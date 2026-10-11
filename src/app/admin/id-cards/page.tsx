@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BadgeDollarSign, Check, CreditCard, Download, FileText, Search, ShieldCheck, Users } from "lucide-react";
 import { resolveFileUrl } from "@/lib/api-client";
 import { UserGuide, type PageHelpGuide } from "@/components/ui/user-guide";
-import QRCode from "qrcode";
 
 type IdCardOrientation = "PORTRAIT" | "LANDSCAPE";
 type IdCardTemplate = {
@@ -50,6 +49,7 @@ type IdCardDraft = {
   updatedAt: string;
   expiresAt: string;
 };
+type IdCardSchoolBrand = { name?: string; logoUrl?: string | null };
 
 const ID_CARD_HELP_GUIDE: PageHelpGuide = {
   title: "ID Card Studio Guide",
@@ -197,6 +197,7 @@ export default function AdminIdCardsPage() {
   const [students, setStudents] = useState<IdCardStudent[]>([]);
   const [classes, setClasses] = useState<Array<{ id: string; name: string; arm?: string | null }>>([]);
   const [orders, setOrders] = useState<IdCardOrder[]>([]);
+  const [schoolBrand, setSchoolBrand] = useState<IdCardSchoolBrand | null>(null);
   const [awards, setAwards] = useState<CardAward[]>([]);
   const [selectedAwardId, setSelectedAwardId] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -205,7 +206,6 @@ export default function AdminIdCardsPage() {
   const [parentPortalQr, setParentPortalQr] = useState<ParentPortalQr>({ available: false, reason: "Set a public app URL to generate a Parent Portal QR." });
   const [includeCardBack, setIncludeCardBack] = useState(false);
   const [proofSide, setProofSide] = useState<"FRONT" | "BACK">("FRONT");
-  const [backQrPreview, setBackQrPreview] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [classId, setClassId] = useState("");
   const [quote, setQuote] = useState<any>(null);
@@ -227,6 +227,14 @@ export default function AdminIdCardsPage() {
     }).then((data) => {
       if (active && data.session?.name?.trim()) setGreetingName(data.session.name.trim());
     }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    requestJson<IdCardSchoolBrand>("/api/admin/school")
+      .then((school) => { if (active) setSchoolBrand(school); })
+      .catch(() => undefined);
     return () => { active = false; };
   }, []);
 
@@ -308,19 +316,6 @@ export default function AdminIdCardsPage() {
     }, 700);
     return () => window.clearTimeout(timeout);
   }, [draftLoaded, selectedIds, selectedTemplate, orientation, includeCardBack, selectedAwardId]);
-
-  useEffect(() => {
-    let active = true;
-    const qrUrl = quote?.preview?.parentPortalQrUrl;
-    if (!qrUrl) {
-      setBackQrPreview(null);
-      return () => { active = false; };
-    }
-    QRCode.toString(qrUrl, { type: "svg", errorCorrectionLevel: "M", margin: 1, width: 240 })
-      .then((svg) => { if (active) setBackQrPreview(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`); })
-      .catch(() => { if (active) setBackQrPreview(null); });
-    return () => { active = false; };
-  }, [quote]);
 
   const visibleStudents = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase();
@@ -535,6 +530,8 @@ export default function AdminIdCardsPage() {
                     <TemplateArtwork
                       templateId={selectedTemplate}
                       orientation={orientation}
+                      schoolName={schoolBrand?.name || undefined}
+                      logoUrl={schoolBrand?.logoUrl ? resolveFileUrl(schoolBrand.logoUrl) : null}
                       studentName={previewStudent ? [previewStudent.firstName, previewStudent.middleName, previewStudent.lastName].filter(Boolean).join(" ") : undefined}
                       admissionNo={previewStudent?.admissionNo || undefined}
                       className={[previewStudent?.class?.name, previewStudent?.class?.arm].filter(Boolean).join(" ") || undefined}
@@ -628,61 +625,24 @@ export default function AdminIdCardsPage() {
                     {quote.preflight.warningCount > 6 ? <p className="mt-1 text-xs font-medium">And {quote.preflight.warningCount - 6} more item{quote.preflight.warningCount - 6 === 1 ? "" : "s"}</p> : null}
                   </section>
                 ) : null}
-                {quote.preview?.students?.[0] ? (() => {
-                  const student = quote.preview.students[0];
-                  const name = [student.firstName, student.middleName, student.lastName].filter(Boolean).join(" ");
-                  const photo = resolveFileUrl(student.photoUrl, student.id);
-                  const schoolName = quote.preview.school?.name || "School";
-                  const officeContact = [quote.preview.school?.address, quote.preview.school?.phone].filter(Boolean).join(" · ");
-                  return (
-                    <div>
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted">First card proof</p>
-                        {quote.quote.includeCardBack ? (
-                          <div className="inline-flex border border-border text-[10px] font-semibold">
-                            <button type="button" onClick={() => setProofSide("FRONT")} aria-pressed={proofSide === "FRONT"} className={`px-2 py-1 ${proofSide === "FRONT" ? "bg-brand text-white" : "text-muted"}`}>Front</button>
-                            <button type="button" onClick={() => setProofSide("BACK")} aria-pressed={proofSide === "BACK"} className={`px-2 py-1 ${proofSide === "BACK" ? "bg-brand text-white" : "text-muted"}`}>Back</button>
-                          </div>
-                        ) : null}
+                <div>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted">Production-matched card proof</p>
+                    {quote.quote.includeCardBack ? (
+                      <div className="inline-flex border border-border text-[10px] font-semibold">
+                        <button type="button" onClick={() => setProofSide("FRONT")} aria-pressed={proofSide === "FRONT"} className={`px-2 py-1 ${proofSide === "FRONT" ? "bg-brand text-white" : "text-muted"}`}>Front</button>
+                        <button type="button" onClick={() => setProofSide("BACK")} aria-pressed={proofSide === "BACK"} className={`px-2 py-1 ${proofSide === "BACK" ? "bg-brand text-white" : "text-muted"}`}>Back</button>
                       </div>
-                      {proofSide === "BACK" && quote.quote.includeCardBack ? (
-                        <div className={`relative mx-auto overflow-hidden border border-border bg-[#fbfcfc] text-foreground ${quote.quote.orientation === "PORTRAIT" ? "aspect-[154/243] w-44" : "aspect-[243/154] w-full max-w-sm"}`}>
-                          <div className="flex min-h-8 items-center gap-2 bg-brand px-2.5 py-1.5 text-white">
-                            {quote.preview.school?.logoUrl ? <img src={resolveFileUrl(quote.preview.school.logoUrl) || undefined} alt="" className="h-5 w-5 shrink-0 bg-white object-contain p-0.5" /> : null}
-                            <p className="truncate text-[10px] font-bold">STUDENT ID</p>
-                          </div>
-                          <div className={`px-3 pt-3 ${quote.quote.orientation === "PORTRAIT" ? "pb-14 text-center" : "pr-16"}`}>
-                            <p className="text-[8px] font-semibold uppercase tracking-wide text-muted">This card is issued by</p>
-                            <p className="mt-0.5 truncate text-xs font-bold text-foreground">{schoolName}</p>
-                            <div className="my-2 border-t border-border" />
-                            <p className="text-[8px] font-bold uppercase tracking-wide text-brand">If found</p>
-                            <p className="mt-0.5 text-[9px] leading-3.5 text-muted">Please return it to the school office or hand it to the nearest police station.</p>
-                            {officeContact ? <p className="mt-2 border-t border-border pt-1.5 text-[7px] leading-3 text-muted"><span className="font-bold uppercase text-brand">School office</span><br />{officeContact}</p> : null}
-                          </div>
-                          <div className={`absolute bottom-2 ${quote.quote.orientation === "PORTRAIT" ? "left-0 right-0 flex-col items-center border-t border-border pt-1.5" : "right-2 flex-col items-center"} flex gap-2`}>
-                            <div className={`min-w-0 pb-1 ${quote.quote.orientation === "PORTRAIT" ? "text-center" : ""}`}>
-                              <p className="text-[8px] font-bold uppercase text-brand">Parent Portal</p>
-                            </div>
-                            {backQrPreview ? <img src={backQrPreview} alt="Parent Portal sign-in QR code" className="h-11 w-11 shrink-0 bg-white p-0.5" /> : <span className="flex h-11 w-11 shrink-0 items-center justify-center border border-border bg-white text-[7px] text-muted">Preparing QR</span>}
-                          </div>
-                        </div>
-                      ) : (
-                        <TemplateArtwork
-                          templateId={quote.quote.templateId}
-                          orientation={quote.quote.orientation}
-                          schoolName={schoolName}
-                          studentName={name}
-                          admissionNo={student.admissionNo || "Not assigned"}
-                          className={student.className || "Class not assigned"}
-                          photoUrl={photo}
-                          logoUrl={quote.preview.school?.logoUrl ? resolveFileUrl(quote.preview.school.logoUrl) : null}
-                          size="proof"
-                        />
-                      )}
-                      <p className="mt-2 text-center text-[10px] font-semibold text-amber-700">PREVIEW ONLY · NOT A PRODUCTION CARD</p>
-                    </div>
-                  );
-                })() : null}
+                    ) : null}
+                  </div>
+                  <iframe
+                    key={`${quote.quote.id}-${proofSide}`}
+                    title={`${templates.find((item) => item.id === quote.quote.templateId)?.label || "ID card"} ${proofSide.toLowerCase()} PDF proof`}
+                    src={`/api/id-cards/quotes/${encodeURIComponent(quote.quote.id)}/preview.pdf#page=${proofSide === "BACK" ? 2 : 1}&toolbar=0&navpanes=0&scrollbar=0`}
+                    className={`mx-auto block border border-border bg-white ${quote.quote.orientation === "PORTRAIT" ? "aspect-[154/243] w-full max-w-[320px]" : "aspect-[243/154] w-full"}`}
+                  />
+                  <p className="mt-2 text-center text-[10px] text-muted">This is the same PDF renderer and saved design snapshot used after payment.</p>
+                </div>
                 <p className="text-xs leading-5 text-muted">Production PDFs are generated only after verified payment. Missing photos render as initials; check student records before checkout.</p>
                 <button type="button" onClick={createOrderAndPay} disabled={working} className="flex h-11 w-full items-center justify-center gap-2 bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50">
                   <CreditCard className="h-4 w-4" /> {working ? "Starting…" : quote.quote.awardId ? "Use award and generate" : "Pay and generate"}
