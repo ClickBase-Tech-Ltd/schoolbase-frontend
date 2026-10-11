@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { getBackendUrl } from "@/lib/backend-url";
 import { formatMoney, pupilName as formatPupilName, invoiceStatusLabel } from "@/lib/format";
 import { playOpenTone, playCloseTone } from "@/lib/sounds";
+import { ErrorModal } from "@/components/ui/error-modal";
 import { Download, Printer, ChevronLeft, Check, AlertCircle, BadgePercent, Plus, X } from "lucide-react";
 
 const BRAND_BLUE = "#0A66C2";
@@ -22,6 +23,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [adjustmentModalOpen, setAdjustmentModalOpen] = useState(false);
+  const [adjustmentValidationError, setAdjustmentValidationError] = useState("");
+  const [chargeModalOpen, setChargeModalOpen] = useState(false);
   const [pendingDeleteAdjustmentId, setPendingDeleteAdjustmentId] = useState<string | null>(null);
 
   const openAdjustmentModal = () => {
@@ -33,11 +36,23 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     setAdjustmentModalOpen(false);
     playCloseTone();
   };
+  const openChargeModal = () => {
+    setChargeModalOpen(true);
+    playOpenTone();
+  };
+  const closeChargeModal = () => {
+    setChargeModalOpen(false);
+    playCloseTone();
+  };
   const [adjustmentType, setAdjustmentType] = useState("SCHOLARSHIP");
   const [adjustmentAmount, setAdjustmentAmount] = useState("");
   const [adjustmentPercentage, setAdjustmentPercentage] = useState("");
   const [adjustmentReason, setAdjustmentReason] = useState("");
   const [isSavingAdjustment, setIsSavingAdjustment] = useState(false);
+  const [chargeName, setChargeName] = useState("");
+  const [chargeAmount, setChargeAmount] = useState("");
+  const [chargeReason, setChargeReason] = useState("");
+  const [isSavingCharge, setIsSavingCharge] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -134,7 +149,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     const percentageValue = adjustmentPercentage.trim() !== "" ? Number(adjustmentPercentage) : undefined;
 
     if ((amountValue === undefined) === (percentageValue === undefined)) {
-      alert("Enter either a fixed amount or a percentage, not both.");
+      setAdjustmentValidationError("Enter either a fixed amount or a percentage, not both.");
       return;
     }
 
@@ -180,6 +195,35 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
       console.error(err);
     } finally {
       setIsSavingAdjustment(false);
+    }
+  };
+
+  const handleAddOutstandingCharge = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!invoiceId) return;
+
+    setIsSavingCharge(true);
+    setError(null);
+    try {
+      const backendUrl = getBackendUrl();
+      const response = await fetch(`${backendUrl}/api/admin/invoices/${encodeURIComponent(invoiceId)}/additional-charges`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: chargeName, amount: chargeAmount, reason: chargeReason }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result?.error || "Unable to add this outstanding charge.");
+
+      setChargeName("");
+      setChargeAmount("");
+      setChargeReason("");
+      closeChargeModal();
+      await fetchInvoice(invoiceId);
+    } catch (chargeError) {
+      setError(chargeError instanceof Error ? chargeError.message : "Unable to add this outstanding charge.");
+    } finally {
+      setIsSavingCharge(false);
     }
   };
 
@@ -271,6 +315,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     description: `${termName} ${academicYear ? `• ${academicYear}` : ""}`,
   }];
   const invoiceAdjustments = Array.isArray(invoice.adjustments) ? invoice.adjustments : [];
+  const additionalChargeItems = lineItems.filter((item: any) => String(item.description || "").startsWith("Additional charge: "));
+  const additionalChargeTotal = additionalChargeItems.reduce((sum: number, item: any) => sum + Number(item.amount || 0) * Number(item.quantity || 1), 0);
   const lineItemsTyped = (lineItems as Array<{ amount?: number | null; quantity?: number | null }>) || [];
   const adjustmentList = (invoiceAdjustments as Array<{ amount?: number | null; percentage?: number | null }>) || [];
   const subtotal = lineItemsTyped.reduce((sum: number, item: { amount?: number | null; quantity?: number | null }) => {
@@ -436,6 +482,30 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
 
+            <section className="mt-6 border-t border-gray-200 pt-6 print:hidden" aria-labelledby="additional-charges-heading">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 id="additional-charges-heading" className="text-sm font-semibold uppercase tracking-[0.2em] text-gray-600">Additional charges</h3>
+                  <p className="mt-1 text-xs text-gray-500">Add a new amount owed to this invoice. This does not record a payment.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={openChargeModal}
+                  className="inline-flex items-center gap-2 border border-brand/30 bg-brand/5 px-3 py-2 text-sm font-semibold text-brand transition hover:bg-brand/10"
+                >
+                  <Plus className="h-4 w-4" /> Add outstanding charge
+                </button>
+              </div>
+              <div className="mt-3 border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                {additionalChargeItems.length ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <span>{additionalChargeItems.length} additional charge{additionalChargeItems.length === 1 ? "" : "s"}</span>
+                    <span className="font-semibold text-gray-900">{formatMoney(additionalChargeTotal, currency)}</span>
+                  </div>
+                ) : <span>No additional charges have been added to this invoice.</span>}
+              </div>
+            </section>
+
             <div className="mt-6 pt-6 border-t border-gray-200 print:hidden">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
@@ -445,9 +515,9 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                 <button
                   type="button"
                   onClick={openAdjustmentModal}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                  className="inline-flex items-center gap-2 border border-brand/30 bg-brand/5 px-3 py-2 text-sm font-semibold text-brand transition hover:bg-brand/10"
                 >
-                  <Plus className="h-3.5 w-3.5" />
+                  <Plus className="h-4 w-4" />
                   Add
                 </button>
               </div>
@@ -557,6 +627,45 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                 Remove
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {chargeModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4 print:hidden">
+          <div className="w-full max-w-lg overflow-hidden border border-border bg-surface shadow-[0_16px_50px_rgba(10,102,194,0.16)]">
+            <div className="border-b border-border bg-brand/5 px-5 py-4 sm:px-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">Add outstanding charge</h2>
+                  <p className="mt-1 text-sm text-muted">This increases the invoice balance. It does not record money received.</p>
+                </div>
+                <button type="button" onClick={closeChargeModal} aria-label="Close additional charge dialog" className="flex h-8 w-8 items-center justify-center border border-border text-muted hover:bg-background">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <form onSubmit={handleAddOutstandingCharge} className="space-y-4 px-5 py-5 sm:px-6">
+              <label className="block text-sm font-medium text-foreground">
+                Charge name
+                <input required minLength={2} maxLength={120} value={chargeName} onChange={(event) => setChargeName(event.target.value)} placeholder="e.g. Replacement textbook" className="mt-1.5 w-full border border-border bg-background px-3 py-2.5" />
+              </label>
+              <label className="block text-sm font-medium text-foreground">
+                Amount ({currency})
+                <input required type="number" min="0.01" step="0.01" value={chargeAmount} onChange={(event) => setChargeAmount(event.target.value)} placeholder="0.00" className="mt-1.5 w-full border border-border bg-background px-3 py-2.5" />
+              </label>
+              <label className="block text-sm font-medium text-foreground">
+                Reason
+                <textarea required minLength={3} maxLength={500} rows={3} value={chargeReason} onChange={(event) => setChargeReason(event.target.value)} placeholder="Explain why this additional amount is due" className="mt-1.5 w-full resize-y border border-border bg-background px-3 py-2.5" />
+              </label>
+              <p className="border-l-2 border-amber-400 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">The charge will appear as a new invoice line and become available for payment. Existing payment records and receipts will not change.</p>
+              <div className="flex justify-end gap-3 border-t border-border pt-4">
+                <button type="button" onClick={closeChargeModal} disabled={isSavingCharge} className="border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-background disabled:opacity-60">Cancel</button>
+                <button type="submit" disabled={isSavingCharge || !chargeName.trim() || Number(chargeAmount) <= 0 || chargeReason.trim().length < 3} className="inline-flex items-center gap-2 bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60">
+                  <Plus className="h-4 w-4" /> {isSavingCharge ? "Adding..." : "Add charge to invoice"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -713,6 +822,14 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
       )}
+
+      <ErrorModal
+        isOpen={Boolean(adjustmentValidationError)}
+        onClose={() => setAdjustmentValidationError("")}
+        title="Invalid adjustment"
+        message={adjustmentValidationError}
+        confirmLabel="Okay"
+      />
 
       <style jsx global>{`
         .invoice-sheet {
