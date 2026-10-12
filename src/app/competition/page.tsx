@@ -8,11 +8,15 @@ import CompetitionHero from "@/components/competition/competition-hero";
 
 type Challenge = { id: string; title: string; description: string | null; gradeLabel: string | null; questionCount: number; durationSeconds: number; closesAt: string | null; attemptLimit: number; attemptsUsed: number };
 type LearnerIdentity = { pupilId: string; classId: string | null; firstName: string | null; lastName: string | null; className: string | null };
+type LearnerCapabilities = { leaderboardEnabled: boolean; studentVsStudentEnabled: boolean };
 type LearnerPracticeSummary = { completedChallenges: number; latestCompletionAt: string | null };
 type ChildOption = { pupilId: string; firstName: string; lastName: string; className: string | null };
 type Question = { id: string; type: string; prompt: string; options: Array<{ id: string; content: string }> };
 type Attempt = { id: string; status: string; startedAt: string; deadlineAt: string; questions: Question[] };
-type Result = { status: string; score: number; correctCount: number; questionCount: number; accuracyPercent: number | null; elapsedMs: number | null; firstCompletion?: boolean };
+type Result = { status: string; score: number; correctCount: number; questionCount: number; accuracyPercent: number | null; elapsedMs: number | null; firstCompletion?: boolean; xpAwarded?: number; achievementsAwarded?: Array<{ code: string; title: string }> };
+type Leaderboard = { challenge: { id: string; title: string }; entries: Array<{ rank: number; displayName: string; score: number; accuracyPercent: number | null; elapsedMs: number | null }> };
+type Match = { id: string; challenge: { id: string; title: string }; status: string; isSender: boolean; opponentName: string; expiresAt: string; winner: "YOU" | "OPPONENT" | null; yourAttempt: { status: string; score: number } | null; opponentAttempt: { status: string; score: number } | null };
+type Peer = { id: string; displayName: string };
 
 function formatChallengeAudience(audience: string | null): string {
   if (!audience) return "Audience details incomplete";
@@ -34,12 +38,19 @@ export default function StudentCompetitionPage() {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [children, setChildren] = useState<ChildOption[]>([]);
   const [learnerIdentity, setLearnerIdentity] = useState<LearnerIdentity | null>(null);
+  const [learnerCapabilities, setLearnerCapabilities] = useState<LearnerCapabilities>({ leaderboardEnabled: false, studentVsStudentEnabled: false });
   const [practiceSummary, setPracticeSummary] = useState<LearnerPracticeSummary>({ completedChallenges: 0, latestCompletionAt: null });
   const [selectedPupilId, setSelectedPupilId] = useState("");
   const [attempts, setAttempts] = useState<Array<{ id: string; challengeId: string; status: string; score: number; submittedAt: string | null }>>([]);
   const [ineligibleChallengeCount, setIneligibleChallengeCount] = useState(0);
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [result, setResult] = useState<Result | null>(null);
+  const [leaderboards, setLeaderboards] = useState<Record<string, Leaderboard>>({});
+  const [leaderboardUnavailable, setLeaderboardUnavailable] = useState<Record<string, boolean>>({});
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [matchesUnavailable, setMatchesUnavailable] = useState(true);
+  const [peersByChallenge, setPeersByChallenge] = useState<Record<string, Peer[]>>({});
+  const [selectedPeerByChallenge, setSelectedPeerByChallenge] = useState<Record<string, string>>({});
   const [challengeToStart, setChallengeToStart] = useState<Challenge | null>(null);
   const [showFinishConfirmation, setShowFinishConfirmation] = useState(false);
   const [showFirstCompletion, setShowFirstCompletion] = useState(false);
@@ -77,14 +88,17 @@ export default function StudentCompetitionPage() {
     setError(null);
     try {
       const query = pupilId ? `?pupilId=${encodeURIComponent(pupilId)}` : "";
-      const data = await api<{ identity: LearnerIdentity; challenges: Challenge[]; attempts: typeof attempts; ineligibleChallengeCount: number; practiceSummary: LearnerPracticeSummary }>(`/student/challenges${query}`);
+      const data = await api<{ identity: LearnerIdentity; capabilities?: LearnerCapabilities; challenges: Challenge[]; attempts: typeof attempts; ineligibleChallengeCount: number; practiceSummary: LearnerPracticeSummary }>(`/student/challenges${query}`);
       setDailyChallengesActive(true);
       setLearnerIdentity(data.identity || null);
+      setLearnerCapabilities(data.capabilities || { leaderboardEnabled: false, studentVsStudentEnabled: false });
       setChallenges(data.challenges || []);
       setAttempts(data.attempts || []);
       setIneligibleChallengeCount(data.ineligibleChallengeCount || 0);
       setPracticeSummary(data.practiceSummary || { completedChallenges: 0, latestCompletionAt: null });
       setSelectedPupilId(data.identity?.pupilId || pupilId);
+      setMatchesUnavailable(!data.capabilities?.studentVsStudentEnabled);
+      if (data.identity?.classId && data.capabilities?.studentVsStudentEnabled) await loadMatches(data.identity.pupilId);
     } catch (loadError) {
       if (isCompetitionFeatureUnavailable(loadError)) {
         setDailyChallengesActive(false);
@@ -182,6 +196,86 @@ export default function StudentCompetitionPage() {
     } finally { setBusy(false); }
   }
 
+  async function loadLeaderboard(challengeId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const query = selectedPupilId ? `?pupilId=${encodeURIComponent(selectedPupilId)}` : "";
+      const data = await api<Leaderboard>(`/student/challenges/${challengeId}/leaderboard${query}`);
+      setLeaderboards((current) => ({ ...current, [challengeId]: data }));
+    } catch (loadError) {
+      if (isCompetitionFeatureUnavailable(loadError)) {
+        setLeaderboardUnavailable((current) => ({ ...current, [challengeId]: true }));
+      } else {
+        setError(loadError instanceof Error ? loadError.message : "Unable to load class standings.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadPeers(challengeId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const query = selectedPupilId ? `?pupilId=${encodeURIComponent(selectedPupilId)}` : "";
+      const data = await api<{ peers: Peer[] }>(`/student/challenges/${challengeId}/peers${query}`);
+      setPeersByChallenge((current) => ({ ...current, [challengeId]: data.peers }));
+      if (data.peers[0]) setSelectedPeerByChallenge((current) => ({ ...current, [challengeId]: current[challengeId] || data.peers[0]?.id || "" }));
+    } catch (peerError) {
+      if (isCompetitionFeatureUnavailable(peerError)) setMatchesUnavailable(true);
+      else setError(peerError instanceof Error ? peerError.message : "Unable to load classmates.");
+    } finally { setBusy(false); }
+  }
+
+  async function sendMatchInvite(challengeId: string) {
+    const recipientPupilId = selectedPeerByChallenge[challengeId];
+    if (!recipientPupilId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api("/student/matches", { method: "POST", body: JSON.stringify({ challengeId, recipientPupilId, pupilId: selectedPupilId || undefined }) });
+      setPeersByChallenge((current) => ({ ...current, [challengeId]: [] }));
+      await loadMatches();
+    } catch (inviteError) {
+      setError(inviteError instanceof Error ? inviteError.message : "Unable to send invitation.");
+    } finally { setBusy(false); }
+  }
+
+  async function loadMatches(pupilId = selectedPupilId) {
+    setBusy(true);
+    setError(null);
+    try {
+      const query = pupilId ? `?pupilId=${encodeURIComponent(pupilId)}` : "";
+      const data = await api<{ matches: Match[] }>(`/student/matches${query}`);
+      setMatches(data.matches);
+      setMatchesUnavailable(false);
+    } catch (matchError) {
+      if (isCompetitionFeatureUnavailable(matchError)) setMatchesUnavailable(true);
+      else setError(matchError instanceof Error ? matchError.message : "Unable to load invitations.");
+    } finally { setBusy(false); }
+  }
+
+  async function updateMatch(match: Match, action: "ACCEPT" | "DECLINE" | "CANCEL" | "START") {
+    setBusy(true);
+    setError(null);
+    try {
+      const query = selectedPupilId ? `?pupilId=${encodeURIComponent(selectedPupilId)}` : "";
+      if (action === "START") {
+        const data = await api<{ attempt: Attempt }>(`/student/matches/${match.id}/attempt${query}`, { method: "POST", body: JSON.stringify({ pupilId: selectedPupilId || undefined }) });
+        setAttempt(data.attempt);
+        setCurrentQuestionIndex(0);
+        setSelected({});
+        setAnswered([]);
+      } else {
+        await api(`/student/matches/${match.id}${query}`, { method: "PATCH", body: JSON.stringify({ action, pupilId: selectedPupilId || undefined }) });
+        await loadMatches();
+      }
+    } catch (matchError) {
+      setError(matchError instanceof Error ? matchError.message : "Unable to update the invitation.");
+    } finally { setBusy(false); }
+  }
+
   const formatRemaining = `${Math.floor(secondsLeft / 60).toString().padStart(2, "0")}:${(secondsLeft % 60).toString().padStart(2, "0")}`;
   const currentQuestion = attempt?.questions[currentQuestionIndex] || null;
   const answerProgress = attempt ? Math.round((answered.length / attempt.questions.length) * 100) : 0;
@@ -198,7 +292,7 @@ export default function StudentCompetitionPage() {
 
       {children.length > 1 ? <section className="max-w-xl space-y-4 border border-border bg-surface p-5"><div><h2 className="font-semibold text-foreground">Choose a student</h2><p className="mt-1 text-sm text-muted">Select which linked student will take part. The choice is verified against your SchoolBase guardian account.</p></div><label className="block text-xs font-semibold text-muted">Student<select value={selectedPupilId} onChange={(event) => { const nextPupilId = event.target.value; setSelectedPupilId(nextPupilId); setAttempt(null); setResult(null); setSelected({}); setAnswered([]); if (nextPupilId) void loadChallenges(nextPupilId); }} disabled={loading} className="mt-1 h-11 w-full border border-border bg-background px-3 text-sm text-foreground"><option value="">Choose a linked student</option>{children.map((child) => <option key={child.pupilId} value={child.pupilId}>{child.firstName} {child.lastName}{child.className ? ` · ${child.className}` : ""}</option>)}</select></label></section> : null}
 
-      {result ? <section className="border border-border bg-surface p-6"><p className="text-xs font-bold uppercase tracking-wide text-brand">Challenge result</p><h2 className="mt-2 text-2xl font-semibold text-foreground">{result.score} points</h2><div className="mt-4 grid gap-3 sm:grid-cols-3"><div className="border border-border bg-background p-3"><p className="text-xs text-muted">Correct</p><p className="mt-1 text-lg font-semibold text-foreground">{result.correctCount} / {result.questionCount}</p></div><div className="border border-border bg-background p-3"><p className="text-xs text-muted">Accuracy</p><p className="mt-1 text-lg font-semibold text-foreground">{result.accuracyPercent ?? 0}%</p></div><div className="border border-border bg-background p-3"><p className="text-xs text-muted">Time</p><p className="mt-1 text-lg font-semibold text-foreground">{Math.floor((result.elapsedMs ?? 0) / 1000)} sec</p></div></div><button type="button" onClick={() => { setResult(null); void loadChallenges(); }} className="mt-5 border border-border px-4 py-2 text-sm font-semibold text-brand hover:bg-brand-light">Back to challenges</button></section> : null}
+      {result ? <section className="border border-border bg-surface p-6"><p className="text-xs font-bold uppercase tracking-wide text-brand">Challenge result</p><h2 className="mt-2 text-2xl font-semibold text-foreground">{result.score} points</h2><div className="mt-4 grid gap-3 sm:grid-cols-3"><div className="border border-border bg-background p-3"><p className="text-xs text-muted">Correct</p><p className="mt-1 text-lg font-semibold text-foreground">{result.correctCount} / {result.questionCount}</p></div><div className="border border-border bg-background p-3"><p className="text-xs text-muted">Accuracy</p><p className="mt-1 text-lg font-semibold text-foreground">{result.accuracyPercent ?? 0}%</p></div><div className="border border-border bg-background p-3"><p className="text-xs text-muted">Time</p><p className="mt-1 text-lg font-semibold text-foreground">{Math.floor((result.elapsedMs ?? 0) / 1000)} sec</p></div></div>{result.xpAwarded ? <p className="mt-4 border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">You earned {result.xpAwarded} Competition XP for completing this challenge.</p> : null}{result.achievementsAwarded?.length ? <div className="mt-4 border border-amber-200 bg-amber-50 px-4 py-3"><p className="text-xs font-bold uppercase tracking-wide text-amber-900">Achievement earned</p><ul className="mt-2 space-y-1 text-sm font-semibold text-amber-900">{result.achievementsAwarded.map((achievement) => <li key={achievement.code}>{achievement.title}</li>)}</ul></div> : null}<button type="button" onClick={() => { setResult(null); void loadChallenges(); }} className="mt-5 border border-brand px-4 py-2 text-sm font-semibold text-brand hover:bg-brand-light">Back to challenges</button></section> : null}
       {showFirstCompletion ? <div role="status" aria-live="polite" className="pointer-events-none fixed inset-0 z-40 flex items-start justify-center overflow-hidden px-4 pt-24 sm:pt-32"><div className="first-completion-burst absolute inset-x-0 top-0 h-72" aria-hidden="true">{Array.from({ length: 24 }, (_, index) => <span key={index} className="first-completion-particle" style={{ "--particle-index": index } as React.CSSProperties} />)}</div><div className="pointer-events-auto relative flex max-w-md items-start gap-4 border border-emerald-200 bg-surface px-5 py-4 shadow-lg"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"><Check className="h-5 w-5" /></div><div className="min-w-0 flex-1"><p className="flex items-center gap-2 font-semibold text-foreground"><Sparkles className="h-4 w-4 text-amber-500" /> First challenge complete!</p><p className="mt-1 text-sm leading-5 text-muted">A great start. Keep practising and building confidence.</p></div><button type="button" onClick={() => setShowFirstCompletion(false)} aria-label="Dismiss celebration" className="p-1 text-muted hover:text-foreground"><X className="h-4 w-4" /></button></div><style>{`@keyframes first-completion-fall { 0% { transform: translate3d(calc((var(--particle-index) - 12) * 7vw), -24px, 0) rotate(0deg); opacity: 0 } 12% { opacity: 1 } 100% { transform: translate3d(calc((var(--particle-index) - 12) * 9vw), 240px, 0) rotate(540deg); opacity: 0 } } .first-completion-particle { position: absolute; top: 0; left: 50%; width: 8px; height: 12px; border-radius: 2px; background: hsl(calc(var(--particle-index) * 31), 72%, 52%); animation: first-completion-fall 1.9s ease-out forwards; animation-delay: calc(var(--particle-index) * 24ms); } @media (prefers-reduced-motion: reduce) { .first-completion-burst { display: none; } .first-completion-particle { animation: none; } }`}</style></div> : null}
 
       {attempt && currentQuestion ? (
@@ -280,6 +374,8 @@ export default function StudentCompetitionPage() {
 
       {dailyChallengesActive === false && !attempt && !result ? <section aria-live="polite" className="flex flex-col gap-4 border border-amber-200 bg-amber-50 p-5 sm:flex-row sm:items-start"><div className="flex h-10 w-10 shrink-0 items-center justify-center border border-amber-300 bg-white text-amber-800"><Award className="h-5 w-5" /></div><div><h2 className="font-semibold text-foreground">Daily challenges aren’t active yet</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-muted">SchoolBase Competition is being prepared for its pilot. Challenges will appear here when the daily challenge experience is enabled. Your parent portal and linked student records are unchanged.</p></div></section> : null}
 
+      {dailyChallengesActive !== false && !attempt && !result && !matchesUnavailable && learnerIdentity?.classId ? <section className="border border-border bg-surface p-4 sm:p-5"><div className="flex items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-foreground">Class challenge invitations</h2><p className="mt-1 text-xs text-muted">No chat or contact details are shared. Invitations expire after seven days.</p></div><button type="button" onClick={() => void loadMatches()} disabled={busy} className="h-9 border border-border px-3 text-xs font-semibold text-foreground hover:bg-background disabled:opacity-50">Refresh</button></div>{matches.length ? <div className="mt-3 divide-y divide-border border-y border-border">{matches.map((match) => <article key={match.id} className="flex flex-col justify-between gap-3 py-3 sm:flex-row sm:items-center"><div><p className="text-sm font-semibold text-foreground">{match.challenge.title} · {match.isSender ? "You invited" : "Invitation from"} {match.opponentName}</p><p className="mt-1 text-xs text-muted">{match.status === "COMPLETED" ? match.winner === "YOU" ? "You won" : match.winner === "OPPONENT" ? "Classmate won" : "Draw" : match.status === "PENDING" ? `Pending · expires ${new Date(match.expiresAt).toLocaleDateString()}` : match.status.replace(/_/g, " ")}{match.yourAttempt && match.opponentAttempt ? ` · You ${match.yourAttempt.score} pts, classmate ${match.opponentAttempt.score} pts` : ""}</p></div><div className="flex flex-wrap gap-2">{match.status === "PENDING" && !match.isSender ? <><button type="button" disabled={busy} onClick={() => void updateMatch(match, "ACCEPT")} className="h-9 border border-brand px-3 text-xs font-semibold text-brand hover:bg-brand-light disabled:opacity-50">Accept</button><button type="button" disabled={busy} onClick={() => void updateMatch(match, "DECLINE")} className="h-9 border border-border px-3 text-xs font-semibold text-muted disabled:opacity-50">Decline</button></> : null}{match.status === "PENDING" && match.isSender ? <button type="button" disabled={busy} onClick={() => void updateMatch(match, "CANCEL")} className="h-9 border border-border px-3 text-xs font-semibold text-muted disabled:opacity-50">Cancel invite</button> : null}{match.status === "ACCEPTED" && !match.yourAttempt ? <button type="button" disabled={busy} onClick={() => void updateMatch(match, "START")} className="h-9 bg-brand px-3 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-50">Start match</button> : null}</div></article>)}</div> : <p className="mt-3 border-t border-border pt-3 text-xs text-muted">No invitations yet.</p>}</section> : null}
+
       {dailyChallengesActive !== false && !attempt && !result && (children.length === 0 || Boolean(selectedPupilId)) ? (
         <section className="space-y-4">
           <div className="flex items-center justify-between gap-3">
@@ -312,9 +408,12 @@ export default function StudentCompetitionPage() {
                       <span className={`font-semibold ${attemptsRemaining ? "text-foreground" : "text-rose-700"}`}>{attemptsRemaining} of {challenge.attemptLimit}</span>
                     </div>
                     {latestResult ? <p className="mt-2 text-xs text-muted">Last result: {latestResult.score} points · {latestResult.status === "EXPIRED" ? "time expired" : "submitted"}</p> : null}
+                    {latestResult?.status === "SUBMITTED" && learnerIdentity?.classId && !matchesUnavailable ? <div className="mt-2">{peersByChallenge[challenge.id] ? peersByChallenge[challenge.id].length ? <div className="flex gap-2"><select aria-label={`Choose classmate for ${challenge.title}`} value={selectedPeerByChallenge[challenge.id] || ""} onChange={(event) => setSelectedPeerByChallenge((current) => ({ ...current, [challenge.id]: event.target.value }))} className="h-9 min-w-0 flex-1 border border-border bg-background px-2 text-xs text-foreground"><option value="">Choose classmate</option>{peersByChallenge[challenge.id].map((peer) => <option key={peer.id} value={peer.id}>{peer.displayName}</option>)}</select><button type="button" disabled={busy || !selectedPeerByChallenge[challenge.id]} onClick={() => void sendMatchInvite(challenge.id)} className="h-9 border border-brand px-3 text-xs font-semibold text-brand hover:bg-brand-light disabled:opacity-50">Invite</button></div> : <p className="text-xs text-muted">No eligible linked classmates are available for this challenge.</p> : <button type="button" disabled={busy} onClick={() => void loadPeers(challenge.id)} className="h-9 border border-border px-3 text-xs font-semibold text-foreground hover:bg-background disabled:opacity-50">Challenge a classmate</button>}</div> : null}
                     <button type="button" onClick={() => setChallengeToStart(challenge)} disabled={busy || attemptInProgress || attemptsRemaining === 0} className="mt-auto inline-flex h-10 w-full items-center justify-center border border-brand bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:border-border disabled:bg-background disabled:text-muted">
                       {busy ? "Starting…" : attemptInProgress ? "Attempt in progress" : attemptsRemaining === 0 ? "Attempts used" : "Review challenge"}
                     </button>
+                    {learnerCapabilities.leaderboardEnabled && latestResult?.status === "SUBMITTED" && learnerIdentity?.classId ? <button type="button" disabled={busy || leaderboardUnavailable[challenge.id]} onClick={() => void loadLeaderboard(challenge.id)} className="mt-2 h-9 border border-border px-3 text-xs font-semibold text-foreground hover:bg-background disabled:cursor-not-allowed disabled:opacity-50">{leaderboardUnavailable[challenge.id] ? "Class standings unavailable" : "View class standings"}</button> : null}
+                    {leaderboards[challenge.id] ? <div className="mt-3 border-t border-border pt-3"><p className="text-xs font-bold uppercase tracking-wide text-muted">Private class standings</p><ol className="mt-2 space-y-2">{leaderboards[challenge.id].entries.map((entry) => <li key={`${entry.rank}-${entry.displayName}`} className="grid grid-cols-[2rem_minmax(0,1fr)_auto] gap-2 text-xs"><span className="font-semibold tabular-nums text-muted">{entry.rank}.</span><span className="truncate text-foreground">{entry.displayName}</span><span className="font-semibold tabular-nums text-foreground">{entry.score} pts</span></li>)}</ol>{!leaderboards[challenge.id].entries.length ? <p className="mt-2 text-xs text-muted">No class submissions yet.</p> : null}</div> : null}
                   </article>
                 );
               })}

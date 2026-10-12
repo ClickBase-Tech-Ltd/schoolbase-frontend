@@ -8,12 +8,24 @@ import { ErrorModal } from "@/components/ui/error-modal";
 import CompetitionHero from "@/components/competition/competition-hero";
 
 type ChildAchievements = { id: string; displayName: string; className: string | null; xp: number; practiceSummary: { completedChallenges: number; personalBestAccuracy: number | null; latestCompletionAt: string | null }; achievements: Array<{ code: string; title: string; description: string; iconUrl: string | null; awardedAt: string }>; recentAttempts: Array<{ title: string; status: string; score: number; correctCount: number; questionCount: number; accuracyPercent: number | null; elapsedMs: number | null; submittedAt: string | null }> };
+type Tournament = { id: string; title: string; status: string; scope: string; registrationClosesAt: string | null; ownRegistration: { registered: boolean; status: string | null; visibilityApproved: boolean } };
 
 export default function ParentCompetitionPage() {
   const [children, setChildren] = useState<ChildAchievements[]>([]);
+  const [tournamentsByPupil, setTournamentsByPupil] = useState<Record<string, Tournament[]>>({});
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  async function loadTournaments(pupilId: string) {
+    try {
+      const response = await fetch(`${getBackendUrl()}/api/competition/school/tournaments?pupilId=${encodeURIComponent(pupilId)}`, { credentials: "include", cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (response.status === 404 && data.error === "FEATURE_DISABLED") { setTournamentsByPupil((current) => ({ ...current, [pupilId]: [] })); return; }
+      if (!response.ok) throw new Error(data.error || "Unable to load tournament opportunities.");
+      setTournamentsByPupil((current) => ({ ...current, [pupilId]: data.tournaments || [] }));
+    } catch (loadError) { setError(loadError instanceof Error ? loadError.message : "Unable to load tournament opportunities."); }
+  }
 
   useEffect(() => {
     let active = true;
@@ -24,11 +36,21 @@ export default function ParentCompetitionPage() {
         if (!response.ok) throw new Error(data.error || "Unable to load Competition achievements.");
         return { disabled: false, children: data.children || [] };
       })
-      .then((data) => { if (active) { setEnabled(!data.disabled); setChildren(data.children); } })
+      .then((data) => { if (active) { setEnabled(!data.disabled); setChildren(data.children); for (const child of data.children as ChildAchievements[]) void loadTournaments(child.id); } })
       .catch((loadError: unknown) => { if (active) setError(loadError instanceof Error ? loadError.message : "Unable to load Competition achievements."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
+
+  async function registerChild(tournamentId: string, pupilId: string) {
+    setError(null);
+    try {
+      const response = await fetch(`${getBackendUrl()}/api/competition/school/tournaments/${tournamentId}/register?pupilId=${encodeURIComponent(pupilId)}`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pupilId }) });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Unable to request tournament participation.");
+      await loadTournaments(pupilId);
+    } catch (registerError) { setError(registerError instanceof Error ? registerError.message : "Unable to request tournament participation."); }
+  }
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 px-2 py-6 sm:px-8 sm:py-8">
@@ -56,6 +78,8 @@ export default function ParentCompetitionPage() {
             <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground"><Sparkles className="h-4 w-4 text-brand" /> Achievements</h3>
             {child.achievements.length ? <div className="mt-3 grid gap-2 sm:grid-cols-2">{child.achievements.map((achievement) => <article key={achievement.code} className="border border-border bg-background p-3"><p className="text-sm font-semibold text-foreground">{achievement.title}</p><p className="mt-1 text-xs leading-5 text-muted">{achievement.description}</p><p className="mt-2 text-[11px] text-muted">Earned {new Date(achievement.awardedAt).toLocaleDateString()}</p></article>)}</div> : <div className="mt-3 flex flex-col gap-3 border border-border bg-background p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium text-foreground">No Competition achievements yet</p><p className="mt-1 text-xs leading-5 text-muted">Complete an eligible student challenge to earn Competition XP and achievements.</p></div><Link href="/competition" className="inline-flex h-10 shrink-0 items-center justify-center gap-2 border border-brand px-3 text-sm font-semibold text-brand hover:bg-brand-light"><Award className="h-4 w-4" /> View student challenges</Link></div>}
           </section>
+
+          {tournamentsByPupil[child.id]?.length ? <section className="border-t border-border pt-5"><div><h3 className="text-sm font-semibold text-foreground">School competition events</h3><p className="mt-1 text-xs text-muted">Participation is optional. Your child’s name is not public unless the school separately approves visibility.</p></div><div className="mt-3 divide-y divide-border border-y border-border">{tournamentsByPupil[child.id].map((tournament) => <article key={tournament.id} className="flex flex-col justify-between gap-3 py-3 sm:flex-row sm:items-center"><div><p className="text-sm font-semibold text-foreground">{tournament.title}</p><p className="mt-1 text-xs text-muted">{tournament.scope} · {tournament.status}{tournament.registrationClosesAt ? ` · closes ${new Date(tournament.registrationClosesAt).toLocaleDateString()}` : ""}</p>{tournament.ownRegistration.registered ? <p className="mt-1 text-xs font-semibold text-brand">Participation request: {tournament.ownRegistration.status?.toLowerCase()}</p> : null}</div>{tournament.status === "REGISTRATION_OPEN" && !tournament.ownRegistration.registered ? <button type="button" onClick={() => void registerChild(tournament.id, child.id)} className="h-9 border border-brand px-3 text-xs font-semibold text-brand hover:bg-brand-light">Request participation</button> : null}</article>)}</div></section> : null}
 
           <section className="border-t border-border pt-5">
             <div className="flex items-end justify-between gap-3"><div><h3 className="text-sm font-semibold text-foreground">Recent challenge results</h3><p className="mt-1 text-xs text-muted">Competition practice only. These do not affect official school results.</p></div><span className="text-xs tabular-nums text-muted">{child.recentAttempts.length} recent</span></div>

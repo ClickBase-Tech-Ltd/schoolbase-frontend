@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Edit2, Download, Mail, Phone, MapPin, UserRound, CreditCard, CalendarCheck, GraduationCap } from "lucide-react";
 import { formatMoney, pupilName } from "@/lib/format";
-import { resolveFileUrl } from "@/lib/api-client";
+import { buildApiUrl, resolveFileUrl } from "@/lib/api-client";
 
 export default function StudentViewClient({ studentId }: { studentId: string }) {
   const [student, setStudent] = useState<any>(null);
@@ -15,25 +15,33 @@ export default function StudentViewClient({ studentId }: { studentId: string }) 
 
   useEffect(() => {
     const loadStudent = async () => {
-      try {
-        const [studentResponse, schoolResponse] = await Promise.all([
-          fetch(`/api/admin/students/${studentId}`),
-          fetch(`/api/admin/school`, { credentials: "include" })
-        ]);
+      const schoolRequest = fetch(buildApiUrl("/admin/school"), { credentials: "include" })
+        .then(async (response) => {
+          if (!response.ok) return null;
+          const schoolData = await response.json();
+          return schoolData?.name as string | undefined;
+        })
+        .then((name) => {
+          if (name) setSchoolName(name);
+        })
+        .catch((err) => {
+          console.warn("Unable to load school name for student profile:", err);
+        });
 
+      try {
+        const studentResponse = await fetch(`/api/admin/students/${encodeURIComponent(studentId)}`, {
+          credentials: "include",
+        });
         if (!studentResponse.ok) throw new Error("Failed to load student");
         const data = await studentResponse.json();
         setStudent(data);
-
-        if (schoolResponse.ok) {
-          const schoolData = await schoolResponse.json();
-          if (schoolData?.name) setSchoolName(schoolData.name);
-        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load student");
       } finally {
         setLoading(false);
       }
+
+      void schoolRequest;
     };
     loadStudent();
   }, [studentId]);

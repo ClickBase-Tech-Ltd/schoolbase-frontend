@@ -27,8 +27,10 @@ const nav = [
     children: [
       { href: "/schoolbase-admin/competition/questions", label: "Competition Questions", icon: "BookOpen" },
       { href: "/schoolbase-admin/competition/challenges", label: "Competition Challenges", icon: "ClipboardCheck" },
+      { href: "/schoolbase-admin/competition/achievements", label: "Competition Achievements", icon: "Sparkles" },
       { href: "/schoolbase-admin/competition/tournaments", label: "Competition Tournaments", icon: "Award" },
       { href: "/schoolbase-admin/competition/sponsors", label: "Competition Sponsors", icon: "Megaphone" },
+      { href: "/schoolbase-admin/competition/prizes-certificates", label: "Competition Prizes & Certificates", icon: "Award" },
     ],
   },
   { href: "/schoolbase-admin/settings", label: "Settings", icon: "Settings" },

@@ -151,6 +151,11 @@ export default function SettingsClient() {
       ]);
 
       if (!profileRes.ok) {
+        if (profileRes.status === 401 || profileRes.status === 403 || profileRes.status === 404) {
+          window.location.href = "/schoolbase-admin/login";
+          return;
+        }
+
         const error = await profileRes.json().catch(() => null);
         throw new Error(error?.message || "Failed to load profile.");
       }
