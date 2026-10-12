@@ -1,16 +1,23 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { Play, Plus, RefreshCw } from "lucide-react";
+import { Award, CircleCheck, Clock3, FileQuestion, Pause, Play, Plus, RefreshCw, Search } from "lucide-react";
 import { ErrorModal } from "@/components/ui/error-modal";
 import { UserGuide, type PageHelpGuide } from "@/components/ui/user-guide";
-import CompetitionHero from "@/components/competition/competition-hero";
 import CompetitionFeatureNotice from "@/components/competition/competition-feature-notice";
+import CompetitionDialog from "@/components/competition/competition-dialog";
 
 type Category = { id: string; name: string };
-type QuestionSet = { id: string; name: string; status: string; _count?: { questions: number } };
+type QuestionSet = { id: string; name: string; categoryId: string; status: string; _count?: { questions: number } };
 type Policy = { id: string; name: string; version: number; policyJson: string };
 type Challenge = { id: string; title: string; status: string; gradeLabel: string | null; questionCount: number; durationSeconds: number; completionXp: number; category: { name: string }; _count: { attempts: number } };
+type ChallengeDialog = "policy" | "challenge" | null;
+type StatusFilter = "ALL" | "ACTIVE" | "DRAFT" | "PAUSED";
+
+const fieldClass = "mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15";
+const labelClass = "block text-sm font-medium text-foreground";
+const secondaryButtonClass = "inline-flex h-10 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3.5 text-sm font-semibold text-foreground transition hover:border-brand/40 hover:bg-background disabled:cursor-not-allowed disabled:opacity-50";
+const primaryButtonClass = "inline-flex h-10 items-center justify-center gap-2 rounded-md bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50";
 
 const COMPETITION_CHALLENGE_GUIDE: PageHelpGuide = {
   title: "Competition challenge management",
@@ -96,6 +103,9 @@ export default function CompetitionChallengesPage() {
   const [minutes, setMinutes] = useState(10);
   const [attemptLimit, setAttemptLimit] = useState(1);
   const [completionXp, setCompletionXp] = useState(0);
+  const [dialog, setDialog] = useState<ChallengeDialog>(null);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [busy, setBusy] = useState(false);
   const [challengeSetupActive, setChallengeSetupActive] = useState<boolean | null>(null);
   const [feedbackModal, setFeedbackModal] = useState<{
@@ -162,6 +172,7 @@ export default function CompetitionChallengesPage() {
     try {
       const data = await request("/admin/scoring-policies", { method: "POST", body: JSON.stringify({ name: policyName, version: 1, policy: { basePoints: 100, difficultyMultipliers: { EASY: 1, MEDIUM: 1.25, HARD: 1.5, EXPERT: 2 }, speedBonusEnabled: false, streakBonusEnabled: false } }) });
       setScoringPolicyId(data.scoringPolicy.id);
+      setDialog(null);
       const refreshError = await load();
       setFeedbackModal(refreshError
         ? { type: "error", title: "Policy created; refresh failed", message: "The scoring policy was created, but the configuration could not be refreshed.", details: refreshError }
@@ -177,7 +188,8 @@ export default function CompetitionChallengesPage() {
     setBusy(true);
     setFeedbackModal(null);
     try {
-      await request("/admin/challenges", { method: "POST", body: JSON.stringify({ title: name, categoryId, questionSetId, scoringPolicyId, ageRange, gradeLabel, questionCount, durationSeconds: minutes * 60, attemptLimit, completionXp, difficultyMix: { EASY: 5, MEDIUM: 3, HARD: 2 } }) });
+      await request("/admin/challenges", { method: "POST", body: JSON.stringify({ title: name, categoryId, questionSetId, scoringPolicyId, ageRange, gradeLabel, questionCount, durationSeconds: minutes * 60, attemptLimit, completionXp }) });
+      setDialog(null);
       const refreshError = await load();
       setFeedbackModal(refreshError
         ? { type: "error", title: "Challenge saved; refresh failed", message: "The challenge draft was saved, but the schedule could not be refreshed.", details: refreshError }
@@ -203,32 +215,115 @@ export default function CompetitionChallengesPage() {
     } finally { setBusy(false); }
   }
 
+  function closeDialog() {
+    if (!busy) setDialog(null);
+  }
+
+  const activeCount = challenges.filter((challenge) => challenge.status === "ACTIVE").length;
+  const draftCount = challenges.filter((challenge) => challenge.status === "DRAFT").length;
+  const attemptCount = challenges.reduce((total, challenge) => total + challenge._count.attempts, 0);
+  const filteredChallenges = challenges.filter((challenge) => {
+    const matchesStatus = statusFilter === "ALL" || challenge.status === statusFilter;
+    const searchText = `${challenge.title} ${challenge.category.name} ${challenge.gradeLabel || ""}`.toLowerCase();
+    return matchesStatus && (!search.trim() || searchText.includes(search.trim().toLowerCase()));
+  });
+  const categoryQuestionSets = sets.filter((set) => set.categoryId === categoryId);
+
   return (
-    <main className="mx-auto max-w-7xl space-y-6 px-2 py-6 sm:px-8 sm:py-8 lg:px-12">
-      <CompetitionHero compact eyebrow="Competition administration · Challenge setup" title="Challenges & scoring" description="Configure versioned scoring and challenge definitions. New challenges start in draft; activation checks approved question coverage."><button type="button" onClick={() => void load()} disabled={busy} className="inline-flex h-10 items-center gap-2 border border-white/60 bg-white/10 px-4 text-sm font-semibold text-white hover:bg-white/20 disabled:opacity-50"><RefreshCw className="h-4 w-4" /> Refresh</button></CompetitionHero>
+    <main className="mx-auto max-w-7xl space-y-5 px-3 py-6 sm:px-6 lg:px-10">
+      <header className="flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-brand">Competition / Challenge setup</div>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground">Challenges & scoring</h1>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">Configure timed student challenges, manage scoring versions, and monitor learner activity.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => void load()} disabled={busy} aria-label="Refresh challenges" title="Refresh" className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-surface text-muted transition hover:border-brand/40 hover:text-brand disabled:opacity-50"><RefreshCw className="h-4 w-4" /></button>
+          <button type="button" onClick={() => setDialog("policy")} disabled={challengeSetupActive === false || busy} className={secondaryButtonClass}><Award className="h-4 w-4" /> New scoring policy</button>
+          <button type="button" onClick={() => setDialog("challenge")} disabled={challengeSetupActive === false || busy} className={primaryButtonClass}><Plus className="h-4 w-4" /> Create challenge</button>
+        </div>
+      </header>
       <UserGuide guide={COMPETITION_CHALLENGE_GUIDE} />
       {challengeSetupActive === false ? <CompetitionFeatureNotice title="Challenge setup isn’t active yet" description="Daily challenge configuration is currently disabled. A platform administrator can review the Competition capability switches after content, identity, and pilot-readiness checks are complete." /> : null}
       <div className={challengeSetupActive === false ? "hidden" : "contents"}>
-      <section className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]">
-        <form onSubmit={(event) => void createPolicy(event)} className="space-y-4 border border-border bg-surface p-5"><div><h2 className="font-semibold text-foreground">Scoring policy</h2><p className="mt-1 text-xs text-muted">Stored as a versioned snapshot. Don’t edit a policy after live attempts use it.</p></div><label className="block text-xs font-semibold text-muted">Policy name<input required value={policyName} onChange={(event) => setPolicyName(event.target.value)} className="mt-1 h-10 w-full border border-border bg-background px-3 text-sm text-foreground" /></label><button disabled={busy} className="inline-flex h-10 items-center gap-2 border border-brand px-4 text-sm font-semibold text-brand hover:bg-brand-light disabled:opacity-50"><Plus className="h-4 w-4" /> Create v1 scoring policy</button><label className="block text-xs font-semibold text-muted">Selected policy<select value={scoringPolicyId} onChange={(event) => setScoringPolicyId(event.target.value)} className="mt-1 h-10 w-full border border-border bg-background px-3 text-sm text-foreground"><option value="">Choose policy</option>{policies.map((policy) => <option key={policy.id} value={policy.id}>{policy.name} · v{policy.version}</option>)}</select></label></form>
+        <section aria-label="Challenge overview" className="grid grid-cols-2 border-y border-border bg-surface sm:grid-cols-4">
+          <div className="border-b border-r border-border px-4 py-3 sm:border-b-0"><p className="text-xs font-medium text-muted">Challenges</p><p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{challenges.length}</p></div>
+          <div className="border-b border-border px-4 py-3 sm:border-b-0 sm:border-r"><p className="text-xs font-medium text-muted">Active</p><p className="mt-1 text-2xl font-semibold tabular-nums text-emerald-700">{activeCount}</p></div>
+          <div className="border-r border-border px-4 py-3"><p className="text-xs font-medium text-muted">Drafts</p><p className="mt-1 text-2xl font-semibold tabular-nums text-amber-700">{draftCount}</p></div>
+          <div className="px-4 py-3"><p className="text-xs font-medium text-muted">Learner attempts</p><p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{attemptCount}</p></div>
+        </section>
 
-        <form onSubmit={(event) => void createChallenge(event)} className="grid gap-3 border border-border bg-surface p-5 sm:grid-cols-2">
-          <div className="sm:col-span-2"><h2 className="font-semibold text-foreground">Create challenge definition</h2><p className="mt-1 text-xs text-muted">Set the age range and class or grade so learners know this challenge is intended for them.</p></div>
-          <label className="text-xs font-semibold text-muted">Title<input required value={name} onChange={(event) => setName(event.target.value)} className="mt-1 h-10 w-full border border-border bg-background px-3 text-sm text-foreground" /></label>
-          <label className="text-xs font-semibold text-muted">Age range<input required type="text" inputMode="numeric" pattern="[0-9]{1,2}[ -–][0-9]{1,2}" value={ageRange} onChange={(event) => setAgeRange(event.target.value)} placeholder="10-11" className="mt-1 h-10 w-full border border-border bg-background px-3 text-sm text-foreground" /></label>
-          <label className="text-xs font-semibold text-muted">Class / grade<input required maxLength={60} value={gradeLabel} onChange={(event) => setGradeLabel(event.target.value)} placeholder="Primary 5" className="mt-1 h-10 w-full border border-border bg-background px-3 text-sm text-foreground" /></label>
-          <label className="text-xs font-semibold text-muted">Category<select required value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className="mt-1 h-10 w-full border border-border bg-background px-3 text-sm text-foreground"><option value="">Choose category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-          <label className="text-xs font-semibold text-muted">Question set<select required value={questionSetId} onChange={(event) => setQuestionSetId(event.target.value)} className="mt-1 h-10 w-full border border-border bg-background px-3 text-sm text-foreground"><option value="">Choose set</option>{sets.map((set) => <option key={set.id} value={set.id}>{set.name} · {set.status} · {set._count?.questions ?? 0}</option>)}</select></label>
-          <label className="text-xs font-semibold text-muted">Questions<input type="number" min={1} max={100} value={questionCount} onChange={(event) => setQuestionCount(Number(event.target.value))} className="mt-1 h-10 w-full border border-border bg-background px-3 text-sm text-foreground" /></label>
-          <label className="text-xs font-semibold text-muted">Minutes<input type="number" min={1} max={120} value={minutes} onChange={(event) => setMinutes(Number(event.target.value))} className="mt-1 h-10 w-full border border-border bg-background px-3 text-sm text-foreground" /></label>
-          <label className="text-xs font-semibold text-muted">Attempts per student<input type="number" min={1} max={10} value={attemptLimit} onChange={(event) => setAttemptLimit(Number(event.target.value))} className="mt-1 h-10 w-full border border-border bg-background px-3 text-sm text-foreground" /></label>
-          <label className="text-xs font-semibold text-muted">XP for successful completion<input type="number" min={0} max={100000} value={completionXp} onChange={(event) => setCompletionXp(Number(event.target.value))} className="mt-1 h-10 w-full border border-border bg-background px-3 text-sm text-foreground" /><span className="mt-1 block font-normal">Set 0 for no XP. Expired attempts do not receive this reward.</span></label>
-          <button disabled={busy || !categoryId || !questionSetId || !scoringPolicyId} className="inline-flex h-10 items-center justify-center gap-2 bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50 sm:col-span-2"><Plus className="h-4 w-4" /> Save challenge draft</button>
-        </form>
-      </section>
+        <section aria-labelledby="challenge-schedule-title" className="overflow-hidden border border-border bg-surface">
+          <div className="flex flex-col gap-4 border-b border-border px-4 py-4 sm:px-5 lg:flex-row lg:items-end lg:justify-between">
+            <div><h2 id="challenge-schedule-title" className="text-base font-semibold text-foreground">Challenge schedule</h2><p className="mt-1 text-sm text-muted">Drafts are private. Activate only after reviewing audience and approved question coverage.</p></div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <label className="flex h-10 min-w-0 items-center gap-2 rounded-md border border-border bg-background px-3 text-muted focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/15"><Search className="h-4 w-4 shrink-0" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search challenges" aria-label="Search challenges" className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted" /></label>
+              <div role="group" aria-label="Filter challenges by status" className="flex h-10 items-center rounded-md border border-border bg-background p-1">
+                {(["ALL", "ACTIVE", "DRAFT", "PAUSED"] as StatusFilter[]).map((filter) => <button key={filter} type="button" onClick={() => setStatusFilter(filter)} aria-pressed={statusFilter === filter} className={`h-8 rounded px-2.5 text-xs font-semibold transition ${statusFilter === filter ? "bg-brand text-white" : "text-muted hover:bg-surface hover:text-foreground"}`}>{filter === "ALL" ? "All" : filter === "DRAFT" ? "Draft" : filter === "PAUSED" ? "Paused" : "Active"}</button>)}
+              </div>
+            </div>
+          </div>
 
-      <section className="border border-border bg-surface p-5"><h2 className="font-semibold text-foreground">Challenge schedule</h2><div className="mt-4 divide-y divide-border border-y border-border">{challenges.map((challenge) => <article key={challenge.id} className="flex flex-col justify-between gap-3 py-4 sm:flex-row sm:items-center"><div><div className="flex flex-wrap items-center gap-2"><p className="font-medium text-foreground">{challenge.title}</p><span className="border border-border bg-background px-2 py-0.5 text-[11px] font-bold uppercase text-muted">{challenge.status}</span></div><p className="mt-1 text-sm font-medium text-foreground">{formatChallengeAudience(challenge.gradeLabel)}</p><p className="mt-1 text-xs text-muted">{challenge.category.name} · {challenge.questionCount} questions · {Math.ceil(challenge.durationSeconds / 60)} min · {challenge._count.attempts} attempts · {challenge.completionXp} XP on completion</p></div><div className="flex gap-2">{challenge.status === "ACTIVE" ? <button type="button" disabled={busy} onClick={() => void setChallengeStatus(challenge.id, "PAUSED")} className="h-9 border border-border px-3 text-xs font-semibold text-muted disabled:opacity-50">Pause</button> : challenge.status !== "ARCHIVED" && challenge.status !== "COMPLETED" ? <button type="button" disabled={busy} onClick={() => void setChallengeStatus(challenge.id, "ACTIVE")} className="inline-flex h-9 items-center gap-1 border border-brand px-3 text-xs font-semibold text-brand hover:bg-brand-light disabled:opacity-50"><Play className="h-3.5 w-3.5" /> Activate</button> : null}</div></article>)}</div></section>
+          {filteredChallenges.length ? <div className="divide-y divide-border">
+            {filteredChallenges.map((challenge) => <article key={challenge.id} className="grid gap-4 px-4 py-4 sm:px-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(160px,1fr)_minmax(180px,.9fr)_auto] lg:items-center">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="truncate text-sm font-semibold text-foreground">{challenge.title}</h3>
+                  <span className={`inline-flex rounded border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${challenge.status === "ACTIVE" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : challenge.status === "PAUSED" ? "border-slate-200 bg-slate-100 text-slate-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}>{challenge.status}</span>
+                </div>
+                <p className="mt-1 text-xs text-muted">{challenge.category.name} · {formatChallengeAudience(challenge.gradeLabel)}</p>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-foreground"><FileQuestion className="h-4 w-4 text-muted" /><span>{challenge.questionCount} questions</span><span className="text-muted">·</span><span>{Math.ceil(challenge.durationSeconds / 60)} min</span></div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted"><span className="inline-flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5" />{challenge._count.attempts} attempts</span><span>{challenge.completionXp} XP reward</span></div>
+              <div className="flex items-center justify-start lg:justify-end">
+                {challenge.status === "ACTIVE" ? <button type="button" disabled={busy} onClick={() => void setChallengeStatus(challenge.id, "PAUSED")} className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-xs font-semibold text-foreground transition hover:border-amber-300 hover:bg-amber-50 hover:text-amber-900 disabled:opacity-50"><Pause className="h-3.5 w-3.5" /> Pause</button> : challenge.status !== "ARCHIVED" && challenge.status !== "COMPLETED" ? <button type="button" disabled={busy} onClick={() => void setChallengeStatus(challenge.id, "ACTIVE")} className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand px-3 text-xs font-semibold text-white transition hover:bg-brand-hover disabled:opacity-50"><Play className="h-3.5 w-3.5" /> Activate</button> : <span className="text-xs text-muted">No actions</span>}
+              </div>
+            </article>)}
+          </div> : <div className="px-5 py-16 text-center"><p className="font-medium text-foreground">No challenges match this view</p><p className="mt-1 text-sm text-muted">Change the search or status filter, or create a challenge draft.</p><button type="button" onClick={() => setDialog("challenge")} className="mt-4 inline-flex h-9 items-center gap-2 rounded-md bg-brand px-3 text-sm font-semibold text-white hover:bg-brand-hover"><Plus className="h-4 w-4" /> Create challenge</button></div>}
+        </section>
+
+        <section aria-labelledby="scoring-policy-title" className="border border-border bg-surface">
+          <div className="flex flex-col gap-2 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div><h2 id="scoring-policy-title" className="text-sm font-semibold text-foreground">Scoring policies</h2><p className="mt-1 text-xs text-muted">Versioned rules are snapshotted when a learner starts an attempt.</p></div>
+            <span className="text-xs tabular-nums text-muted">{policies.length} versions</span>
+          </div>
+          <div className="divide-y divide-border">
+            {policies.map((policy) => <article key={policy.id} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5"><div className="flex items-center gap-2"><CircleCheck className="h-4 w-4 text-brand" /><span className="text-sm font-medium text-foreground">{policy.name}</span><span className="rounded border border-border bg-background px-2 py-0.5 text-[10px] font-semibold text-muted">v{policy.version}</span></div><span className="text-xs text-muted">Base scoring and difficulty multipliers</span></article>)}
+            {!policies.length ? <p className="px-5 py-5 text-sm text-muted">No scoring policy exists yet. Create one before saving a challenge.</p> : null}
+          </div>
+        </section>
       </div>
+
+      <CompetitionDialog isOpen={dialog === "policy"} onClose={closeDialog} title="Create scoring policy" description="A policy is versioned and copied into each attempt when the learner starts.">
+        <form onSubmit={(event) => void createPolicy(event)} className="space-y-4 p-5 sm:p-6">
+          <label className={labelClass}>Policy name<input required value={policyName} onChange={(event) => setPolicyName(event.target.value)} maxLength={120} placeholder="Balanced points" className={fieldClass} /></label>
+          <div className="border-l-2 border-brand/30 pl-3 text-sm leading-5 text-muted">100 base points · difficulty multipliers enabled · no speed or streak bonus</div>
+          <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end"><button type="button" onClick={closeDialog} disabled={busy} className={secondaryButtonClass}>Cancel</button><button disabled={busy} className={primaryButtonClass}><Award className="h-4 w-4" /> Create policy v1</button></div>
+        </form>
+      </CompetitionDialog>
+
+      <CompetitionDialog isOpen={dialog === "challenge"} onClose={closeDialog} title="Create challenge" description="Set the audience and challenge format. The new challenge is saved as a draft." size="large">
+        <form onSubmit={(event) => void createChallenge(event)} className="space-y-4 p-5 sm:p-6">
+          <label className={labelClass}>Challenge title<input required maxLength={191} value={name} onChange={(event) => setName(event.target.value)} placeholder="Primary 5 Mathematics Challenge" className={fieldClass} /></label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className={labelClass}>Age range<input required type="text" inputMode="numeric" pattern="[0-9]{1,2}[ -–][0-9]{1,2}" value={ageRange} onChange={(event) => setAgeRange(event.target.value)} placeholder="10-11" className={fieldClass} /></label>
+            <label className={labelClass}>Class or grade<input required maxLength={60} value={gradeLabel} onChange={(event) => setGradeLabel(event.target.value)} placeholder="Primary 5" className={fieldClass} /></label>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className={labelClass}>Category<select required value={categoryId} onChange={(event) => { setCategoryId(event.target.value); setQuestionSetId(""); }} className={fieldClass}><option value="">Choose category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+            <label className={labelClass}>Question set<select required value={questionSetId} onChange={(event) => setQuestionSetId(event.target.value)} disabled={!categoryId} className={fieldClass}><option value="">Choose set</option>{categoryQuestionSets.map((set) => <option key={set.id} value={set.id}>{set.name} · {set._count?.questions ?? 0} records</option>)}</select></label>
+          </div>
+          <label className={labelClass}>Scoring policy<select required value={scoringPolicyId} onChange={(event) => setScoringPolicyId(event.target.value)} className={fieldClass}><option value="">Choose policy</option>{policies.map((policy) => <option key={policy.id} value={policy.id}>{policy.name} · v{policy.version}</option>)}</select></label>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <label className={labelClass}>Questions<input type="number" min={1} max={100} value={questionCount} onChange={(event) => setQuestionCount(Number(event.target.value))} className={fieldClass} /></label>
+            <label className={labelClass}>Minutes<input type="number" min={1} max={120} value={minutes} onChange={(event) => setMinutes(Number(event.target.value))} className={fieldClass} /></label>
+            <label className={labelClass}>Attempts per student<input type="number" min={1} max={10} value={attemptLimit} onChange={(event) => setAttemptLimit(Number(event.target.value))} className={fieldClass} /></label>
+          </div>
+          <label className={labelClass}>Completion XP<input type="number" min={0} max={100000} value={completionXp} onChange={(event) => setCompletionXp(Number(event.target.value))} className={fieldClass} /><span className="mt-1 block text-xs font-normal text-muted">Set to zero when this challenge should not award XP.</span></label>
+          <div className="flex flex-col-reverse gap-2 border-t border-border pt-4 sm:flex-row sm:justify-end"><button type="button" onClick={closeDialog} disabled={busy} className={secondaryButtonClass}>Cancel</button><button disabled={busy || !categoryId || !questionSetId || !scoringPolicyId} className={primaryButtonClass}><Plus className="h-4 w-4" /> Save challenge draft</button></div>
+        </form>
+      </CompetitionDialog>
+
       <ErrorModal isOpen={Boolean(feedbackModal)} onClose={() => setFeedbackModal(null)} title={feedbackModal?.title} message={feedbackModal?.message || ""} details={feedbackModal?.details} type={feedbackModal?.type || "error"} confirmLabel={feedbackModal?.type === "success" ? "Done" : "Okay"} />
     </main>
   );
