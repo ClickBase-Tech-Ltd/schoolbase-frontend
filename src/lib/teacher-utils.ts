@@ -216,7 +216,7 @@ export function getTeacherNavigation(phase: SchoolPhase) {
     { href: '/teacher/students', label: 'Students', icon: 'Users' },
     { href: '/teacher/subjects', label: 'Subjects', icon: 'BookOpen' },
     { href: '/teacher/attendance', label: 'Attendance', icon: 'ClipboardList' },
-    { href: '/teacher/competition', label: 'Competition', icon: 'Award' },
+    { href: '/teacher/competition', label: 'Competition', icon: 'Award', badge: 'New' },
     { href: '/teacher/timetable', label: 'Timetable', icon: 'CalendarDays' },
     { href: '/teacher/announcements', label: 'Announcements', icon: 'Megaphone' },
     { href: '/teacher/profile', label: 'Profile', icon: 'UserCircle' },

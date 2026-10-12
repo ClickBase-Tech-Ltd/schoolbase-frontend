@@ -20,6 +20,7 @@ const baseNav = [
     href: "/admin/competition",
     label: "Competition",
     icon: "Award",
+    badge: "New",
     children: [
       { href: "/admin/competition/students", label: "Competition Accounts", icon: "UserCircle" },
     ],

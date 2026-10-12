@@ -19,6 +19,7 @@ const nav = [
     href: "/parent/competition",
     label: "Competition",
     icon: "Award",
+    badge: "New",
     children: [
       { href: "/parent/competition", label: "Achievements", icon: "Sparkles" },
       { href: "/competition", label: "Student Challenges", icon: "Award" },

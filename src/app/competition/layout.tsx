@@ -3,7 +3,7 @@ import SharedLayout from "@/components/shared-layout";
 import { getParentSession, getStaffSession } from "@/lib/auth";
 
 const competitionNav = [
-  { href: "/competition", label: "My Competition", icon: "Award", section: "Parent-linked Competition" },
+  { href: "/competition", label: "My Competition", icon: "Award", section: "Parent-linked Competition", badge: "New" },
 ];
 
 export default async function CompetitionLayout({ children }: { children: React.ReactNode }) {
