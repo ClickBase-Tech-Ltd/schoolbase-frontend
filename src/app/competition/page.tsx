@@ -57,6 +57,13 @@ class ChildSelectionRequiredError extends Error {
   }
 }
 
+class DailyLimitReachedError extends Error {
+  constructor(public kind: "daily" | "exam") {
+    super(kind === "daily" ? "You have already completed a daily challenge today. Please come back tomorrow." : "You have already completed an exam practice today. Please come back tomorrow.");
+    this.name = "DailyLimitReachedError";
+  }
+}
+
 function isCompetitionFeatureUnavailable(error: unknown): boolean {
   return error instanceof Error && error.name === "CompetitionFeatureUnavailableError";
 }
@@ -95,6 +102,7 @@ export default function StudentCompetitionPage() {
   const [busy, setBusy] = useState(false);
   const [dailyChallengesActive, setDailyChallengesActive] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [limitNotice, setLimitNotice] = useState<{ title: string; message: string; details: string } | null>(null);
 
   async function api<T>(path: string, init?: RequestInit): Promise<T> {
     const response = await fetch(`/api/competition${path}`, { credentials: "include", ...init, headers: { "Content-Type": "application/json", ...(init?.headers || {}) } });
@@ -109,6 +117,8 @@ export default function StudentCompetitionPage() {
       if (data.error === "STUDENT_IDENTITY_NOT_LINKED") throw new Error("No active student connected to this parent account was found. Check that the SchoolBase guardian-to-student relationship is current. Direct student sign-in may require a separately verified Competition account link.");
       if (data.error === "GUARDIAN_PUPIL_NOT_LINKED") throw new Error("That student is not linked to your parent account for Competition.");
       if (data.error === "ATTEMPT_LIMIT_REACHED") throw new Error("You have used all attempts available for this challenge.");
+      if (data.error === "DAILY_CHALLENGE_LIMIT_REACHED") throw new DailyLimitReachedError("daily");
+      if (data.error === "EXAM_PRACTICE_LIMIT_REACHED") throw new DailyLimitReachedError("exam");
       if (data.error === "ATTEMPT_ALREADY_CREATED") throw new Error("An attempt is already being started. Refresh your challenge list before trying again.");
       if (data.error === "CHALLENGE_AUDIENCE_MISMATCH") throw new Error("This challenge is not eligible for the selected student’s recorded class. No attempt was started.");
       throw new Error(data.error || "Competition request failed.");
@@ -236,6 +246,12 @@ export default function StudentCompetitionPage() {
         setDailyChallengesActive(false);
         setChallenges([]);
         setAttempts([]);
+      } else if (startError instanceof DailyLimitReachedError) {
+        setLimitNotice({
+          title: startError.kind === "daily" ? "Daily challenge limit reached" : "Exam practice limit reached",
+          message: startError.message,
+          details: "Each student can complete only one daily challenge and one exam practice per day. Return tomorrow to unlock another attempt.",
+        });
       } else {
         setError(startError instanceof Error ? startError.message : "Unable to start challenge.");
       }
@@ -640,6 +656,16 @@ export default function StudentCompetitionPage() {
         <button type="button" onClick={() => void startChallenge(challengeToStart)} className="h-10 bg-brand px-5 text-sm font-semibold text-white hover:bg-brand-hover">Start challenge</button>
       </div></section></div> : null}
       {!attempt ? <UserGuide guide={PRACTICE_HELP_GUIDE} /> : null}
+      <ErrorModal
+        isOpen={Boolean(limitNotice)}
+        onClose={() => setLimitNotice(null)}
+        title={limitNotice?.title || "Today's limit reached"}
+        message={limitNotice?.message || "A limit was reached for this student."}
+        details={limitNotice?.details || "Please return tomorrow to unlock another challenge."}
+        type="error"
+        confirmLabel="Come back tomorrow"
+      />
+
       <ErrorModal isOpen={Boolean(error)} onClose={() => setError(null)} title="Competition request failed" message={error || "The challenge request could not be completed."} type="error" confirmLabel="Okay" />
     </main>
   );
