@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Award, BookOpen, Check, CheckCircle2, Clock3, GraduationCap, RefreshCw, Send, Sparkles, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Award, BellRing, BookOpen, Check, CheckCircle2, Clock3, GraduationCap, RefreshCw, Send, Sparkles, Volume2, VolumeX, X } from "lucide-react";
 import { ErrorModal } from "@/components/ui/error-modal";
 import CompetitionHero from "@/components/competition/competition-hero";
 import { UserGuide, type PageHelpGuide } from "@/components/ui/user-guide";
@@ -71,6 +71,8 @@ export default function StudentCompetitionPage() {
   const [leaderboardUnavailable, setLeaderboardUnavailable] = useState<Record<string, boolean>>({});
   const [matches, setMatches] = useState<Match[]>([]);
   const [matchesUnavailable, setMatchesUnavailable] = useState(true);
+  const [dismissedInviteIds, setDismissedInviteIds] = useState<string[]>([]);
+  const notifiedInviteIds = useRef<Set<string>>(new Set());
   const [peersByChallenge, setPeersByChallenge] = useState<Record<string, Peer[]>>({});
   const [selectedPeerByChallenge, setSelectedPeerByChallenge] = useState<Record<string, string>>({});
   const [challengeToStart, setChallengeToStart] = useState<Challenge | null>(null);
@@ -164,6 +166,13 @@ export default function StudentCompetitionPage() {
     const timeout = window.setTimeout(() => setShowFirstCompletion(false), 4200);
     return () => window.clearTimeout(timeout);
   }, [showFirstCompletion]);
+
+  useEffect(() => {
+    if (!learnerCapabilities.studentVsStudentEnabled || !selectedPupilId || attempt || result) return;
+    const intervalId = window.setInterval(() => { void loadMatches(selectedPupilId, true); }, 20000);
+    return () => window.clearInterval(intervalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [learnerCapabilities.studentVsStudentEnabled, selectedPupilId, attempt, result]);
 
   function togglePracticeSounds() {
     const nextEnabled = !practiceSoundsEnabled;
@@ -322,18 +331,26 @@ export default function StudentCompetitionPage() {
     } finally { setBusy(false); }
   }
 
-  async function loadMatches(pupilId = selectedPupilId) {
-    setBusy(true);
-    setError(null);
+  async function loadMatches(pupilId = selectedPupilId, silent = false) {
+    if (!silent) {
+      setBusy(true);
+      setError(null);
+    }
     try {
       const query = pupilId ? `?pupilId=${encodeURIComponent(pupilId)}` : "";
       const data = await api<{ matches: Match[] }>(`/student/matches${query}`);
       setMatches(data.matches);
       setMatchesUnavailable(false);
+      const incomingPending = data.matches.filter((match) => match.status === "PENDING" && !match.isSender);
+      const firstIncoming = incomingPending.find((match) => !notifiedInviteIds.current.has(match.id));
+      if (firstIncoming) {
+        notifiedInviteIds.current.add(firstIncoming.id);
+        if (window.localStorage.getItem(PRACTICE_SOUND_PREFERENCE) !== "disabled") playBellTone("school", 0.75);
+      }
     } catch (matchError) {
       if (isCompetitionFeatureUnavailable(matchError)) setMatchesUnavailable(true);
-      else setError(matchError instanceof Error ? matchError.message : "Unable to load invitations.");
-    } finally { setBusy(false); }
+      else if (!silent) setError(matchError instanceof Error ? matchError.message : "Unable to load invitations.");
+    } finally { if (!silent) setBusy(false); }
   }
 
   async function updateMatch(match: Match, action: "ACCEPT" | "DECLINE" | "CANCEL" | "START") {
@@ -349,6 +366,7 @@ export default function StudentCompetitionPage() {
         setAnswered([]);
       } else {
         await api(`/student/matches/${match.id}${query}`, { method: "PATCH", body: JSON.stringify({ action, pupilId: selectedPupilId || undefined }) });
+        if (action === "ACCEPT" && practiceSoundsEnabled) playBellTone("marimba", 0.45);
         await loadMatches();
       }
     } catch (matchError) {
@@ -363,6 +381,11 @@ export default function StudentCompetitionPage() {
   const resultAccuracyValue = result?.accuracyPercent ?? 0;
   const resultAccuracy = Math.round(resultAccuracyValue);
   const resultPassed = resultAccuracyValue >= 70;
+  const incomingInvite = matches.find((match) => match.status === "PENDING" && !match.isSender && !dismissedInviteIds.includes(match.id)) || null;
+
+  function dismissIncomingInvite(matchId: string) {
+    setDismissedInviteIds((current) => current.includes(matchId) ? current : [...current, matchId]);
+  }
 
   return (
     <main className={`mx-auto max-w-5xl space-y-6 px-2 py-6 sm:px-8 sm:py-8 ${attempt || result ? "pb-32" : ""}`}>
@@ -581,6 +604,8 @@ export default function StudentCompetitionPage() {
           <style>{`@keyframes competition-challenge-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } .competition-challenge-enter { animation: competition-challenge-enter 360ms cubic-bezier(.2,.7,.2,1) both; } @media (prefers-reduced-motion: reduce) { .competition-challenge-enter { animation: none; } }`}</style>
         </section>
       ) : null}
+
+      {incomingInvite && !attempt && !result ? <div role="presentation" className="fixed inset-0 z-[70] flex items-center justify-center bg-[#101827]/55 p-4 backdrop-blur-[3px]" onMouseDown={(event) => { if (event.target === event.currentTarget) dismissIncomingInvite(incomingInvite.id); }}><section role="dialog" aria-modal="true" aria-labelledby="incoming-invite-title" className="invite-modal-enter relative w-full max-w-md overflow-hidden border border-border bg-surface shadow-2xl"><div className="h-1 bg-gradient-to-r from-emerald-500 via-teal-400 to-sky-500" /><div className="p-5 sm:p-7"><div className="flex items-start justify-between gap-4"><div className="relative grid h-14 w-14 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-700"><span className="invite-ring absolute inset-0 rounded-full border border-emerald-400/70" aria-hidden="true" /><BellRing className="h-6 w-6" /></div><div className="flex items-center gap-1"><button type="button" onClick={togglePracticeSounds} aria-label={practiceSoundsEnabled ? "Turn practice sounds off" : "Turn practice sounds on"} aria-pressed={practiceSoundsEnabled} title={practiceSoundsEnabled ? "Turn practice sounds off" : "Turn practice sounds on"} className="inline-flex h-9 w-9 items-center justify-center border border-border text-muted hover:border-brand hover:text-brand">{practiceSoundsEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}</button><button type="button" onClick={() => dismissIncomingInvite(incomingInvite.id)} aria-label="Dismiss invitation" className="inline-flex h-9 w-9 items-center justify-center text-muted hover:bg-background hover:text-foreground"><X className="h-4 w-4" /></button></div></div><p className="mt-5 text-xs font-bold uppercase tracking-[0.12em] text-emerald-800">Classmate invitation</p><h2 id="incoming-invite-title" className="mt-2 text-2xl font-semibold leading-tight text-foreground">Ready for a friendly challenge?</h2><p className="mt-2 text-sm leading-6 text-muted"><span className="font-semibold text-foreground">{incomingInvite.opponentName}</span> invited you to take on <span className="font-semibold text-foreground">{incomingInvite.challenge.title}</span>.</p><div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-y border-border py-3"><span className="inline-flex items-center gap-2 text-xs font-semibold text-amber-800"><span className="h-2 w-2 rounded-full bg-amber-500" /> Pending</span><span className="text-xs text-muted">Expires {new Date(incomingInvite.expiresAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span></div><div className="mt-5 grid grid-cols-2 gap-2"><button type="button" disabled={busy} onClick={() => { dismissIncomingInvite(incomingInvite.id); void updateMatch(incomingInvite, "DECLINE"); }} className="inline-flex h-11 items-center justify-center border border-border px-4 text-sm font-semibold text-foreground transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-800 disabled:opacity-50">Decline</button><button type="button" disabled={busy} onClick={() => { dismissIncomingInvite(incomingInvite.id); void updateMatch(incomingInvite, "ACCEPT"); }} className="inline-flex h-11 items-center justify-center gap-2 bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-50"><Check className="h-4 w-4" /> Accept invitation</button></div><p className="mt-3 text-center text-[11px] leading-5 text-muted">Your challenge results stay private to you and your school.</p></div><style>{`@keyframes invite-modal-in { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } } @keyframes invite-ring-pulse { 0% { transform: scale(.82); opacity: .7; } 100% { transform: scale(1.6); opacity: 0; } } .invite-modal-enter { animation: invite-modal-in 260ms cubic-bezier(.2,.7,.2,1) both; } .invite-ring { animation: invite-ring-pulse 1.8s ease-out infinite; } @media (prefers-reduced-motion: reduce) { .invite-modal-enter, .invite-ring { animation: none; } }`}</style></section></div> : null}
 
       {challengeToStart ? <div role="presentation" className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) closeChallengeBriefing(); }}><section role="dialog" aria-modal="true" aria-labelledby="challenge-brief-title" className="w-full max-w-lg border border-border bg-surface p-5 shadow-2xl sm:p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-wide text-brand">Challenge briefing</p><h2 id="challenge-brief-title" className="mt-2 text-xl font-semibold text-foreground">{challengeToStart.title}</h2></div><div className="flex items-center gap-2"><button type="button" onClick={togglePracticeSounds} aria-label={practiceSoundsEnabled ? "Turn practice sounds off" : "Turn practice sounds on"} aria-pressed={practiceSoundsEnabled} title={practiceSoundsEnabled ? "Turn practice sounds off" : "Turn practice sounds on"} className="inline-flex h-9 w-9 items-center justify-center border border-border text-muted hover:border-brand hover:text-brand">{practiceSoundsEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}</button><button type="button" onClick={closeChallengeBriefing} aria-label="Close challenge briefing" className="p-1 text-muted hover:text-foreground"><X className="h-5 w-5" /></button></div></div>
       <p className="mt-2 text-sm font-medium text-foreground">{formatChallengeAudience(challengeToStart.gradeLabel)}</p>{challengeToStart.description ? <p className="mt-3 text-sm leading-6 text-muted">{challengeToStart.description}</p> : null}
