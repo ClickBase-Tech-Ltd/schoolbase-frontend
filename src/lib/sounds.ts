@@ -228,6 +228,46 @@ export function playLoginSuccessTone() {
   playSessionTone([523, 659, 784], 0.18, 0.045);
 }
 
+export function playClassClap(volume = 1) {
+  try {
+    const ctx = createAudioContext();
+    if (!ctx) return;
+
+    const schedule = () => {
+      const start = ctx.currentTime + 0.015;
+      const claps = [0, 0.12, 0.25, 0.39, 0.52, 0.68, 0.82];
+      claps.forEach((delay, index) => {
+        const duration = 0.075 + Math.random() * 0.035;
+        const buffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * duration), ctx.sampleRate);
+        const samples = buffer.getChannelData(0);
+        for (let sample = 0; sample < samples.length; sample += 1) samples[sample] = Math.random() * 2 - 1;
+
+        const source = ctx.createBufferSource();
+        const filter = ctx.createBiquadFilter();
+        const gain = ctx.createGain();
+        source.buffer = buffer;
+        filter.type = "bandpass";
+        filter.frequency.value = 1150 + (index % 3) * 260;
+        filter.Q.value = 0.75;
+        const clapStart = start + delay;
+        gain.gain.setValueAtTime(0.0001, clapStart);
+        gain.gain.exponentialRampToValueAtTime(Math.min(0.075, 0.045 * volume), clapStart + 0.004);
+        gain.gain.exponentialRampToValueAtTime(0.0001, clapStart + duration);
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        source.start(clapStart);
+      });
+      window.setTimeout(() => ctx.close().catch(() => {}), 1300);
+    };
+
+    if (ctx.state === "suspended") ctx.resume().then(schedule).catch(() => {});
+    else schedule();
+  } catch {
+    // Audio is optional and may be unavailable in the browser.
+  }
+}
+
 export function playLogoutTone() {
   playSessionTone([659, 523, 392], 0.16, 0.04);
 }
