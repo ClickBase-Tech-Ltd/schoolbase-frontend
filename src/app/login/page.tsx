@@ -1,9 +1,7 @@
-import { redirect } from "next/navigation";
 import { CheckCircle2, LockKeyhole, ShieldCheck } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { LoginForm } from "@/components/auth/login-form";
 import { LoginPageAdSlot } from "@/components/login-page-ad-slot";
-import { getStaffSession, getPlatformAdminSession } from "@/lib/auth";
 
 export const metadata = {
   title: "School Login | SchoolBase",
@@ -18,16 +16,6 @@ export default async function LoginPage({
 }) {
   const { next, signup, reset } = await searchParams;
   const teacherLoginRequested = next === "/teacher";
-
-  // Check both staff and platform admin sessions
-  const staffSession = await getStaffSession();
-  const platformSession = await getPlatformAdminSession();
-
-  // Keep an existing staff session in its role-specific workspace.
-  if (staffSession?.role === "TEACHER") redirect("/teacher");
-  if (!teacherLoginRequested && staffSession?.role === "BURSAR") redirect("/accounting");
-  if (!teacherLoginRequested && staffSession) redirect("/admin");
-  if (!teacherLoginRequested && platformSession) redirect("/schoolbase-admin");
 
   return (
     <main className="min-h-screen bg-background px-3 py-4 sm:px-8 sm:py-10">

@@ -174,6 +174,23 @@ export default function CompetitionQuestionsPage() {
     } finally { setBusy(false); }
   }
 
+  async function reviewSet(action: "APPROVE" | "RETURN_TO_DRAFT") {
+    if (!selectedSet) return;
+    setBusy(true);
+    setFeedbackModal(null);
+    try {
+      await request(`/admin/question-sets/${selectedSet}/review`, { method: "POST", body: JSON.stringify({ action }) });
+      const refreshError = await load();
+      const approved = action === "APPROVE";
+      setFeedbackModal(refreshError
+        ? { type: "error", title: `Question set ${approved ? "approved" : "returned to draft"}; refresh failed`, message: "The set was updated, but the question bank could not be refreshed.", details: refreshError }
+        : { type: "success", title: `Question set ${approved ? "approved" : "returned to draft"}`, message: approved ? "This reviewed set is now eligible for active daily challenges and matching exam practice." : "This set is no longer available to students until it is reviewed and approved again." });
+    } catch (reviewError) {
+      if (reviewError instanceof Error && reviewError.name === "QuestionBankUnavailableError") setQuestionBankActive(false);
+      else setFeedbackModal({ type: "error", title: "Question-set review failed", message: reviewError instanceof Error ? reviewError.message : "Review action failed." });
+    } finally { setBusy(false); }
+  }
+
   const selectedQuestionSet = sets.find((set) => set.id === selectedSet);
   const filteredQuestions = questions.filter((question) => {
     const matchesStatus = statusFilter === "ALL" || question.status === statusFilter;
@@ -186,6 +203,7 @@ export default function CompetitionQuestionsPage() {
   const approvedCount = questions.filter((question) => question.status === "APPROVED").length;
   const reviewCount = questions.filter((question) => question.status === "DRAFT").length;
   const rejectedCount = questions.filter((question) => question.status === "REJECTED").length;
+  const selectedSetCanBeApproved = approvedCount > 0 && questions.every((question) => question.status === "APPROVED" || question.status === "REJECTED");
 
   function closeDialog() {
     if (!busy) setDialog(null);
@@ -247,7 +265,13 @@ export default function CompetitionQuestionsPage() {
               <div className="flex h-9 w-9 items-center justify-center rounded-md bg-brand/10 text-brand"><FileQuestion className="h-4 w-4" /></div>
               <div><h2 id="question-list-title" className="text-sm font-semibold text-foreground">Questions</h2><p className="mt-0.5 text-xs text-muted">Expand a row to review its options and answer key.</p></div>
             </div>
-            <span className="text-xs font-medium text-muted">{selectedQuestionSet?.status || "No set selected"}</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-muted">{selectedQuestionSet?.status || "No set selected"}</span>
+              {selectedQuestionSet && selectedQuestionSet.status !== "ARCHIVED" ? selectedQuestionSet.status === "APPROVED"
+                ? <button type="button" disabled={busy} onClick={() => void reviewSet("RETURN_TO_DRAFT")} className="h-8 border border-border px-2.5 text-xs font-semibold text-foreground hover:border-amber-300 hover:bg-amber-50 disabled:opacity-50">Return to draft</button>
+                : <button type="button" disabled={busy || !selectedSetCanBeApproved} onClick={() => void reviewSet("APPROVE")} title={selectedSetCanBeApproved ? "Approve reviewed question set" : "Review every question and approve at least one before approving the set"} className="inline-flex h-8 items-center gap-1.5 border border-emerald-300 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"><Check className="h-3.5 w-3.5" /> Approve set</button>
+                : null}
+            </div>
           </div>
 
           {!selectedSet ? <div className="px-5 py-16 text-center"><p className="font-medium text-foreground">Select a question set</p><p className="mt-1 text-sm text-muted">Choose a set above to view and review its questions.</p></div> : pageQuestions.length === 0 ? <div className="px-5 py-16 text-center"><p className="font-medium text-foreground">No matching questions</p><p className="mt-1 text-sm text-muted">Adjust the search or review filter, or add a new question to this set.</p><button type="button" onClick={() => setDialog("question")} className="mt-4 inline-flex h-9 items-center gap-2 rounded-md bg-brand px-3 text-sm font-semibold text-white hover:bg-brand-hover"><Plus className="h-4 w-4" /> Add question</button></div> : <div className="divide-y divide-border">
