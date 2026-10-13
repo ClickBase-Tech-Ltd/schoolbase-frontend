@@ -27,7 +27,7 @@ const COMPETITION_CHALLENGE_GUIDE: PageHelpGuide = {
     "Confirm the Competition master switch, Question bank, and Daily challenges are enabled in Platform Settings. XP is optional and requires its own switch.",
     "Create or choose a category, then create a question set and add reviewed questions. Each multiple-choice question needs exactly one correct option; approve only content that has been checked for accuracy and age suitability.",
     "Create a scoring policy. Its rules are copied into each attempt, so changing a policy later does not rewrite scores already earned.",
-    "Create a challenge with an age range, class or grade label, category, question set, question count, duration, and attempts per student. It is saved as a draft.",
+    "Create a challenge with a class or grade label, category, question set, question count, duration, and attempts per student. It is saved as a draft.",
     "Activate the challenge only after its question set has enough approved questions and the audience label is correct. Activation makes it eligible to appear to matching linked learners.",
     "A parent session resolves children from the authenticated guardian’s existing SchoolBase family relationship. A parent chooses a child when there is more than one; the server rechecks that relationship and active enrollment. Direct student-user access still requires a trusted identity binding.",
     "The learner starts an attempt, answers before the server-controlled deadline, and submits it. The server checks eligibility, records answers, calculates the score, and shows the result; the parent Competition page shows the learner's permitted progress.",
@@ -84,8 +84,7 @@ const COMPETITION_CHALLENGE_GUIDE: PageHelpGuide = {
 
 function formatChallengeAudience(audience: string | null): string {
   if (!audience) return "Audience details incomplete";
-  if (/^Ages \d{1,2}-\d{1,2} · .+/.test(audience)) return audience;
-  return `${audience} · age range not specified`;
+  return audience.replace(/^Ages \d{1,2}-\d{1,2} · /, "");
 }
 
 export default function CompetitionChallengesPage() {
@@ -98,7 +97,6 @@ export default function CompetitionChallengesPage() {
   const [categoryId, setCategoryId] = useState("");
   const [questionSetId, setQuestionSetId] = useState("");
   const [scoringPolicyId, setScoringPolicyId] = useState("");
-  const [ageRange, setAgeRange] = useState("");
   const [gradeLabel, setGradeLabel] = useState("");
   const [questionCount, setQuestionCount] = useState(10);
   const [minutes, setMinutes] = useState(10);
@@ -189,7 +187,7 @@ export default function CompetitionChallengesPage() {
     setBusy(true);
     setFeedbackModal(null);
     try {
-      await request("/admin/challenges", { method: "POST", body: JSON.stringify({ title: name, categoryId, questionSetId, scoringPolicyId, ageRange, gradeLabel, questionCount, durationSeconds: minutes * 60, attemptLimit, completionXp }) });
+      await request("/admin/challenges", { method: "POST", body: JSON.stringify({ title: name, categoryId, questionSetId, scoringPolicyId, gradeLabel, questionCount, durationSeconds: minutes * 60, attemptLimit, completionXp }) });
       setDialog(null);
       const refreshError = await load();
       setFeedbackModal(refreshError
@@ -307,10 +305,7 @@ export default function CompetitionChallengesPage() {
       <CompetitionDialog isOpen={dialog === "challenge"} onClose={closeDialog} title="Create challenge" description="Set the audience and challenge format. The new challenge is saved as a draft." size="large">
         <form onSubmit={(event) => void createChallenge(event)} className="space-y-4 p-5 sm:p-6">
           <label className={labelClass}>Challenge title<input required maxLength={191} value={name} onChange={(event) => setName(event.target.value)} placeholder="Primary 5 Mathematics Challenge" className={fieldClass} /></label>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className={labelClass}>Age range<input required type="text" inputMode="numeric" pattern="[0-9]{1,2}[ -–][0-9]{1,2}" value={ageRange} onChange={(event) => setAgeRange(event.target.value)} placeholder="10-11" className={fieldClass} /></label>
-            <label className={labelClass}>Class or grade<input required maxLength={60} value={gradeLabel} onChange={(event) => setGradeLabel(event.target.value)} placeholder="Primary 5" className={fieldClass} /></label>
-          </div>
+          <label className={labelClass}>Class or grade<input required maxLength={60} value={gradeLabel} onChange={(event) => setGradeLabel(event.target.value)} placeholder="JSS 1" className={fieldClass} /></label>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className={labelClass}>Category<select required value={categoryId} onChange={(event) => { setCategoryId(event.target.value); setQuestionSetId(""); }} className={fieldClass}><option value="">Choose category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
             <label className={labelClass}>Question set<select required value={questionSetId} onChange={(event) => setQuestionSetId(event.target.value)} disabled={!categoryId} className={fieldClass}><option value="">Choose set</option>{categoryQuestionSets.map((set) => <option key={set.id} value={set.id}>{set.name} · {set._count?.questions ?? 0} records</option>)}</select></label>
