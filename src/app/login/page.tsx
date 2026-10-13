@@ -16,15 +16,18 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ next?: string; signup?: string; reset?: string }>;
 }) {
+  const { next, signup, reset } = await searchParams;
+  const teacherLoginRequested = next === "/teacher";
+
   // Check both staff and platform admin sessions
   const staffSession = await getStaffSession();
   const platformSession = await getPlatformAdminSession();
 
-  // Redirect if already logged in
-  if (staffSession) redirect("/admin");
-  if (platformSession) redirect("/schoolbase-admin");
-
-  const { next, signup, reset } = await searchParams;
+  // Keep an existing staff session in its role-specific workspace.
+  if (staffSession?.role === "TEACHER") redirect("/teacher");
+  if (!teacherLoginRequested && staffSession?.role === "BURSAR") redirect("/accounting");
+  if (!teacherLoginRequested && staffSession) redirect("/admin");
+  if (!teacherLoginRequested && platformSession) redirect("/schoolbase-admin");
 
   return (
     <main className="min-h-screen bg-background px-3 py-4 sm:px-8 sm:py-10">
@@ -84,7 +87,7 @@ export default async function LoginPage({
 
               <p className="mt-2 text-sm text-muted">Sign in to manage your school.</p>
 
-              <LoginForm redirectTo="/admin" />
+              <LoginForm redirectTo={teacherLoginRequested ? "/teacher" : "/admin"} teacherLoginRequested={teacherLoginRequested} />
             </div>
           </div>
         </section>

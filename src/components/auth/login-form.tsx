@@ -2,17 +2,23 @@
 
 import { useState } from "react";
 import { Eye, EyeOff, Mail, Lock } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { playLoginSuccessTone } from "@/lib/sounds";
 
-export function LoginForm({ redirectTo }: { redirectTo: string }) {
-  const router = useRouter();
+type LoginResponse = {
+  error?: string;
+  needsVerification?: boolean;
+  email?: string;
+  session?: { role?: string } | null;
+  user?: { role?: string } | null;
+  role?: string | null;
+};
+
+export function LoginForm({ redirectTo, teacherLoginRequested = false }: { redirectTo: string; teacherLoginRequested?: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
-  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -38,16 +44,15 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json();
+      const data = await res.json() as LoginResponse;
 
       console.log('=== LOGIN RESPONSE ===');
       console.log('Status:', res.status);
       console.log('Data:', data);
 
       if (!res.ok) {
-        const errorData = data as any;
-        const needsVerification = Boolean(errorData.needsVerification);
-        const pendingEmailFromResponse = errorData.email || email;
+        const needsVerification = Boolean(data.needsVerification);
+        const pendingEmailFromResponse = data.email || email;
 
         if (needsVerification) {
           const verificationUrl = `/signup/verify?email=${encodeURIComponent(
@@ -59,7 +64,7 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
           return;
         }
 
-        setError(errorData.error || "Login failed");
+        setError(data.error || "Login failed");
         setNotice(null);
         setPending(false);
         return;
@@ -76,6 +81,13 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
       let redirectUrl = redirectTo;
 
       const sessionRole = data?.session?.role ?? data?.user?.role ?? data?.role ?? null;
+
+      if (teacherLoginRequested && sessionRole !== "TEACHER") {
+        setError("This sign-in link is for a teacher account. Please use the teacher account credentials provided by your school.");
+        setNotice(null);
+        setPending(false);
+        return;
+      }
 
       if (sessionRole === "TEACHER") {
         redirectUrl = "/teacher";
@@ -109,15 +121,6 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
       {error && (
         <div className="border border-error/20 bg-error/10 px-3 py-2 text-sm text-error">
           <p className="mb-2">{error}</p>
-          {pendingEmail && (
-            <button
-              type="button"
-              onClick={() => router.push(`/signup/verify?email=${encodeURIComponent(pendingEmail)}&needsVerification=true`)}
-              className="inline-flex items-center text-xs font-medium text-error underline hover:no-underline"
-            >
-              Enter verification code →
-            </button>
-          )}
         </div>
       )}
 
