@@ -47,7 +47,8 @@ interface AuditLog {
 
 const competitionFeatureOptions = [
   { key: "competition.enabled", label: "Competition module", description: "Master switch. All Competition capabilities remain unavailable while this is off." },
-  { key: "competition.dailyChallenge.enabled", label: "Daily challenges", description: "Student vs System challenge access." },
+  { key: "competition.dailyChallenge.enabled", label: "Daily challenges", description: "Student access to daily challenge practice." },
+  { key: "competition.examPractice.enabled", label: "Exam practice", description: "WAEC, BECE, and other configured exam-practice tracks. Requires the question bank." },
   { key: "competition.questionBank.enabled", label: "Question bank", description: "Competition question authoring and review workflows." },
   { key: "competition.leaderboard.enabled", label: "Leaderboards", description: "Private or explicitly approved competition rankings." },
   { key: "competition.gamification.enabled", label: "XP and achievements", description: "Competition-only XP, badges, and achievements." },

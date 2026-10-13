@@ -1,5 +1,5 @@
-import CompetitionRoleOverview from "@/components/competition/competition-role-overview";
+import SchoolCompetitionHub from "@/components/competition/school-competition-hub";
 
 export default function SchoolCompetitionPage() {
-  return <CompetitionRoleOverview audience="school" />;
+  return <SchoolCompetitionHub />;
 }

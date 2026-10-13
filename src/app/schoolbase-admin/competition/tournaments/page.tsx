@@ -38,6 +38,7 @@ type Tournament = {
     status: string;
     displayNameSnapshot: string;
     visibilityApproved: boolean;
+    guardianConsentStatus: "ACCEPTED" | "DECLINED" | null;
     school: { name: string };
     class: { name: string } | null;
   }>;
@@ -535,7 +536,8 @@ export default function CompetitionTournamentsPage() {
                           <p className="text-xs text-muted">
                             {participant.school.name} ·{" "}
                             {participant.class?.name || "Unassigned"} ·{" "}
-                            {participant.status} · display consent{" "}
+                            {participant.status} · guardian opt-in{" "}
+                            {participant.guardianConsentStatus?.toLowerCase() || "awaiting"} · public name visibility{" "}
                             {participant.visibilityApproved
                               ? "approved"
                               : "not approved"}
@@ -545,7 +547,8 @@ export default function CompetitionTournamentsPage() {
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
-                              disabled={busy}
+                              disabled={busy || participant.guardianConsentStatus !== "ACCEPTED"}
+                              title={participant.guardianConsentStatus !== "ACCEPTED" ? "Guardian acceptance is required before participation approval." : undefined}
                               onClick={() =>
                                 openDecision(
                                   `/admin/tournaments/${selectedTournament.id}/participants/${participant.id}`,
@@ -875,7 +878,7 @@ export default function CompetitionTournamentsPage() {
           {pendingDecision?.visibilityApproved !== undefined ? (
             <label className="flex items-start gap-2 text-sm text-foreground">
               <input type="checkbox" checked={visibilityApproved} onChange={(event) => setVisibilityApproved(event.target.checked)} className="mt-1" />
-              Participant name display consent is approved
+                            Public name visibility is approved separately from participation
             </label>
           ) : null}
           <label className="block text-sm font-medium text-foreground">Decision reason<textarea required maxLength={1000} rows={3} value={reason} onChange={(event) => setReason(event.target.value)} className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm" /></label>

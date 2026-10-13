@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Activity, Award, RefreshCw, ShieldCheck, Users } from "lucide-react";
-import { getBackendUrl } from "@/lib/backend-url";
 import { ErrorModal } from "@/components/ui/error-modal";
 import CompetitionHero from "@/components/competition/competition-hero";
 
 type RoleOverview = { attempts?: number; challenges?: number; tournaments?: number; participants?: number; assignedClasses?: number };
+type Nominee = { pupilId: string; status: string; guardianConsentStatus: string | null; nominatedAt: string | null };
+type RosterPupil = { id: string; firstName: string; lastName: string; admissionNo: string | null; class: { name: string } | null; nomination: Nominee | null };
 type SchoolTournament = { id: string; title: string; description: string | null; rules: string | null; scope: string; status: string; registrationOpensAt: string | null; registrationClosesAt: string | null; startsAt: string | null; endsAt: string | null; participantLimit: number | null; _count: { participants: number }; schoolRegistration: { registered: boolean; status: string | null } };
 
 export default function CompetitionRoleOverview({ audience }: { audience: "school" | "teacher" }) {
@@ -15,12 +16,17 @@ export default function CompetitionRoleOverview({ audience }: { audience: "schoo
   const [loading, setLoading] = useState(true);
   const [reportingActive, setReportingActive] = useState(true);
   const [tournaments, setTournaments] = useState<SchoolTournament[]>([]);
+  const [rosterTournamentId, setRosterTournamentId] = useState<string | null>(null);
+  const [roster, setRoster] = useState<RosterPupil[]>([]);
+  const [selectedPupilIds, setSelectedPupilIds] = useState<string[]>([]);
+  const [rosterLoading, setRosterLoading] = useState(false);
+  const [nominating, setNominating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function load() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${getBackendUrl()}/api/competition/school/overview`, { credentials: "include", cache: "no-store" });
+      const response = await fetch("/api/competition/school/overview", { credentials: "include", cache: "no-store" });
       const body = await response.json().catch(() => ({}));
       if (!response.ok && body.error === "FEATURE_DISABLED") {
         setReportingActive(false);
@@ -31,7 +37,7 @@ export default function CompetitionRoleOverview({ audience }: { audience: "schoo
       setReportingActive(true);
       setData(body);
       if (audience === "school") {
-        const tournamentResponse = await fetch(`${getBackendUrl()}/api/competition/school/tournaments`, { credentials: "include", cache: "no-store" });
+        const tournamentResponse = await fetch("/api/competition/school/tournaments", { credentials: "include", cache: "no-store" });
         const tournamentData = await tournamentResponse.json().catch(() => ({}));
         if (tournamentResponse.ok) setTournaments(tournamentData.tournaments || []);
         else if (tournamentData.error !== "FEATURE_DISABLED") throw new Error(tournamentData.error || "Unable to load tournament opportunities.");
@@ -49,17 +55,46 @@ export default function CompetitionRoleOverview({ audience }: { audience: "schoo
   async function registerSchool(tournamentId: string) {
     setError(null);
     try {
-      const response = await fetch(`${getBackendUrl()}/api/competition/school/tournaments/${tournamentId}/register-school`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const response = await fetch(`/api/competition/school/tournaments/${tournamentId}/register-school`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: "{}" });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.error || "Unable to request school registration.");
       await load();
     } catch (registerError) { setError(registerError instanceof Error ? registerError.message : "Unable to request school registration."); }
   }
 
-  return <main className="mx-auto max-w-7xl space-y-6 px-2 py-6 sm:px-8 sm:py-8 lg:px-12"><CompetitionHero eyebrow={audience === "teacher" ? "Teacher workspace · Competition" : "School workspace · Competition"} title="Learn. Compete. Represent Your School." description={`${audience === "teacher" ? "Bring focused academic practice to your assigned classes and help students build confidence through school-linked challenges." : "Give students a new way to practise, build confidence, and celebrate academic progress through SchoolBase-linked challenges."} Competition practice is separate from official school assessments and results.`}>{audience === "school" ? <Link href="/admin/competition/students" className="inline-flex h-11 shrink-0 items-center gap-2 border border-white/60 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/20"><Users className="h-4 w-4" /> Manage student links</Link> : null}<button type="button" onClick={() => void load()} disabled={loading} className="inline-flex h-11 shrink-0 items-center gap-2 border border-white/60 bg-white/10 px-4 text-sm font-semibold text-white hover:bg-white/20 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh</button></CompetitionHero>
+  async function loadRoster(tournamentId: string) {
+    setError(null);
+    setRosterLoading(true);
+    try {
+      const response = await fetch(`/api/competition/school/tournaments/${tournamentId}/roster`, { credentials: "include", cache: "no-store" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "Unable to load eligible pupils.");
+      setRoster(body.pupils || []);
+      setSelectedPupilIds([]);
+      setRosterTournamentId(tournamentId);
+    } catch (rosterError) { setError(rosterError instanceof Error ? rosterError.message : "Unable to load eligible pupils."); }
+    finally { setRosterLoading(false); }
+  }
+
+  async function nominatePupils(tournamentId: string) {
+    setError(null);
+    setNominating(true);
+    try {
+      const response = await fetch(`/api/competition/school/tournaments/${tournamentId}/nominations`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pupilIds: selectedPupilIds }) });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || "Unable to invite selected pupils.");
+      setSelectedPupilIds([]);
+      await loadRoster(tournamentId);
+      await load();
+    } catch (nominationError) { setError(nominationError instanceof Error ? nominationError.message : "Unable to invite selected pupils."); }
+    finally { setNominating(false); }
+  }
+
+
+  return <main className="mx-auto max-w-7xl space-y-6 px-2 py-6 sm:px-8 sm:py-8 lg:px-12"><CompetitionHero eyebrow={audience === "teacher" ? "Teacher workspace · Competition" : "School workspace · Competition"} title="Learn. Compete. Represent Your School." description={`${audience === "teacher" ? "Bring focused academic practice to your assigned classes and help students build confidence through school-linked challenges." : "Give students a new way to practise, build confidence, and celebrate academic progress through SchoolBase-linked challenges."} Practice is formative and separate from official results and tournament participation.`}>{audience === "school" ? <Link href="/admin/competition/students" className="inline-flex h-11 shrink-0 items-center gap-2 border border-white/60 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/20"><Users className="h-4 w-4" /> Legacy guardian links</Link> : null}<button type="button" onClick={() => void load()} disabled={loading} className="inline-flex h-11 shrink-0 items-center gap-2 border border-white/60 bg-white/10 px-4 text-sm font-semibold text-white hover:bg-white/20 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh</button></CompetitionHero>
     {reportingActive ? <section className={`grid gap-3 ${cards.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2 xl:grid-cols-4"}`}>{cards.map(({ label, value, icon: Icon }) => <div key={label} className="border border-border bg-surface p-5"><div className="flex items-center gap-2 text-brand"><Icon className="h-4 w-4" /><span className="text-xs font-bold uppercase tracking-wide text-muted">{label}</span></div><p className="mt-4 text-3xl font-semibold tabular-nums text-foreground">{loading ? "—" : value}</p></div>)}</section> : <section aria-live="polite" className="flex flex-col gap-4 border border-amber-200 bg-amber-50 p-5 sm:flex-row sm:items-start"><div className="flex h-10 w-10 shrink-0 items-center justify-center border border-amber-300 bg-white text-amber-800"><ShieldCheck className="h-5 w-5" /></div><div><h2 className="font-semibold text-foreground">Competition reporting isn’t active yet</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-muted">Reporting for your school is currently turned off. When the Competition pilot is enabled, this page will show challenge and participation activity for your school.</p></div></section>}
     {reportingActive ? <section className="border border-border bg-surface p-5"><h2 className="font-semibold text-foreground">Participation scope</h2><p className="mt-2 text-sm leading-6 text-muted">{audience === "teacher" ? "Reporting is restricted to classes assigned to your authenticated teacher account. Student-level performance detail will be added only with the privacy and access rules reviewed." : "All counts are limited to your authenticated school. Competition is currently gated until its pilot workflows and privacy review are complete."}</p></section> : null}
-    {audience === "school" && tournaments.length ? <section className="border border-border bg-surface"><div className="border-b border-border px-5 py-4"><h2 className="font-semibold text-foreground">Tournament opportunities</h2><p className="mt-1 text-xs text-muted">School registration is subject to review; learners opt in individually and names stay private unless visibility is approved.</p></div><div className="divide-y divide-border">{tournaments.map((tournament) => <article key={tournament.id} className="flex flex-col justify-between gap-3 px-5 py-4 sm:flex-row sm:items-center"><div><h3 className="text-sm font-semibold text-foreground">{tournament.title}</h3><p className="mt-1 text-xs text-muted">{tournament.scope} · {tournament.status}{tournament.registrationClosesAt ? ` · registration closes ${new Date(tournament.registrationClosesAt).toLocaleDateString()}` : ""}</p>{tournament.description ? <p className="mt-1 text-sm text-muted">{tournament.description}</p> : null}</div>{tournament.status === "REGISTRATION_OPEN" ? <button type="button" disabled={tournament.schoolRegistration.registered} onClick={() => void registerSchool(tournament.id)} className="h-10 border border-brand px-3 text-sm font-semibold text-brand disabled:opacity-50">{tournament.schoolRegistration.registered ? `School ${tournament.schoolRegistration.status?.toLowerCase()}` : "Register school"}</button> : null}</article>)}</div></section> : null}
+    {audience === "school" && tournaments.length ? <section className="border border-border bg-surface"><div className="border-b border-border px-5 py-4"><h2 className="font-semibold text-foreground">Tournament opportunities</h2><p className="mt-1 text-xs text-muted">Register the school first. Once approved, nominate pupils from your active roster. Each nomination is an invitation; guardian opt-in is required before Competition administrators can review participation. Public name visibility is separate.</p></div><div className="divide-y divide-border">{tournaments.map((tournament) => <article key={tournament.id} className="px-5 py-4"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 className="text-sm font-semibold text-foreground">{tournament.title}</h3><p className="mt-1 text-xs text-muted">{tournament.scope} · {tournament.status}{tournament.registrationClosesAt ? ` · registration closes ${new Date(tournament.registrationClosesAt).toLocaleDateString()}` : ""}</p>{tournament.description ? <p className="mt-1 text-sm text-muted">{tournament.description}</p> : null}</div>{tournament.status === "REGISTRATION_OPEN" ? tournament.schoolRegistration.status === "APPROVED" ? <button type="button" disabled={rosterLoading || nominating} onClick={() => rosterTournamentId === tournament.id ? setRosterTournamentId(null) : void loadRoster(tournament.id)} className="h-10 rounded-md border border-brand px-3 text-sm font-semibold text-brand disabled:opacity-50">{rosterTournamentId === tournament.id ? "Close roster" : "Select representatives"}</button> : <button type="button" disabled={tournament.schoolRegistration.registered} onClick={() => void registerSchool(tournament.id)} className="h-10 rounded-md border border-brand px-3 text-sm font-semibold text-brand disabled:opacity-50">{tournament.schoolRegistration.registered ? `School ${tournament.schoolRegistration.status?.toLowerCase()}` : "Register school"}</button> : null}</div>{rosterTournamentId === tournament.id ? <div className="mt-4 border-t border-border pt-4"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h4 className="text-sm font-semibold text-foreground">Choose pupils to invite</h4><p className="mt-1 text-xs text-muted">Inviting does not enrol a pupil. Guardian acceptance is not tournament participation approval or public name consent.</p></div><button type="button" onClick={() => void nominatePupils(tournament.id)} disabled={nominating || selectedPupilIds.length === 0} className="h-9 rounded-md bg-brand px-3 text-xs font-semibold text-white disabled:opacity-50">{nominating ? "Sending invitations…" : `Invite selected (${selectedPupilIds.length})`}</button></div>{rosterLoading ? <p className="py-6 text-center text-sm text-muted">Loading active school roster…</p> : roster.length ? <div className="mt-3 divide-y divide-border border-y border-border">{roster.map((pupil) => { const already = Boolean(pupil.nomination); return <label key={pupil.id} className="flex items-center gap-3 py-3 text-sm"><input type="checkbox" checked={selectedPupilIds.includes(pupil.id)} disabled={already || nominating} onChange={(event) => setSelectedPupilIds((current) => event.target.checked ? [...current, pupil.id] : current.filter((id) => id !== pupil.id))} className="h-4 w-4 accent-[#0A66C2]" /><span className="min-w-0 flex-1"><span className="block font-medium text-foreground">{pupil.firstName} {pupil.lastName} · {pupil.class?.name || "Class not assigned"}</span><span className="text-xs text-muted">{pupil.admissionNo || "No admission number"}</span></span>{already ? <span className="text-xs font-semibold text-muted">{pupil.nomination?.guardianConsentStatus === "ACCEPTED" ? "Guardian accepted · " : pupil.nomination?.guardianConsentStatus === "DECLINED" ? "Declined · " : "Invited · "}{pupil.nomination?.status.toLowerCase()}</span> : null}</label>; })}</div> : <p className="py-6 text-center text-sm text-muted">No eligible active pupils with a guardian relationship are available.</p>}</div> : null}</article>)}</div></section> : null}
     <ErrorModal isOpen={Boolean(error)} onClose={() => setError(null)} title="Competition report could not be loaded" message={error || "Unable to load Competition reporting."} type="error" confirmLabel="Okay" />
   </main>;
 }

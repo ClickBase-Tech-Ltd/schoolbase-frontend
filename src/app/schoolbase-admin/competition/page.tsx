@@ -21,6 +21,7 @@ import CompetitionHero from "@/components/competition/competition-hero";
 const featureKeys = [
   ["competition.enabled", "Competition master switch"],
   ["competition.dailyChallenge.enabled", "Daily challenge"],
+  ["competition.examPractice.enabled", "Exam practice"],
   ["competition.questionBank.enabled", "Question bank"],
   ["competition.leaderboard.enabled", "Leaderboards"],
   ["competition.gamification.enabled", "XP and achievements"],
@@ -119,6 +120,7 @@ export default function CompetitionFoundationPage() {
   const actionCards = [
     { label: "Question bank", href: "/schoolbase-admin/competition/questions", icon: Files, enabled: features["competition.questionBank.enabled"] },
     { label: "Challenges", href: "/schoolbase-admin/competition/challenges", icon: Activity, enabled: features["competition.dailyChallenge.enabled"] },
+    { label: "Exam practice", href: "/schoolbase-admin/competition/exam-practices", icon: Trophy, enabled: features["competition.examPractice.enabled"] && features["competition.questionBank.enabled"] },
     { label: "Tournaments", href: "/schoolbase-admin/competition/tournaments", icon: Trophy, enabled: features["competition.schoolTournament.enabled"] || features["competition.publicTournament.enabled"] },
     { label: "Sponsors", href: "/schoolbase-admin/competition/sponsors", icon: Sparkles, enabled: features["competition.sponsors.enabled"] },
   ];

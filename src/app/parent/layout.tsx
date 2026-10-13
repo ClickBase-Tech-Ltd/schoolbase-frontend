@@ -22,7 +22,7 @@ const nav = [
     badge: "New",
     children: [
       { href: "/parent/competition", label: "Achievements", icon: "Sparkles" },
-      { href: "/competition", label: "Student Challenges", icon: "Award" },
+      { href: "/competition", label: "Practice & WAEC", icon: "BookOpen" },
     ],
   },
   { href: "/parent/school", label: "School Info", icon: "Globe" },

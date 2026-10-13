@@ -21,9 +21,6 @@ const baseNav = [
     label: "Competition",
     icon: "Award",
     badge: "New",
-    children: [
-      { href: "/admin/competition/students", label: "Competition Accounts", icon: "UserCircle" },
-    ],
   },
   { href: "/admin/admissions", label: "Admissions", icon: "GraduationCap" },
   { href: "/admin/promotions", label: "Promotions", icon: "TrendingUp" },

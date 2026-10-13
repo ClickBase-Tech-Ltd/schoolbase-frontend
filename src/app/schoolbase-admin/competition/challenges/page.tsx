@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { Award, CircleCheck, Clock3, FileQuestion, Pause, Play, Plus, RefreshCw, Search } from "lucide-react";
 import { ErrorModal } from "@/components/ui/error-modal";
 import { UserGuide, type PageHelpGuide } from "@/components/ui/user-guide";
@@ -28,7 +29,7 @@ const COMPETITION_CHALLENGE_GUIDE: PageHelpGuide = {
     "Create a scoring policy. Its rules are copied into each attempt, so changing a policy later does not rewrite scores already earned.",
     "Create a challenge with an age range, class or grade label, category, question set, question count, duration, and attempts per student. It is saved as a draft.",
     "Activate the challenge only after its question set has enough approved questions and the audience label is correct. Activation makes it eligible to appear to matching linked learners.",
-    "A school administrator links an eligible student to an existing guardian relationship. The guardian signs in through the normal parent portal, selects the linked child if needed, and opens Student Challenges.",
+    "A parent session resolves children from the authenticated guardian’s existing SchoolBase family relationship. A parent chooses a child when there is more than one; the server rechecks that relationship and active enrollment. Direct student-user access still requires a trusted identity binding.",
     "The learner starts an attempt, answers before the server-controlled deadline, and submits it. The server checks eligibility, records answers, calculates the score, and shows the result; the parent Competition page shows the learner's permitted progress.",
     "Monitor attempts here. Pause an active challenge to stop new attempts. Disabling the relevant feature switch blocks its API workflow; existing records are retained.",
   ],
@@ -60,7 +61,7 @@ const COMPETITION_CHALLENGE_GUIDE: PageHelpGuide = {
     },
     {
       question: "How does a student sign in?",
-      answer: "The current Competition learner journey uses the existing parent or guardian sign-in and an active Competition link to the student. School staff must create that link from Competition Accounts first.",
+      answer: "A parent or guardian signs in through SchoolBase. Their active, same-school GuardianPupil relationships determine which children they can select; parent-led practice does not require an additional Competition link. Direct student-user access still needs a trusted account-to-pupil binding.",
     },
     {
       question: "What does activating a challenge do?",
@@ -72,7 +73,7 @@ const COMPETITION_CHALLENGE_GUIDE: PageHelpGuide = {
     },
     {
       question: "Which larger features can I manage here today?",
-      answer: "Question sets, questions, scoring policies, solo challenge definitions, optional completion XP, and the three achievement criteria managed on the Competition Achievements page are supported. Tournament and sponsor pages are currently read-only; student matches, class competitions, leaderboard generation, prize fulfillment, certificate issuance, and geographic events are not operational workflows yet, even where settings or schema records exist.",
+      answer: "Question review, active challenge setup, exam-practice offering review, school tournament nominations, guardian opt-in, tournament administration, and the enabled reward workflows have frontend/API surfaces. Regional and international operation is not implemented. A capability flag alone does not make a workflow ready for general release.",
     },
     {
       question: "What must be approved before a student pilot?",
@@ -238,6 +239,7 @@ export default function CompetitionChallengesPage() {
           <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">Configure timed student challenges, manage scoring versions, and monitor learner activity.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Link href="/schoolbase-admin/competition/exam-practices" className={secondaryButtonClass}>Exam-practice offerings</Link>
           <button type="button" onClick={() => void load()} disabled={busy} aria-label="Refresh challenges" title="Refresh" className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-surface text-muted transition hover:border-brand/40 hover:text-brand disabled:opacity-50"><RefreshCw className="h-4 w-4" /></button>
           <button type="button" onClick={() => setDialog("policy")} disabled={challengeSetupActive === false || busy} className={secondaryButtonClass}><Award className="h-4 w-4" /> New scoring policy</button>
           <button type="button" onClick={() => setDialog("challenge")} disabled={challengeSetupActive === false || busy} className={primaryButtonClass}><Plus className="h-4 w-4" /> Create challenge</button>

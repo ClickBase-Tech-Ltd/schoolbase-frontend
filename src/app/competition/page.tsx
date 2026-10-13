@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, Award, Check, CheckCircle2, Clock3, RefreshCw, Send, Sparkles, X } from "lucide-react";
-import { getBackendUrl } from "@/lib/backend-url";
+import { ArrowLeft, ArrowRight, Award, BookOpen, Check, CheckCircle2, Clock3, GraduationCap, RefreshCw, Send, Sparkles, X } from "lucide-react";
 import { ErrorModal } from "@/components/ui/error-modal";
 import CompetitionHero from "@/components/competition/competition-hero";
 
-type Challenge = { id: string; title: string; description: string | null; gradeLabel: string | null; questionCount: number; durationSeconds: number; closesAt: string | null; attemptLimit: number; attemptsUsed: number };
+type ExamPractice = { examCode: string; countryCode: string; gradeLabel: string; format: "PRACTICE" | "MOCK_EXAM"; syllabusVersion: string | null; subjectName: string };
+type PracticeMode = "DAILY" | "EXAM";
+type Challenge = { id: string; title: string; description: string | null; gradeLabel: string | null; questionCount: number; durationSeconds: number; closesAt: string | null; attemptLimit: number; attemptsUsed: number; examPractice?: ExamPractice | null };
 type LearnerIdentity = { pupilId: string; classId: string | null; firstName: string | null; lastName: string | null; className: string | null };
 type LearnerCapabilities = { leaderboardEnabled: boolean; studentVsStudentEnabled: boolean };
 type LearnerPracticeSummary = { completedChallenges: number; latestCompletionAt: string | null };
@@ -41,6 +42,8 @@ export default function StudentCompetitionPage() {
   const [learnerCapabilities, setLearnerCapabilities] = useState<LearnerCapabilities>({ leaderboardEnabled: false, studentVsStudentEnabled: false });
   const [practiceSummary, setPracticeSummary] = useState<LearnerPracticeSummary>({ completedChallenges: 0, latestCompletionAt: null });
   const [selectedPupilId, setSelectedPupilId] = useState("");
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
+  const [practiceMode, setPracticeMode] = useState<PracticeMode>("DAILY");
   const [attempts, setAttempts] = useState<Array<{ id: string; challengeId: string; status: string; score: number; submittedAt: string | null }>>([]);
   const [ineligibleChallengeCount, setIneligibleChallengeCount] = useState(0);
   const [attempt, setAttempt] = useState<Attempt | null>(null);
@@ -64,7 +67,7 @@ export default function StudentCompetitionPage() {
   const [error, setError] = useState<string | null>(null);
 
   async function api<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${getBackendUrl()}/api/competition${path}`, { credentials: "include", ...init, headers: { "Content-Type": "application/json", ...(init?.headers || {}) } });
+    const response = await fetch(`/api/competition${path}`, { credentials: "include", ...init, headers: { "Content-Type": "application/json", ...(init?.headers || {}) } });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
       if (data.error === "FEATURE_DISABLED") {
@@ -73,7 +76,7 @@ export default function StudentCompetitionPage() {
         throw unavailable;
       }
       if (data.error === "CHILD_SELECTION_REQUIRED") throw new ChildSelectionRequiredError(data.children || []);
-      if (data.error === "STUDENT_IDENTITY_NOT_LINKED") throw new Error("No active student linked to this guardian is enabled for Competition yet. Ask your school administrator to connect the student’s existing SchoolBase guardian relationship.");
+      if (data.error === "STUDENT_IDENTITY_NOT_LINKED") throw new Error("No active student connected to this parent account was found. Check that the SchoolBase guardian-to-student relationship is current. Direct student sign-in may require a separately verified Competition account link.");
       if (data.error === "GUARDIAN_PUPIL_NOT_LINKED") throw new Error("That student is not linked to your parent account for Competition.");
       if (data.error === "ATTEMPT_LIMIT_REACHED") throw new Error("You have used all attempts available for this challenge.");
       if (data.error === "ATTEMPT_ALREADY_CREATED") throw new Error("An attempt is already being started. Refresh your challenge list before trying again.");
@@ -83,7 +86,7 @@ export default function StudentCompetitionPage() {
     return data as T;
   }
 
-  async function loadChallenges(pupilId = selectedPupilId) {
+  async function loadChallenges(pupilId = selectedPupilId, nextStep: 2 | 3 = 2) {
     setLoading(true);
     setError(null);
     try {
@@ -97,6 +100,7 @@ export default function StudentCompetitionPage() {
       setIneligibleChallengeCount(data.ineligibleChallengeCount || 0);
       setPracticeSummary(data.practiceSummary || { completedChallenges: 0, latestCompletionAt: null });
       setSelectedPupilId(data.identity?.pupilId || pupilId);
+      setWizardStep(nextStep);
       setMatchesUnavailable(!data.capabilities?.studentVsStudentEnabled);
       if (data.identity?.classId && data.capabilities?.studentVsStudentEnabled) await loadMatches(data.identity.pupilId);
     } catch (loadError) {
@@ -107,6 +111,7 @@ export default function StudentCompetitionPage() {
       } else if (loadError instanceof ChildSelectionRequiredError) {
         setChildren(loadError.children);
         setSelectedPupilId("");
+        setWizardStep(1);
         setChallenges([]);
         setAttempts([]);
       } else {
@@ -116,7 +121,10 @@ export default function StudentCompetitionPage() {
   }
 
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
-  useEffect(() => { void loadChallenges(); }, []);
+  useEffect(() => {
+    const initialPupilId = new URLSearchParams(window.location.search).get("pupilId") || undefined;
+    void loadChallenges(initialPupilId);
+  }, []);
 
   useEffect(() => {
     if (!attempt?.deadlineAt) return;
@@ -183,7 +191,7 @@ export default function StudentCompetitionPage() {
       setResult(data.result);
       setShowFirstCompletion(data.result.firstCompletion === true);
       setAttempt(null);
-      await loadChallenges();
+      await loadChallenges(selectedPupilId, 3);
     } catch (finishError) {
       if (isCompetitionFeatureUnavailable(finishError)) {
         setAttempt(null);
@@ -279,20 +287,45 @@ export default function StudentCompetitionPage() {
   const formatRemaining = `${Math.floor(secondsLeft / 60).toString().padStart(2, "0")}:${(secondsLeft % 60).toString().padStart(2, "0")}`;
   const currentQuestion = attempt?.questions[currentQuestionIndex] || null;
   const answerProgress = attempt ? Math.round((answered.length / attempt.questions.length) * 100) : 0;
+  const visibleChallenges = challenges.filter((challenge) => practiceMode === "EXAM" ? Boolean(challenge.examPractice) : !challenge.examPractice);
 
   return (
     <main className={`mx-auto max-w-5xl space-y-6 px-2 py-6 sm:px-8 sm:py-8 ${attempt || result ? "pb-32" : ""}`}>
-      {!attempt ? <CompetitionHero compact eyebrow="Student challenges · School pilot" title="Learn. Compete. Represent Your School." description="Sign in through the SchoolBase parent portal. Challenges and results are tied to the student you select from your linked children." /> : null}
+      {!attempt ? <CompetitionHero compact eyebrow="SchoolBase Competition · Practice" title="Learn. Compete. Represent Your School." description="Practise eligible academic challenges with a parent-linked student. Practice results are formative and separate from official school results and tournament participation." /> : null}
 
       {!attempt && !result && learnerIdentity?.firstName ? <section aria-label="Student Competition overview" className="grid gap-3 border-b border-border py-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
-        <div><p className="text-xs font-bold uppercase tracking-wide text-brand">Your practice space</p><h2 className="mt-1 text-lg font-semibold text-foreground">Ready for a challenge, {learnerIdentity.firstName}?</h2><p className="mt-1 text-sm text-muted">{learnerIdentity.className || "Class not assigned"} · Your progress is private to your linked family account.</p></div>
+        <div><p className="text-xs font-bold uppercase tracking-wide text-brand">Your practice space</p><h2 className="mt-1 text-lg font-semibold text-foreground">Ready for a challenge, {learnerIdentity.firstName}?</h2><p className="mt-1 text-sm text-muted">{learnerIdentity.className || "Class not assigned"} · Progress is private and separate from official results.</p></div>
         <div className="border-l-2 border-brand/30 pl-3"><p className="text-[10px] font-bold uppercase tracking-wide text-muted">Completed</p><p className="mt-1 text-lg font-semibold tabular-nums text-foreground">{practiceSummary.completedChallenges}</p></div>
         <div className="border-l-2 border-emerald-500/50 pl-3"><p className="text-[10px] font-bold uppercase tracking-wide text-muted">Available now</p><p className="mt-1 text-lg font-semibold tabular-nums text-foreground">{challenges.length}</p></div>
       </section> : null}
 
-      {children.length > 1 ? <section className="max-w-xl space-y-4 border border-border bg-surface p-5"><div><h2 className="font-semibold text-foreground">Choose a student</h2><p className="mt-1 text-sm text-muted">Select which linked student will take part. The choice is verified against your SchoolBase guardian account.</p></div><label className="block text-xs font-semibold text-muted">Student<select value={selectedPupilId} onChange={(event) => { const nextPupilId = event.target.value; setSelectedPupilId(nextPupilId); setAttempt(null); setResult(null); setSelected({}); setAnswered([]); if (nextPupilId) void loadChallenges(nextPupilId); }} disabled={loading} className="mt-1 h-11 w-full border border-border bg-background px-3 text-sm text-foreground"><option value="">Choose a linked student</option>{children.map((child) => <option key={child.pupilId} value={child.pupilId}>{child.firstName} {child.lastName}{child.className ? ` · ${child.className}` : ""}</option>)}</select></label></section> : null}
+      {!attempt && !result && dailyChallengesActive !== false && (learnerIdentity || children.length > 1) ? <section aria-label="Practice setup steps" className="grid grid-cols-3 border-y border-border bg-surface">
+        {["Choose child", "Choose practice", "Choose challenge"].map((label, index) => {
+          const step = (index + 1) as 1 | 2 | 3;
+          const complete = wizardStep > step;
+          const current = wizardStep === step;
+          return <div key={label} aria-current={current ? "step" : undefined} className={`flex items-center gap-2 border-r border-border px-2 py-3 last:border-r-0 sm:px-4 ${current ? "bg-brand-light/50" : ""}`}>
+            <span className={`flex h-7 w-7 shrink-0 items-center justify-center border text-xs font-bold ${complete ? "border-emerald-600 bg-emerald-600 text-white" : current ? "border-brand bg-brand text-white" : "border-border text-muted"}`}>{complete ? <Check className="h-4 w-4" /> : index + 1}</span>
+            <span className={`text-xs font-semibold sm:text-sm ${current ? "text-foreground" : "text-muted"}`}>{label}</span>
+          </div>;
+        })}
+      </section> : null}
 
-      {result ? <section className="border border-border bg-surface p-6"><p className="text-xs font-bold uppercase tracking-wide text-brand">Challenge result</p><h2 className="mt-2 text-2xl font-semibold text-foreground">{result.score} points</h2><div className="mt-4 grid gap-3 sm:grid-cols-3"><div className="border border-border bg-background p-3"><p className="text-xs text-muted">Correct</p><p className="mt-1 text-lg font-semibold text-foreground">{result.correctCount} / {result.questionCount}</p></div><div className="border border-border bg-background p-3"><p className="text-xs text-muted">Accuracy</p><p className="mt-1 text-lg font-semibold text-foreground">{result.accuracyPercent ?? 0}%</p></div><div className="border border-border bg-background p-3"><p className="text-xs text-muted">Time</p><p className="mt-1 text-lg font-semibold text-foreground">{Math.floor((result.elapsedMs ?? 0) / 1000)} sec</p></div></div>{result.xpAwarded ? <p className="mt-4 border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">You earned {result.xpAwarded} Competition XP for completing this challenge.</p> : null}{result.achievementsAwarded?.length ? <div className="mt-4 border border-amber-200 bg-amber-50 px-4 py-3"><p className="text-xs font-bold uppercase tracking-wide text-amber-900">Achievement earned</p><ul className="mt-2 space-y-1 text-sm font-semibold text-amber-900">{result.achievementsAwarded.map((achievement) => <li key={achievement.code}>{achievement.title}</li>)}</ul></div> : null}<button type="button" onClick={() => { setResult(null); void loadChallenges(); }} className="mt-5 border border-brand px-4 py-2 text-sm font-semibold text-brand hover:bg-brand-light">Back to challenges</button></section> : null}
+      {children.length > 1 && wizardStep === 1 && !attempt && !result ? <section className="mx-auto w-full max-w-2xl space-y-4 border border-border bg-surface p-5 sm:p-6">
+        <div><p className="text-xs font-bold uppercase tracking-wide text-brand">Step 1 of 3</p><h2 className="mt-1 text-xl font-semibold text-foreground">Who is practising today?</h2><p className="mt-1 text-sm leading-5 text-muted">Choose a child already connected to your SchoolBase parent account.</p></div>
+        <label className="block text-sm font-medium text-foreground">Child<select value={selectedPupilId} onChange={(event) => setSelectedPupilId(event.target.value)} disabled={loading} className="mt-1 h-11 w-full border border-border bg-background px-3"><option value="">Choose a child</option>{children.map((child) => <option key={child.pupilId} value={child.pupilId}>{child.firstName} {child.lastName}{child.className ? ` · ${child.className}` : ""}</option>)}</select></label>
+        <button type="button" disabled={loading || !selectedPupilId} onClick={() => { setAttempt(null); setResult(null); setSelected({}); setAnswered([]); void loadChallenges(selectedPupilId); }} className="inline-flex h-11 w-full items-center justify-center gap-2 bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50">Continue <ArrowRight className="h-4 w-4" /></button>
+      </section> : null}
+
+      {learnerIdentity && wizardStep === 2 && !attempt && !result && dailyChallengesActive ? <section className="mx-auto w-full max-w-3xl space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-brand">Step 2 of 3</p><h2 className="mt-1 text-xl font-semibold text-foreground">What would you like to practise?</h2><p className="mt-1 text-sm text-muted">Choose a challenge type for {learnerIdentity.firstName}.</p></div>{children.length > 1 ? <button type="button" onClick={() => setWizardStep(1)} className="h-9 border border-border px-3 text-xs font-semibold text-foreground hover:border-brand">Change child</button> : null}</div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <button type="button" onClick={() => { setPracticeMode("DAILY"); setWizardStep(3); }} className="group min-h-36 border border-border bg-surface p-5 text-left transition hover:border-brand hover:bg-brand-light/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"><span className="flex h-10 w-10 items-center justify-center bg-brand/10 text-brand"><Award className="h-5 w-5" /></span><span className="mt-4 block font-semibold text-foreground">Daily challenge</span><span className="mt-1 block text-sm leading-5 text-muted">Timed academic challenges available for this child’s class and age.</span><span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-brand">{challenges.filter((challenge) => !challenge.examPractice).length} available <ArrowRight className="h-3.5 w-3.5" /></span></button>
+          <button type="button" onClick={() => { setPracticeMode("EXAM"); setWizardStep(3); }} className="group min-h-36 border border-border bg-surface p-5 text-left transition hover:border-emerald-600 hover:bg-emerald-50/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"><span className="flex h-10 w-10 items-center justify-center bg-emerald-100 text-emerald-800"><BookOpen className="h-5 w-5" /></span><span className="mt-4 block font-semibold text-foreground">WAEC & exam practice</span><span className="mt-1 block text-sm leading-5 text-muted">Reviewed exam offerings matched to country and grade.</span><span className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-emerald-800">{challenges.filter((challenge) => Boolean(challenge.examPractice)).length} available <ArrowRight className="h-3.5 w-3.5" /></span></button>
+        </div>
+      </section> : null}
+
+      {result ? <section className="border border-border bg-surface p-6"><p className="text-xs font-bold uppercase tracking-wide text-brand">Challenge result</p><h2 className="mt-2 text-2xl font-semibold text-foreground">{result.score} points</h2><div className="mt-4 grid gap-3 sm:grid-cols-3"><div className="border border-border bg-background p-3"><p className="text-xs text-muted">Correct</p><p className="mt-1 text-lg font-semibold text-foreground">{result.correctCount} / {result.questionCount}</p></div><div className="border border-border bg-background p-3"><p className="text-xs text-muted">Accuracy</p><p className="mt-1 text-lg font-semibold text-foreground">{result.accuracyPercent ?? 0}%</p></div><div className="border border-border bg-background p-3"><p className="text-xs text-muted">Time</p><p className="mt-1 text-lg font-semibold text-foreground">{Math.floor((result.elapsedMs ?? 0) / 1000)} sec</p></div></div>{result.xpAwarded ? <p className="mt-4 border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">You earned {result.xpAwarded} Competition XP for completing this challenge.</p> : null}{result.achievementsAwarded?.length ? <div className="mt-4 border border-amber-200 bg-amber-50 px-4 py-3"><p className="text-xs font-bold uppercase tracking-wide text-amber-900">Achievement earned</p><ul className="mt-2 space-y-1 text-sm font-semibold text-amber-900">{result.achievementsAwarded.map((achievement) => <li key={achievement.code}>{achievement.title}</li>)}</ul></div> : null}<button type="button" onClick={() => { setResult(null); void loadChallenges(selectedPupilId, 3); }} className="mt-5 border border-brand px-4 py-2 text-sm font-semibold text-brand hover:bg-brand-light">Back to challenges</button></section> : null}
       {showFirstCompletion ? <div role="status" aria-live="polite" className="pointer-events-none fixed inset-0 z-40 flex items-start justify-center overflow-hidden px-4 pt-24 sm:pt-32"><div className="first-completion-burst absolute inset-x-0 top-0 h-72" aria-hidden="true">{Array.from({ length: 24 }, (_, index) => <span key={index} className="first-completion-particle" style={{ "--particle-index": index } as React.CSSProperties} />)}</div><div className="pointer-events-auto relative flex max-w-md items-start gap-4 border border-emerald-200 bg-surface px-5 py-4 shadow-lg"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700"><Check className="h-5 w-5" /></div><div className="min-w-0 flex-1"><p className="flex items-center gap-2 font-semibold text-foreground"><Sparkles className="h-4 w-4 text-amber-500" /> First challenge complete!</p><p className="mt-1 text-sm leading-5 text-muted">A great start. Keep practising and building confidence.</p></div><button type="button" onClick={() => setShowFirstCompletion(false)} aria-label="Dismiss celebration" className="p-1 text-muted hover:text-foreground"><X className="h-4 w-4" /></button></div><style>{`@keyframes first-completion-fall { 0% { transform: translate3d(calc((var(--particle-index) - 12) * 7vw), -24px, 0) rotate(0deg); opacity: 0 } 12% { opacity: 1 } 100% { transform: translate3d(calc((var(--particle-index) - 12) * 9vw), 240px, 0) rotate(540deg); opacity: 0 } } .first-completion-particle { position: absolute; top: 0; left: 50%; width: 8px; height: 12px; border-radius: 2px; background: hsl(calc(var(--particle-index) * 31), 72%, 52%); animation: first-completion-fall 1.9s ease-out forwards; animation-delay: calc(var(--particle-index) * 24ms); } @media (prefers-reduced-motion: reduce) { .first-completion-burst { display: none; } .first-completion-particle { animation: none; } }`}</style></div> : null}
 
       {attempt && currentQuestion ? (
@@ -372,22 +405,23 @@ export default function StudentCompetitionPage() {
 
       {showFinishConfirmation && attempt ? <div role="presentation" className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4"><section role="dialog" aria-modal="true" aria-labelledby="finish-challenge-title" className="w-full max-w-md border border-border bg-surface p-5 shadow-2xl sm:p-6"><p className="text-xs font-bold uppercase tracking-wide text-brand">Finish challenge</p><h2 id="finish-challenge-title" className="mt-2 text-xl font-semibold text-foreground">Submit your attempt?</h2><p className="mt-2 text-sm leading-6 text-muted">{secondsLeft === 0 ? "Time has expired. Your recorded answers will be scored now." : answered.length === attempt.questions.length ? "All answers are recorded. Submitting will end your attempt and show your result." : `${attempt.questions.length - answered.length} question${attempt.questions.length - answered.length === 1 ? " is" : "s are"} unanswered. Unanswered questions will count as incorrect, and you cannot return after submitting.`}</p><div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setShowFinishConfirmation(false)} className="h-10 border border-border px-4 text-sm font-semibold text-foreground hover:bg-background">Keep working</button><button type="button" disabled={busy} onClick={() => void finishAttempt()} className="inline-flex h-10 items-center justify-center gap-2 bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"><Send className="h-4 w-4" /> {busy ? "Submitting…" : "Submit attempt"}</button></div></section></div> : null}
 
-      {dailyChallengesActive === false && !attempt && !result ? <section aria-live="polite" className="flex flex-col gap-4 border border-amber-200 bg-amber-50 p-5 sm:flex-row sm:items-start"><div className="flex h-10 w-10 shrink-0 items-center justify-center border border-amber-300 bg-white text-amber-800"><Award className="h-5 w-5" /></div><div><h2 className="font-semibold text-foreground">Daily challenges aren’t active yet</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-muted">SchoolBase Competition is being prepared for its pilot. Challenges will appear here when the daily challenge experience is enabled. Your parent portal and linked student records are unchanged.</p></div></section> : null}
+      {dailyChallengesActive === false && !attempt && !result ? <section aria-live="polite" className="flex flex-col gap-4 border border-amber-200 bg-amber-50 p-5 sm:flex-row sm:items-start"><div className="flex h-10 w-10 shrink-0 items-center justify-center border border-amber-300 bg-white text-amber-800"><Award className="h-5 w-5" /></div><div><h2 className="font-semibold text-foreground">Practice is not available right now</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-muted">SchoolBase Competition practice is currently unavailable. When enabled, this page will show active challenges that match the selected student. Tournament invitations and participation are handled separately.</p></div></section> : null}
 
       {dailyChallengesActive !== false && !attempt && !result && !matchesUnavailable && learnerIdentity?.classId ? <section className="border border-border bg-surface p-4 sm:p-5"><div className="flex items-center justify-between gap-3"><div><h2 className="text-sm font-semibold text-foreground">Class challenge invitations</h2><p className="mt-1 text-xs text-muted">No chat or contact details are shared. Invitations expire after seven days.</p></div><button type="button" onClick={() => void loadMatches()} disabled={busy} className="h-9 border border-border px-3 text-xs font-semibold text-foreground hover:bg-background disabled:opacity-50">Refresh</button></div>{matches.length ? <div className="mt-3 divide-y divide-border border-y border-border">{matches.map((match) => <article key={match.id} className="flex flex-col justify-between gap-3 py-3 sm:flex-row sm:items-center"><div><p className="text-sm font-semibold text-foreground">{match.challenge.title} · {match.isSender ? "You invited" : "Invitation from"} {match.opponentName}</p><p className="mt-1 text-xs text-muted">{match.status === "COMPLETED" ? match.winner === "YOU" ? "You won" : match.winner === "OPPONENT" ? "Classmate won" : "Draw" : match.status === "PENDING" ? `Pending · expires ${new Date(match.expiresAt).toLocaleDateString()}` : match.status.replace(/_/g, " ")}{match.yourAttempt && match.opponentAttempt ? ` · You ${match.yourAttempt.score} pts, classmate ${match.opponentAttempt.score} pts` : ""}</p></div><div className="flex flex-wrap gap-2">{match.status === "PENDING" && !match.isSender ? <><button type="button" disabled={busy} onClick={() => void updateMatch(match, "ACCEPT")} className="h-9 border border-brand px-3 text-xs font-semibold text-brand hover:bg-brand-light disabled:opacity-50">Accept</button><button type="button" disabled={busy} onClick={() => void updateMatch(match, "DECLINE")} className="h-9 border border-border px-3 text-xs font-semibold text-muted disabled:opacity-50">Decline</button></> : null}{match.status === "PENDING" && match.isSender ? <button type="button" disabled={busy} onClick={() => void updateMatch(match, "CANCEL")} className="h-9 border border-border px-3 text-xs font-semibold text-muted disabled:opacity-50">Cancel invite</button> : null}{match.status === "ACCEPTED" && !match.yourAttempt ? <button type="button" disabled={busy} onClick={() => void updateMatch(match, "START")} className="h-9 bg-brand px-3 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-50">Start match</button> : null}</div></article>)}</div> : <p className="mt-3 border-t border-border pt-3 text-xs text-muted">No invitations yet.</p>}</section> : null}
 
-      {dailyChallengesActive !== false && !attempt && !result && (children.length === 0 || Boolean(selectedPupilId)) ? (
+      {dailyChallengesActive !== false && wizardStep === 3 && !attempt && !result && learnerIdentity ? (
         <section className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold text-foreground">Available challenges</h2>
-              <p className="mt-1 text-sm text-muted">Only challenges that match the selected student’s recorded class and age appear here.</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-brand">Step 3 of 3 · {practiceMode === "EXAM" ? "WAEC & exam practice" : "Daily challenge"}</p>
+              <h2 className="mt-1 text-lg font-semibold text-foreground">Choose a challenge</h2>
+              <p className="mt-1 text-sm text-muted">{practiceMode === "EXAM" ? "Only active, reviewed offerings with an approved question set and a matching country and grade appear here." : "These timed practice challenges match the selected child’s recorded class and age. They do not affect official results or tournament standing."}</p>
             </div>
-            <button type="button" onClick={() => void loadChallenges()} disabled={loading} aria-label="Refresh challenges" className="flex h-10 w-10 items-center justify-center border border-border text-brand hover:bg-brand-light disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></button>
+            <div className="flex gap-2"><button type="button" onClick={() => setWizardStep(2)} className="inline-flex h-10 items-center gap-2 border border-border px-3 text-sm font-semibold text-foreground hover:border-brand"><ArrowLeft className="h-4 w-4" /> Change practice</button><button type="button" onClick={() => void loadChallenges(selectedPupilId, 3)} disabled={loading} aria-label="Refresh challenges" title="Refresh" className="flex h-10 w-10 items-center justify-center border border-border text-brand hover:bg-brand-light disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></button></div>
           </div>
-          {loading ? <div className="border border-border bg-surface p-10 text-center text-sm text-muted">Checking challenges for this student…</div> : challenges.length ? (
+          {loading ? <div className="border border-border bg-surface p-10 text-center text-sm text-muted">Checking eligible challenges for this child…</div> : visibleChallenges.length ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              {challenges.map((challenge, index) => {
+              {visibleChallenges.map((challenge, index) => {
                 const prior = attempts.filter((item) => item.challengeId === challenge.id);
                 const attemptsRemaining = Math.max(0, challenge.attemptLimit - challenge.attemptsUsed);
                 const attemptInProgress = prior.some((item) => item.status === "STARTED");
@@ -398,6 +432,7 @@ export default function StudentCompetitionPage() {
                       <div className="min-w-0"><h3 className="font-semibold text-foreground">{challenge.title}</h3><p className="mt-1 text-sm text-muted">{formatChallengeAudience(challenge.gradeLabel)}</p></div>
                       <Award className="h-5 w-5 shrink-0 text-brand" />
                     </div>
+                    {challenge.examPractice ? <div className="mt-3 border-l-2 border-emerald-500 pl-3"><p className="text-xs font-semibold text-emerald-800">{challenge.examPractice.examCode} · {challenge.examPractice.subjectName}</p><p className="mt-1 text-xs leading-5 text-muted">For {challenge.examPractice.countryCode} · {challenge.examPractice.gradeLabel} · {challenge.examPractice.format === "MOCK_EXAM" ? "Mock exam" : "Practice"}{challenge.examPractice.syllabusVersion ? ` · Syllabus ${challenge.examPractice.syllabusVersion}` : ""}</p></div> : null}
                     {challenge.description ? <p className="mt-3 line-clamp-2 text-sm leading-5 text-muted">{challenge.description}</p> : null}
                     <div className="mt-4 grid grid-cols-2 gap-2 border-y border-border py-3 text-xs">
                       <div><p className="text-muted">Questions</p><p className="mt-1 font-semibold text-foreground">{challenge.questionCount}</p></div>
@@ -420,8 +455,8 @@ export default function StudentCompetitionPage() {
             </div>
           ) : !error ? (
             <div className="border border-border bg-surface p-8 text-center sm:p-10">
-              <Award className="mx-auto h-8 w-8 text-brand" />
-              {ineligibleChallengeCount > 0 ? <><p className="mt-3 font-semibold text-foreground">No challenges match this student yet</p><p className="mx-auto mt-1 max-w-lg text-sm leading-6 text-muted">{ineligibleChallengeCount} active challenge{ineligibleChallengeCount === 1 ? " is" : "s are"} outside this student’s recorded age or class. Ask the school to verify the student profile or publish a challenge for the right audience.</p></> : <><p className="mt-3 font-semibold text-foreground">No eligible challenges available</p><p className="mt-1 text-sm text-muted">New challenges for this student will appear here when published.</p></>}
+              {practiceMode === "EXAM" ? <GraduationCap className="mx-auto h-8 w-8 text-emerald-700" /> : <Award className="mx-auto h-8 w-8 text-brand" />}
+              {practiceMode === "EXAM" ? <><p className="mt-3 font-semibold text-foreground">No exam-class practice is available yet</p><p className="mx-auto mt-1 max-w-lg text-sm leading-6 text-muted">Exam practice appears automatically when a challenge is available for {learnerIdentity.className || "this class"} and your school’s country. No separate student approval is needed.</p></> : ineligibleChallengeCount > 0 ? <><p className="mt-3 font-semibold text-foreground">No challenges match this child yet</p><p className="mx-auto mt-1 max-w-lg text-sm leading-6 text-muted">{ineligibleChallengeCount} active challenge{ineligibleChallengeCount === 1 ? " is" : "s are"} outside this child’s recorded age or class. Check the student record or return later for a matching challenge.</p></> : <><p className="mt-3 font-semibold text-foreground">No daily challenges are open right now</p><p className="mt-1 text-sm text-muted">New eligible challenges will appear here when published.</p></>}
             </div>
           ) : null}
           <style>{`@keyframes competition-challenge-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } } .competition-challenge-enter { animation: competition-challenge-enter 360ms cubic-bezier(.2,.7,.2,1) both; } @media (prefers-reduced-motion: reduce) { .competition-challenge-enter { animation: none; } }`}</style>
