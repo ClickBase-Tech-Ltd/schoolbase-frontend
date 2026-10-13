@@ -79,6 +79,7 @@ export default function StudentCompetitionPage() {
   const [practiceSoundsEnabled, setPracticeSoundsEnabled] = useState(true);
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [answered, setAnswered] = useState<string[]>([]);
+  const [answerRecovered, setAnswerRecovered] = useState<string[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -230,9 +231,11 @@ export default function StudentCompetitionPage() {
     setBusy(true);
     setError(null);
     try {
-      await api(`/student/attempts/${attempt.id}/answers/${question.id}`, { method: "POST", body: JSON.stringify({ optionId: selected[question.id], pupilId: selectedPupilId || undefined }) });
+      const submission = await api<{ accepted: boolean; alreadyRecorded?: boolean; optionId?: string }>(`/student/attempts/${attempt.id}/answers/${question.id}`, { method: "POST", body: JSON.stringify({ optionId: selected[question.id], pupilId: selectedPupilId || undefined }) });
+      if (submission.optionId) setSelected((current) => ({ ...current, [question.id]: submission.optionId! }));
       setAnswered((current) => [...current, question.id]);
-      if (practiceSoundsEnabled) playBellTone("ding", 0.45);
+      if (submission.alreadyRecorded) setAnswerRecovered((current) => [...current, question.id]);
+      if (practiceSoundsEnabled && !submission.alreadyRecorded) playBellTone("ding", 0.45);
     } catch (answerError) {
       if (isCompetitionFeatureUnavailable(answerError)) {
         setAttempt(null);
@@ -486,7 +489,7 @@ export default function StudentCompetitionPage() {
             <div className="border-b border-border px-5 py-5 sm:px-8 sm:py-7">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="border border-brand/20 bg-brand-light px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-brand">Question {currentQuestionIndex + 1}</span>
-                {answered.includes(currentQuestion.id) ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700"><CheckCircle2 className="h-4 w-4" /> Answer recorded</span> : null}
+                {answered.includes(currentQuestion.id) ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700"><CheckCircle2 className="h-4 w-4" /> {answerRecovered.includes(currentQuestion.id) ? "Answer saved during reconnection" : "Answer recorded"}</span> : null}
                 {!answered.includes(currentQuestion.id) && selected[currentQuestion.id] ? <span className="text-xs font-semibold text-brand">Selected · submit to record</span> : null}
               </div>
               <h1 className="mt-4 max-w-3xl text-xl font-semibold leading-8 text-foreground sm:text-2xl">{currentQuestion.prompt}</h1>
