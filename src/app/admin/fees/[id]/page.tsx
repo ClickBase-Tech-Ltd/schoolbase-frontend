@@ -6,7 +6,7 @@ import { getBackendUrl } from "@/lib/backend-url";
 import { formatMoney, pupilName as formatPupilName, invoiceStatusLabel } from "@/lib/format";
 import { playOpenTone, playCloseTone } from "@/lib/sounds";
 import { ErrorModal } from "@/components/ui/error-modal";
-import { Download, Printer, ChevronLeft, Check, AlertCircle, BadgePercent, Plus, X } from "lucide-react";
+import { Download, Printer, ChevronLeft, Check, AlertCircle, BadgePercent, Plus, X, CreditCard, LoaderCircle } from "lucide-react";
 
 const BRAND_BLUE = "#0A66C2";
 const LIGHT_BLUE = "#E7F1F8";
@@ -26,6 +26,82 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [adjustmentValidationError, setAdjustmentValidationError] = useState("");
   const [chargeModalOpen, setChargeModalOpen] = useState(false);
   const [pendingDeleteAdjustmentId, setPendingDeleteAdjustmentId] = useState<string | null>(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("CASH");
+  const [paymentReference, setPaymentReference] = useState("");
+  const [isRecordingPayment, setIsRecordingPayment] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  const openPaymentModal = () => {
+    const balance = invoice ? Math.max(0, Number(invoice.amountDue || 0) - Number(invoice.amountPaid || 0)) : 0;
+    setPaymentAmount((balance / 100).toFixed(2));
+    setPaymentMethod("CASH");
+    setPaymentReference("");
+    setPaymentError(null);
+    setPaymentModalOpen(true);
+    playOpenTone();
+  };
+
+  const closePaymentModal = () => {
+    if (isRecordingPayment) return;
+    setPaymentModalOpen(false);
+    setPaymentError(null);
+    playCloseTone();
+  };
+
+  const handleRecordPayment = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!invoice) return;
+    const paymentMinor = Math.round(Number(paymentAmount) * 100);
+    const balanceMinor = Math.max(0, Number(invoice.amountDue || 0) - Number(invoice.amountPaid || 0));
+    if (!Number.isSafeInteger(paymentMinor) || paymentMinor <= 0 || paymentMinor > balanceMinor) {
+      setPaymentError(`Enter an amount greater than zero and no more than ${formatMoney(balanceMinor, currency)}.`);
+      return;
+    }
+
+    setIsRecordingPayment(true);
+    setPaymentError(null);
+    try {
+      let remaining = paymentMinor;
+      const paymentItems = (Array.isArray(invoice.items) ? invoice.items : []) as Array<{
+        id: string;
+        amount?: number | null;
+        quantity?: number | null;
+        amountPaid?: number | null;
+        amountOutstanding?: number | null;
+      }>;
+      const allocations = paymentItems.flatMap((item) => {
+        const itemBalance = Math.max(0, Number(item.amountOutstanding ?? (Number(item.amount || 0) * Number(item.quantity || 1) - Number(item.amountPaid || 0))));
+        const allocated = Math.min(remaining, itemBalance);
+        remaining -= allocated;
+        return allocated > 0 ? [{ invoiceItemId: item.id, amount: allocated / 100 }] : [];
+      });
+
+      const backendUrl = getBackendUrl();
+      const response = await fetch(`${backendUrl}/api/admin/fees/payments/record`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          invoiceId: invoice.id,
+          amount: (paymentMinor / 100).toFixed(2),
+          method: paymentMethod,
+          reference: paymentReference.trim() || null,
+          allocations,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Unable to record this payment.");
+
+      setPaymentModalOpen(false);
+      await fetchInvoice(invoiceId);
+    } catch (recordError) {
+      setPaymentError(recordError instanceof Error ? recordError.message : "Unable to record this payment.");
+    } finally {
+      setIsRecordingPayment(false);
+    }
+  };
 
   const openAdjustmentModal = () => {
     setAdjustmentModalOpen(true);
@@ -331,6 +407,9 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     }
     return sum;
   }, 0);
+  const balanceDueMinor = Math.max(0, Number(invoice.amountDue || 0) - Number(invoice.amountPaid || 0));
+  const unitemizedBalance = Math.max(0, balanceDueMinor + Number(invoice.amountPaid || 0) + totalAdjustments - subtotal);
+  const grossSubtotal = subtotal + unitemizedBalance;
 
   return (
     <main className="min-h-screen pb-12">
@@ -341,7 +420,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
             <ChevronLeft size={16} />
             Back to Fees
           </Link>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
+            {outstanding > 0 ? <button type="button" onClick={openPaymentModal} className="inline-flex h-9 items-center justify-center gap-2 bg-brand px-3 text-sm font-semibold text-white transition hover:bg-brand-hover sm:h-10 sm:px-4"><CreditCard size={16} />Record payment</button> : null}
             <button
               onClick={handleDownloadPDF}
               aria-label="Download invoice"
@@ -463,7 +543,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
               <div className="w-full max-w-sm divide-y divide-gray-200 border-y border-gray-200">
                 <div className="flex items-center justify-between px-4 py-3 text-sm text-gray-600">
                   <span>Subtotal</span>
-                  <span className="font-medium text-gray-900">{formatMoney(subtotal, currency)}</span>
+                  <span className="font-medium text-gray-900">{formatMoney(grossSubtotal, currency)}</span>
                 </div>
                 {totalAdjustments > 0 && (
                   <div className="flex items-center justify-between px-4 py-3 text-sm text-gray-600">
@@ -471,6 +551,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                     <span className="font-medium text-red-600">-{formatMoney(totalAdjustments, currency)}</span>
                   </div>
                 )}
+                {unitemizedBalance > 0 && <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm text-gray-600"><span>Previously billed balance not itemized</span><span className="font-medium text-gray-900">{formatMoney(unitemizedBalance, currency)}</span></div>}
                 <div className="flex items-center justify-between px-4 py-3 text-sm text-gray-600">
                   <span>Amount Paid</span>
                   <span className="font-medium text-gray-900">{formatMoney(invoice.amountPaid, currency)}</span>
@@ -481,6 +562,11 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                 </div>
               </div>
             </div>
+
+            {outstanding > 0 ? <section aria-label="Record invoice payment" className="mt-6 flex flex-col justify-between gap-4 border-l-4 border-brand bg-brand-light/50 px-4 py-4 sm:flex-row sm:items-center sm:px-5 print:hidden">
+              <div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-brand">Payment collection</p><p className="mt-1 text-sm font-semibold text-foreground">Outstanding balance: {formatMoney(outstanding, currency)}</p><p className="mt-1 text-xs text-muted">Discounts are already reflected in this balance.</p></div>
+              <button type="button" onClick={openPaymentModal} className="inline-flex h-11 w-full items-center justify-center gap-2 bg-brand px-5 text-sm font-bold text-white transition hover:bg-brand-hover sm:w-auto"><CreditCard size={17} />Record payment</button>
+            </section> : null}
 
             <section className="mt-6 border-t border-gray-200 pt-6 print:hidden" aria-labelledby="additional-charges-heading">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -580,6 +666,20 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           </div>
         </div>
       </div>
+
+      {paymentModalOpen ? <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/50 px-4 py-6 print:hidden" onMouseDown={(event) => { if (event.target === event.currentTarget) closePaymentModal(); }}>
+        <form onSubmit={handleRecordPayment} className="w-full max-w-lg overflow-hidden border border-border bg-surface shadow-2xl">
+          <div className="flex items-start justify-between gap-4 border-b border-border bg-brand-light/60 px-5 py-4 sm:px-6"><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-brand">Invoice payment</p><h2 className="mt-1 text-lg font-semibold text-foreground">Record payment</h2><p className="mt-1 text-sm text-muted">{invoice.invoiceNo} · balance {formatMoney(outstanding, currency)}</p></div><button type="button" disabled={isRecordingPayment} onClick={closePaymentModal} aria-label="Close payment dialog" className="grid h-9 w-9 place-items-center border border-border bg-surface text-muted hover:text-foreground disabled:opacity-50"><X className="h-4 w-4" /></button></div>
+          <div className="space-y-4 px-5 py-5 sm:px-6">
+            <label className="block text-sm font-semibold text-foreground">Payment amount ({currency})<input autoFocus required type="number" min="0.01" max={(outstanding / 100).toFixed(2)} step="0.01" value={paymentAmount} onChange={(event) => { setPaymentAmount(event.target.value); setPaymentError(null); }} className="mt-1.5 h-11 w-full border border-border bg-background px-3 text-base font-semibold tabular-nums text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/15" /></label>
+            <label className="block text-sm font-semibold text-foreground">Payment method<select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="mt-1.5 h-11 w-full border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-brand"><option value="CASH">Cash</option><option value="BANK_TRANSFER">Bank transfer</option><option value="CARD">Card</option><option value="ONLINE">Online</option><option value="OTHER">Other</option></select></label>
+            <label className="block text-sm font-semibold text-foreground">Reference <span className="font-normal text-muted">(optional)</span><input maxLength={120} value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} placeholder="Receipt, transfer, or transaction reference" className="mt-1.5 h-11 w-full border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-brand" /></label>
+            <p className="border-l-2 border-brand/50 bg-background px-3 py-2 text-xs leading-5 text-muted">Known fee items will be allocated first. Any remaining legacy/unitemized balance will still be recorded against this invoice.</p>
+            {paymentError ? <p role="alert" className="border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{paymentError}</p> : null}
+          </div>
+          <div className="flex flex-col-reverse gap-2 border-t border-border px-5 py-4 sm:flex-row sm:justify-end sm:px-6"><button type="button" disabled={isRecordingPayment} onClick={closePaymentModal} className="h-10 border border-border px-4 text-sm font-semibold text-foreground hover:bg-background disabled:opacity-50">Cancel</button><button type="submit" disabled={isRecordingPayment || !paymentAmount || Number(paymentAmount) <= 0 || Number(paymentAmount) * 100 > outstanding} className="inline-flex h-10 items-center justify-center gap-2 bg-brand px-5 text-sm font-bold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50">{isRecordingPayment ? <><LoaderCircle className="h-4 w-4 animate-spin" />Recording…</> : <><CreditCard className="h-4 w-4" />Record payment</>}</button></div>
+        </form>
+      </div> : null}
 
       {pendingDeleteAdjustmentId && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4 print:hidden">
