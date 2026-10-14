@@ -22,7 +22,7 @@ function PupilAvatar({ photoUrl, name, size }: { photoUrl: string | null; name: 
 function InvitingSchoolLogo({ school }: { school: NonNullable<Tournament["ownRegistration"]["invitingSchool"]> }) {
   const [imageFailed, setImageFailed] = useState(false);
   const initials = school.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("");
-  return <span className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-full border-2 border-surface bg-white text-lg font-bold text-emerald-800 ring-1 ring-emerald-200 shadow-sm">
+  return <span className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-full border-2 border-surface bg-white text-lg font-bold text-brand ring-1 ring-brand/20 shadow-sm">
     {school.logoUrl && !imageFailed ? <img src={`/api/school-logo/${encodeURIComponent(school.id)}`} alt={`${school.name} logo`} onError={() => setImageFailed(true)} className="h-full w-full object-contain p-2" /> : initials || "S"}
   </span>;
 }
@@ -41,48 +41,48 @@ function TournamentEventRow({ tournament, childId, index, busy, onAccept, onDecl
   const approved = tournament.ownRegistration.status === "APPROVED";
   const canRequest = tournament.status === "REGISTRATION_OPEN" && !tournament.ownRegistration.registered;
   const statusLabel = invited ? "Guardian response needed" : acceptedAwaitingReview ? "Awaiting school review" : declined ? "Invitation declined" : approved ? "Participation approved" : tournament.ownRegistration.registered ? `Participation ${tournament.ownRegistration.status?.toLowerCase()}` : tournament.status === "REGISTRATION_OPEN" ? "Registration open" : tournament.status.replaceAll("_", " ").toLowerCase();
-  const statusTone = invited ? "border-amber-300 bg-amber-100 text-amber-950" : acceptedAwaitingReview || approved ? "border-emerald-300 bg-emerald-100 text-emerald-950" : declined ? "border-rose-300 bg-rose-100 text-rose-950" : canRequest ? "border-sky-300 bg-sky-100 text-sky-950" : "border-border bg-background text-muted";
+  const statusTone = invited ? "border-amber-300 bg-amber-100 text-amber-950" : acceptedAwaitingReview || approved ? "border-emerald-300 bg-emerald-100 text-emerald-950" : declined ? "border-rose-300 bg-rose-100 text-rose-950" : canRequest ? "border-brand/30 bg-brand-light text-brand" : "border-border bg-background text-muted";
 
   return (
     <article
       style={{ animationDelay: `${Math.min(index, 5) * 70}ms` }}
-      className={`competition-event-row relative grid gap-3 px-4 py-4 transition-colors sm:grid-cols-[minmax(0,1fr)_minmax(190px,auto)] sm:items-center sm:px-5 ${invited ? "bg-amber-50/70 hover:bg-amber-50" : "bg-white hover:bg-emerald-50/60"}`}
+      className={`competition-event-row relative grid gap-3 px-4 py-4 transition-colors sm:grid-cols-[minmax(0,1fr)_minmax(190px,auto)] sm:items-center sm:px-5 ${invited ? "bg-amber-50/70 hover:bg-amber-50" : "bg-white hover:bg-brand-light/60"}`}
     >
-      <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1.5 ${invited ? "bg-amber-400" : acceptedAwaitingReview || approved ? "bg-emerald-500" : declined ? "bg-rose-400" : canRequest ? "bg-sky-400" : "bg-slate-300"}`} />
+      <span aria-hidden="true" className={`absolute inset-y-0 left-0 w-1.5 ${invited ? "bg-amber-400" : acceptedAwaitingReview || approved ? "bg-emerald-500" : declined ? "bg-rose-400" : canRequest ? "bg-brand" : "bg-border"}`} />
       <div className="min-w-0 pl-2">
         <div className="flex flex-wrap items-center gap-2">
-          <h4 className="text-sm font-bold text-slate-950">{tournament.title}</h4>
+          <h4 className="text-sm font-bold text-foreground">{tournament.title}</h4>
           <span className={`inline-flex items-center gap-1.5 border px-2 py-1 text-[10px] font-extrabold uppercase ${statusTone}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${invited ? "bg-amber-600" : acceptedAwaitingReview || approved ? "bg-emerald-600" : declined ? "bg-rose-600" : canRequest ? "bg-sky-600" : "bg-slate-400"}`} />
+            <span className={`h-1.5 w-1.5 rounded-full ${invited ? "bg-amber-600" : acceptedAwaitingReview || approved ? "bg-emerald-600" : declined ? "bg-rose-600" : canRequest ? "bg-brand" : "bg-muted"}`} />
             {statusLabel}
           </span>
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-slate-600">
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-muted">
           <span>{tournament.scope} event</span>
-          <span className="h-1 w-1 rounded-full bg-slate-300" />
+          <span className="h-1 w-1 rounded-full bg-border" />
           <span>{tournament.status.replaceAll("_", " ").toLowerCase()}</span>
           {tournament.registrationClosesAt ? <>
-            <span className="h-1 w-1 rounded-full bg-slate-300" />
-            <span className="font-semibold text-slate-700">Closes {new Date(tournament.registrationClosesAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>
+            <span className="h-1 w-1 rounded-full bg-border" />
+            <span className="font-semibold text-foreground">Closes {new Date(tournament.registrationClosesAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>
           </> : null}
         </div>
-        <p className={`mt-2 border-l-2 pl-2.5 text-xs leading-5 ${invited ? "border-amber-500 font-semibold text-amber-950" : acceptedAwaitingReview ? "border-emerald-500 text-emerald-900" : declined ? "border-rose-400 text-rose-900" : approved ? "border-emerald-500 text-emerald-900" : "border-slate-300 text-slate-600"}`}>
+        <p className={`mt-2 border-l-2 pl-2.5 text-xs leading-5 ${invited ? "border-amber-500 font-semibold text-amber-950" : acceptedAwaitingReview ? "border-emerald-500 text-emerald-900" : declined ? "border-rose-400 text-rose-900" : approved ? "border-emerald-500 text-emerald-900" : "border-brand/40 text-muted"}`}>
           {invited ? "Your school nominated this child. Review the invitation and choose whether to accept." : acceptedAwaitingReview ? "Guardian acceptance is recorded. The school must still approve participation." : declined ? "This school invitation was declined." : approved ? `Participation is approved. Name visibility is ${tournament.ownRegistration.visibilityApproved ? "approved" : "not approved"}.` : tournament.ownRegistration.registered ? `Participation request: ${tournament.ownRegistration.status?.toLowerCase()}.` : "Request participation. This does not imply guardian consent or public name visibility."}
         </p>
       </div>
       {invited || canRequest ? (
         <div className="flex gap-2 pl-2 sm:pl-0">
           {invited ? <>
-            <button type="button" disabled={busy} onClick={() => onAccept(tournament.id, childId)} className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 bg-emerald-700 px-3 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-800 hover:shadow-md disabled:cursor-wait disabled:opacity-60">
+            <button type="button" disabled={busy} onClick={() => onAccept(tournament.id, childId)} className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 bg-brand px-3 text-xs font-bold text-white shadow-sm transition hover:bg-brand-hover hover:shadow-md disabled:cursor-wait disabled:opacity-60">
               {busy ? "Saving…" : <><Check className="h-4 w-4" />Accept</>}
             </button>
             <button type="button" disabled={busy} onClick={() => onDecline(tournament.id, childId)} className="h-10 border border-rose-300 bg-white px-3 text-xs font-bold text-rose-800 transition hover:bg-rose-50 disabled:cursor-wait disabled:opacity-60">Decline</button>
-          </> : <button type="button" disabled={busy} onClick={() => onAccept(tournament.id, childId)} className="inline-flex h-10 w-full items-center justify-center gap-2 border border-emerald-700 bg-emerald-700 px-4 text-xs font-bold text-white shadow-sm transition hover:border-emerald-800 hover:bg-emerald-800 hover:shadow-md disabled:cursor-wait disabled:opacity-60">
+          </> : <button type="button" disabled={busy} onClick={() => onAccept(tournament.id, childId)} className="inline-flex h-10 w-full items-center justify-center gap-2 border border-brand bg-brand px-4 text-xs font-bold text-white shadow-sm transition hover:border-brand-hover hover:bg-brand-hover hover:shadow-md disabled:cursor-wait disabled:opacity-60">
             {busy ? "Sending request…" : <>Request participation <ArrowRight className="h-4 w-4" /></>}
           </button>}
         </div>
       ) : (
-        <div className="pl-2 sm:pl-0"><span className={`inline-flex min-h-9 items-center border px-3 text-xs font-bold ${approved ? "border-emerald-300 bg-emerald-100 text-emerald-900" : declined ? "border-rose-200 bg-rose-50 text-rose-800" : "border-slate-200 bg-slate-50 text-slate-600"}`}>{approved ? "Ready to compete" : declined ? "Closed by guardian" : "No action required"}</span></div>
+        <div className="pl-2 sm:pl-0"><span className={`inline-flex min-h-9 items-center border px-3 text-xs font-bold ${approved ? "border-emerald-300 bg-emerald-100 text-emerald-900" : declined ? "border-rose-200 bg-rose-50 text-rose-800" : "border-border bg-background text-muted"}`}>{approved ? "Ready to compete" : declined ? "Closed by guardian" : "No action required"}</span></div>
       )}
     </article>
   );
@@ -229,21 +229,21 @@ export default function ParentCompetitionPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f4f8f6] px-3 py-5 sm:px-6 sm:py-8 lg:px-10">
+    <main className="min-h-screen bg-background px-3 py-5 sm:px-6 sm:py-8 lg:px-10">
       <div className="mx-auto max-w-6xl space-y-7 sm:space-y-9">
-      <header className="relative overflow-hidden border-b-4 border-emerald-500 bg-emerald-950 px-5 py-6 text-white shadow-lg sm:px-8 sm:py-8"><div aria-hidden="true" className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(ellipse_at_top_right,rgba(52,211,153,.24),transparent_68%)]" /><div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.16em] text-emerald-200"><span className="h-2 w-2 rounded-full bg-lime-300" /> Parent portal <span className="text-emerald-500">/</span> Competition</p><h1 className="mt-2 text-3xl font-semibold sm:text-4xl">Practice & progress</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-emerald-100/80">Daily challenges, achievements, and school event invitations for your children.</p><p className="mt-3 inline-flex items-center gap-2 border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-medium text-emerald-50"><ShieldCheck className="h-3.5 w-3.5 text-lime-300" />Practice scores never change official school results</p></div>{children.length > 1 && selectedChild ? <label className="block min-w-56 text-xs font-bold text-white">Child profile<select value={selectedChild.id} onChange={(event) => setSelectedChildId(event.target.value)} className="mt-1.5 h-11 w-full border border-emerald-300 bg-white px-3 text-sm font-semibold text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-lime-300">{children.map((child) => <option key={child.id} value={child.id}>{child.displayName}</option>)}</select></label> : null}</div></header>
+      <header className="relative overflow-hidden border-b-4 border-brand-accent bg-brand-hover px-5 py-6 text-white shadow-lg sm:px-8 sm:py-8"><div aria-hidden="true" className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(ellipse_at_top_right,rgba(112,181,249,.24),transparent_68%)]" /><div className="relative flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[.16em] text-blue-100"><span className="h-2 w-2 rounded-full bg-brand-accent" /> Parent portal <span className="text-blue-300">/</span> Competition</p><h1 className="mt-2 text-3xl font-semibold sm:text-4xl">Practice & progress</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-blue-100/80">Daily challenges, achievements, and school event invitations for your children.</p><p className="mt-3 inline-flex items-center gap-2 border border-white/15 bg-white/10 px-2.5 py-1.5 text-[11px] font-medium text-blue-50"><ShieldCheck className="h-3.5 w-3.5 text-brand-accent" />Practice scores never change official school results</p></div>{children.length > 1 && selectedChild ? <label className="block min-w-56 text-xs font-bold text-white">Child profile<select value={selectedChild.id} onChange={(event) => setSelectedChildId(event.target.value)} className="mt-1.5 h-11 w-full border border-blue-200 bg-white px-3 text-sm font-semibold text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-accent">{children.map((child) => <option key={child.id} value={child.id}>{child.displayName}</option>)}</select></label> : null}</div></header>
       {!enabled && !loading && !error ? <section className="flex items-start gap-3 border border-border bg-surface p-5"><div className="flex h-10 w-10 shrink-0 items-center justify-center border border-brand/20 bg-brand-light text-brand"><Award className="h-5 w-5" /></div><div><h2 className="font-semibold text-foreground">Competition achievements are not enabled yet</h2><p className="mt-1 text-sm leading-6 text-muted">When the school activates this feature, this page will show achievements and challenge progress for children linked to your parent account.</p><Link href="/parent/results" className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-brand hover:text-brand-hover"><ShieldCheck className="h-4 w-4" /> View official school results</Link></div></section> : null}
       {loading ? <div className="border border-border bg-surface p-10 text-center text-sm text-muted">Checking Competition availability…</div> : null}
       {enabled && !loading && selectedChild ? [selectedChild].map((child) => (
         <section key={child.id} className="space-y-7 sm:space-y-8">
-          <header className="flex flex-wrap items-center justify-between gap-4 border-b border-emerald-200 pb-5">
-            <div className="flex min-w-0 items-center gap-3"><PupilAvatar photoUrl={child.photoUrl} name={child.displayName} size="small" /><div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[.15em] text-emerald-800">Learner overview</p><h2 className="mt-0.5 truncate text-xl font-semibold text-foreground">{child.displayName}</h2><p className="mt-0.5 text-sm text-muted">{child.className || "Class not assigned"}</p></div></div>
-            <div className="flex min-w-44 items-center gap-3 border border-amber-300 bg-amber-100 px-4 py-2.5 shadow-sm"><span className="grid h-10 w-10 place-items-center bg-amber-400 text-amber-950"><Award className="h-5 w-5" /></span><div><p className="text-[10px] font-bold uppercase tracking-wide text-amber-950">Competition XP</p><p className="text-2xl font-bold leading-none tabular-nums text-amber-950">{child.xp}</p></div></div>
+          <header className="flex flex-wrap items-center justify-between gap-4 border-b border-brand/20 pb-5">
+            <div className="flex min-w-0 items-center gap-3"><PupilAvatar photoUrl={child.photoUrl} name={child.displayName} size="small" /><div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-[.15em] text-brand">Learner overview</p><h2 className="mt-0.5 truncate text-xl font-semibold text-foreground">{child.displayName}</h2><p className="mt-0.5 text-sm text-muted">{child.className || "Class not assigned"}</p></div></div>
+            <div className="flex min-w-44 items-center gap-3 border border-brand/30 bg-brand-light px-4 py-2.5 shadow-sm"><span className="grid h-10 w-10 place-items-center bg-brand text-white"><Award className="h-5 w-5" /></span><div><p className="text-[10px] font-bold uppercase tracking-wide text-brand-hover">Competition XP</p><p className="text-2xl font-bold leading-none tabular-nums text-brand-hover">{child.xp}</p></div></div>
           </header>
 
-          <section aria-label="Start practice" className="flex flex-col justify-between gap-4 border-l-4 border-lime-400 bg-emerald-800 p-5 text-white shadow-md sm:flex-row sm:items-center sm:px-6"><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center bg-lime-300 text-emerald-950"><BookOpen className="h-5 w-5" /></span><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-lime-200">Build confidence</p><h3 className="mt-0.5 font-semibold">Ready for a practice session?</h3><p className="mt-1 max-w-2xl text-sm leading-5 text-emerald-50/80">Choose a daily challenge or exam practice for {child.displayName}. Available exam tracks match the child’s school country and class.</p></div></div><Link href={`/competition?pupilId=${encodeURIComponent(child.id)}`} className="inline-flex h-11 shrink-0 items-center justify-center gap-2 bg-lime-300 px-5 text-sm font-bold text-emerald-950 shadow transition hover:bg-lime-200 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-emerald-800">Start practice <ArrowRight className="h-4 w-4" /></Link></section>
+          <section aria-label="Start practice" className="flex flex-col justify-between gap-4 border-l-4 border-brand-accent bg-brand p-5 text-white shadow-md sm:flex-row sm:items-center sm:px-6"><div className="flex items-start gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center bg-white text-brand"><BookOpen className="h-5 w-5" /></span><div><p className="text-[10px] font-bold uppercase tracking-[.14em] text-blue-100">Build confidence</p><h3 className="mt-0.5 font-semibold">Ready for a practice session?</h3><p className="mt-1 max-w-2xl text-sm leading-5 text-blue-50/90">Choose a daily challenge or exam practice for {child.displayName}. Available exam tracks match the child’s school country and class.</p></div></div><Link href={`/competition?pupilId=${encodeURIComponent(child.id)}`} className="inline-flex h-11 shrink-0 items-center justify-center gap-2 bg-white px-5 text-sm font-bold text-brand shadow transition hover:bg-brand-light hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand">Start practice <ArrowRight className="h-4 w-4" /></Link></section>
 
-          {childInvites.length ? <section aria-label="Classmate invitations" className="border border-emerald-200 bg-emerald-50/50 p-4 sm:p-5"><div className="flex items-start gap-3"><BellRing className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" /><div className="min-w-0 flex-1"><h3 className="text-sm font-semibold text-foreground">Classmate invitations</h3><div className="mt-3 divide-y divide-emerald-200 border-y border-emerald-200">{childInvites.map((invite) => <article key={invite.id} className="flex flex-col justify-between gap-3 py-3 sm:flex-row sm:items-center"><div className="flex min-w-0 items-center gap-3"><div className="flex -space-x-2"><PupilAvatar photoUrl={invite.opponentPhotoUrl} name={invite.opponentName} size="small" /><PupilAvatar photoUrl={child.photoUrl} name={child.displayName} size="small" /></div><div className="min-w-0"><p className="truncate text-sm font-semibold text-foreground">{invite.challenge.title}</p><p className="mt-0.5 text-xs text-muted">From {invite.opponentName} · expires {new Date(invite.expiresAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</p></div></div><div className="flex gap-2"><button type="button" onClick={() => void decideInvite(invite, "DECLINE", child.id)} className="h-9 border border-border bg-surface px-3 text-xs font-semibold text-foreground hover:border-rose-300 hover:text-rose-800">Decline</button><button type="button" onClick={() => void decideInvite(invite, "ACCEPT", child.id)} className="inline-flex h-9 items-center gap-1.5 bg-emerald-700 px-3 text-xs font-semibold text-white hover:bg-emerald-800"><Check className="h-3.5 w-3.5" /> Accept</button></div></article>)}</div></div></div></section> : null}
+          {childInvites.length ? <section aria-label="Classmate invitations" className="border border-brand/25 bg-brand-light/50 p-4 sm:p-5"><div className="flex items-start gap-3"><BellRing className="mt-0.5 h-5 w-5 shrink-0 text-brand" /><div className="min-w-0 flex-1"><h3 className="text-sm font-semibold text-foreground">Classmate invitations</h3><div className="mt-3 divide-y divide-brand/20 border-y border-brand/20">{childInvites.map((invite) => <article key={invite.id} className="flex flex-col justify-between gap-3 py-3 sm:flex-row sm:items-center"><div className="flex min-w-0 items-center gap-3"><div className="flex -space-x-2"><PupilAvatar photoUrl={invite.opponentPhotoUrl} name={invite.opponentName} size="small" /><PupilAvatar photoUrl={child.photoUrl} name={child.displayName} size="small" /></div><div className="min-w-0"><p className="truncate text-sm font-semibold text-foreground">{invite.challenge.title}</p><p className="mt-0.5 text-xs text-muted">From {invite.opponentName} · expires {new Date(invite.expiresAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</p></div></div><div className="flex gap-2"><button type="button" onClick={() => void decideInvite(invite, "DECLINE", child.id)} className="h-9 border border-border bg-surface px-3 text-xs font-semibold text-foreground hover:border-rose-300 hover:text-rose-800">Decline</button><button type="button" onClick={() => void decideInvite(invite, "ACCEPT", child.id)} className="inline-flex h-9 items-center gap-1.5 bg-brand px-3 text-xs font-semibold text-white hover:bg-brand-hover"><Check className="h-3.5 w-3.5" /> Accept</button></div></article>)}</div></div></div></section> : null}
 
           <section aria-label="Practice summary" className="grid gap-4 border-y border-border py-4 sm:grid-cols-3">
             <div><p className="text-[10px] font-bold uppercase tracking-wide text-muted">Challenges completed</p><p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{child.practiceSummary.completedChallenges}</p></div>
@@ -257,18 +257,18 @@ export default function ParentCompetitionPage() {
           </section>
 
           {tournamentsByPupil[child.id]?.length ? (
-            <section className="overflow-hidden border border-emerald-300 bg-white shadow-sm transition-shadow hover:shadow-md">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-200 bg-emerald-950 px-4 py-4 text-white sm:px-5">
+            <section className="overflow-hidden border border-brand/30 bg-white shadow-sm transition-shadow hover:shadow-md">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-hover bg-brand-hover px-4 py-4 text-white sm:px-5">
                 <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center bg-lime-300 text-emerald-950"><Trophy className="h-5 w-5" /></span>
+                  <span className="grid h-10 w-10 place-items-center bg-white text-brand"><Trophy className="h-5 w-5" /></span>
                   <div>
                     <h3 className="text-sm font-bold">School competition events</h3>
-                    <p className="mt-0.5 text-xs leading-5 text-emerald-100/75">Optional participation · guardian consent required · student name stays private unless separately approved.</p>
+                    <p className="mt-0.5 text-xs leading-5 text-blue-100/80">Optional participation · guardian consent required · student name stays private unless separately approved.</p>
                   </div>
                 </div>
                 <span className="border border-white/20 bg-white/10 px-2.5 py-1 text-xs font-bold tabular-nums">{tournamentsByPupil[child.id].length} event{tournamentsByPupil[child.id].length === 1 ? "" : "s"}</span>
               </div>
-              <div className="divide-y divide-emerald-100">
+              <div className="divide-y divide-brand/15">
                 {tournamentsByPupil[child.id].map((tournament, index) => (
                   <TournamentEventRow
                     key={tournament.id}
