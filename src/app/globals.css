@@ -203,3 +203,12 @@ html[data-theme="dark"] [class*="bg-[#f6f8fa]"] {
 html[data-theme="dark"] [class*="bg-[#f3f9fe]"] {
   background-color: #0f2438 !important;
 }
+
+button:not(:disabled),
+a[href],
+select:not(:disabled),
+summary,
+[role="button"]:not([aria-disabled="true"]),
+[onclick]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}

@@ -17,6 +17,7 @@ type LearnerPracticeSummary = { completedChallenges: number; latestCompletionAt:
 type ChildOption = { pupilId: string; firstName: string; lastName: string; className: string | null };
 type Question = { id: string; type: string; prompt: string; options: Array<{ id: string; content: string }> };
 type Attempt = { id: string; status: string; startedAt: string; deadlineAt: string; questions: Question[] };
+type AttemptSummary = { id: string; challengeId: string; status: string; score: number; submittedAt: string | null };
 type Result = { status: string; score: number; correctCount: number; questionCount: number; accuracyPercent: number | null; elapsedMs: number | null; firstCompletion?: boolean; xpAwarded?: number; achievementsAwarded?: Array<{ code: string; title: string }> };
 type Leaderboard = { challenge: { id: string; title: string }; entries: Array<{ rank: number; displayName: string; score: number; accuracyPercent: number | null; elapsedMs: number | null }> };
 type Match = { id: string; challenge: { id: string; title: string }; status: string; isSender: boolean; opponentName: string; opponentPhotoUrl?: string | null; expiresAt: string; winner: "YOU" | "OPPONENT" | null; yourAttempt: { status: string; score: number } | null; opponentAttempt: { status: string; score: number } | null };
@@ -255,6 +256,23 @@ export default function StudentCompetitionPage() {
       } else {
         setError(startError instanceof Error ? startError.message : "Unable to start challenge.");
       }
+    } finally { setBusy(false); }
+  }
+
+  async function resumeChallenge(attemptId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const data = await api<{ attempt: Attempt; savedAnswers: Array<{ questionId: string; optionId: string }> }>(`/student/attempts/${attemptId}${selectedPupilId ? `?pupilId=${encodeURIComponent(selectedPupilId)}` : ""}`);
+      setAttempt(data.attempt);
+      setSelected(Object.fromEntries(data.savedAnswers.map((answer) => [answer.questionId, answer.optionId])));
+      setAnswered(data.savedAnswers.map((answer) => answer.questionId));
+      setAnswerRecovered(data.savedAnswers.map((answer) => answer.questionId));
+      setCurrentQuestionIndex(Math.max(0, data.attempt.questions.findIndex((question) => !data.savedAnswers.some((answer) => answer.questionId === question.id))));
+      if (data.attempt.deadlineAt && new Date(data.attempt.deadlineAt).getTime() <= Date.now()) setSecondsLeft(0);
+    } catch (resumeError) {
+      setError(resumeError instanceof Error ? resumeError.message : "Unable to resume this attempt.");
+      await loadChallenges(selectedPupilId, 3);
     } finally { setBusy(false); }
   }
 
@@ -589,7 +607,7 @@ export default function StudentCompetitionPage() {
               {visibleChallenges.map((challenge, index) => {
                 const prior = attempts.filter((item) => item.challengeId === challenge.id);
                 const attemptsRemaining = Math.max(0, challenge.attemptLimit - challenge.attemptsUsed);
-                const attemptInProgress = prior.some((item) => item.status === "STARTED");
+                const inProgressAttempt = prior.find((item) => item.status === "STARTED");
                 const latestResult = prior.find((item) => item.status === "SUBMITTED" || item.status === "EXPIRED");
                 return (
                   <article key={challenge.id} style={{ animationDelay: `${Math.min(index, 6) * 65}ms` }} className="competition-challenge-enter flex h-full flex-col border border-border bg-surface p-5 transition duration-200 hover:-translate-y-0.5 hover:border-brand/50 hover:shadow-md">
@@ -609,8 +627,8 @@ export default function StudentCompetitionPage() {
                     </div>
                     {latestResult ? <p className="mt-2 text-xs text-muted">Last result: {latestResult.score} points · {latestResult.status === "EXPIRED" ? "time expired" : "submitted"}</p> : null}
                     {latestResult?.status === "SUBMITTED" && learnerIdentity?.classId && !matchesUnavailable ? <div className="mt-2">{peersByChallenge[challenge.id] ? peersByChallenge[challenge.id].length ? <div className="flex gap-2"><select aria-label={`Choose classmate for ${challenge.title}`} value={selectedPeerByChallenge[challenge.id] || ""} onChange={(event) => setSelectedPeerByChallenge((current) => ({ ...current, [challenge.id]: event.target.value }))} className="h-9 min-w-0 flex-1 border border-border bg-background px-2 text-xs text-foreground"><option value="">Choose classmate</option>{peersByChallenge[challenge.id].map((peer) => <option key={peer.id} value={peer.id}>{peer.displayName}</option>)}</select><button type="button" disabled={busy || !selectedPeerByChallenge[challenge.id]} onClick={() => void sendMatchInvite(challenge.id)} className="h-9 border border-brand px-3 text-xs font-semibold text-brand hover:bg-brand-light disabled:opacity-50">Invite</button></div> : <p className="text-xs text-muted">No eligible linked classmates are available for this challenge.</p> : <button type="button" disabled={busy} onClick={() => void loadPeers(challenge.id)} className="h-9 border border-border px-3 text-xs font-semibold text-foreground hover:bg-background disabled:opacity-50">Challenge a classmate</button>}</div> : null}
-                    <button type="button" onClick={() => openChallengeBriefing(challenge)} disabled={busy || attemptInProgress || attemptsRemaining === 0} className="mt-auto inline-flex h-10 w-full items-center justify-center border border-brand bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:border-border disabled:bg-background disabled:text-muted">
-                      {busy ? "Starting…" : attemptInProgress ? "Attempt in progress" : attemptsRemaining === 0 ? "Attempts used" : "Review challenge"}
+                    <button type="button" onClick={() => inProgressAttempt ? void resumeChallenge(inProgressAttempt.id) : openChallengeBriefing(challenge)} disabled={busy || (!inProgressAttempt && attemptsRemaining === 0)} className="mt-auto inline-flex h-10 w-full items-center justify-center border border-brand bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:border-border disabled:bg-background disabled:text-muted">
+                      {busy ? inProgressAttempt ? "Resuming…" : "Starting…" : inProgressAttempt ? "Resume attempt" : attemptsRemaining === 0 ? "Attempts used" : "Review challenge"}
                     </button>
                     {learnerCapabilities.leaderboardEnabled && latestResult?.status === "SUBMITTED" && learnerIdentity?.classId ? <button type="button" disabled={busy || leaderboardUnavailable[challenge.id]} onClick={() => void loadLeaderboard(challenge.id)} className="mt-2 h-9 border border-border px-3 text-xs font-semibold text-foreground hover:bg-background disabled:cursor-not-allowed disabled:opacity-50">{leaderboardUnavailable[challenge.id] ? "Class standings unavailable" : "View class standings"}</button> : null}
                     {leaderboards[challenge.id] ? <div className="mt-3 border-t border-border pt-3"><p className="text-xs font-bold uppercase tracking-wide text-muted">Private class standings</p><ol className="mt-2 space-y-2">{leaderboards[challenge.id].entries.map((entry) => <li key={`${entry.rank}-${entry.displayName}`} className="grid grid-cols-[2rem_minmax(0,1fr)_auto] gap-2 text-xs"><span className="font-semibold tabular-nums text-muted">{entry.rank}.</span><span className="truncate text-foreground">{entry.displayName}</span><span className="font-semibold tabular-nums text-foreground">{entry.score} pts</span></li>)}</ol>{!leaderboards[challenge.id].entries.length ? <p className="mt-2 text-xs text-muted">No class submissions yet.</p> : null}</div> : null}
