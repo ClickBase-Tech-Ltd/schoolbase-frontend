@@ -2,12 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Award, ShieldCheck, Sparkles, ArrowRight, BookOpen, BellRing, Check, Swords, Volume2, VolumeX, X } from "lucide-react";
+import { Award, ShieldCheck, Sparkles, ArrowRight, BookOpen, BellRing, Check, Swords, Trophy, Volume2, VolumeX, X } from "lucide-react";
 import { ErrorModal } from "@/components/ui/error-modal";
 import { playBellTone } from "@/lib/sounds";
 
 type ChildAchievements = { id: string; displayName: string; photoUrl: string | null; className: string | null; xp: number; practiceSummary: { completedChallenges: number; personalBestAccuracy: number | null; latestCompletionAt: string | null }; achievements: Array<{ code: string; title: string; description: string; iconUrl: string | null; awardedAt: string }>; recentAttempts: Array<{ title: string; status: string; score: number; correctCount: number; questionCount: number; accuracyPercent: number | null; elapsedMs: number | null; submittedAt: string | null }> };
-type Tournament = { id: string; title: string; status: string; scope: string; registrationClosesAt: string | null; ownRegistration: { registered: boolean; status: string | null; visibilityApproved: boolean; nominated?: boolean; guardianConsentStatus?: "ACCEPTED" | "DECLINED" | null } };
+type Tournament = { id: string; title: string; status: string; scope: string; registrationClosesAt: string | null; ownRegistration: { registered: boolean; status: string | null; visibilityApproved: boolean; nominated?: boolean; guardianConsentStatus?: "ACCEPTED" | "DECLINED" | null; invitingSchool?: { id: string; name: string; logoUrl: string | null } | null } };
 type ClassmateInvite = { id: string; challenge: { id: string; title: string }; status: string; isSender: boolean; opponentName: string; opponentPhotoUrl: string | null; expiresAt: string };
 const COMPETITION_SOUND_PREFERENCE = "schoolbase-competition-sounds";
 
@@ -19,18 +19,28 @@ function PupilAvatar({ photoUrl, name, size }: { photoUrl: string | null; name: 
   </span>;
 }
 
+function InvitingSchoolLogo({ school }: { school: NonNullable<Tournament["ownRegistration"]["invitingSchool"]> }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const initials = school.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("");
+  return <span className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-full border-2 border-surface bg-white text-lg font-bold text-emerald-800 ring-1 ring-emerald-200 shadow-sm">
+    {school.logoUrl && !imageFailed ? <img src={`/api/school-logo/${encodeURIComponent(school.id)}`} alt={`${school.name} logo`} onError={() => setImageFailed(true)} className="h-full w-full object-contain p-2" /> : initials || "S"}
+  </span>;
+}
+
 export default function ParentCompetitionPage() {
   const [children, setChildren] = useState<ChildAchievements[]>([]);
   const [selectedChildId, setSelectedChildId] = useState("");
   const [tournamentsByPupil, setTournamentsByPupil] = useState<Record<string, Tournament[]>>({});
   const [matchesByPupil, setMatchesByPupil] = useState<Record<string, ClassmateInvite[]>>({});
   const [dismissedInviteIds, setDismissedInviteIds] = useState<string[]>([]);
+  const [busyTournamentId, setBusyTournamentId] = useState<string | null>(null);
   const [matchesEnabled, setMatchesEnabled] = useState(false);
   const [soundsEnabled, setSoundsEnabled] = useState(true);
   const [enabled, setEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const notifiedInvites = useRef<Set<string>>(new Set());
+  const notifiedTournamentInvites = useRef<Set<string>>(new Set());
 
   async function loadMatches(pupilId: string, silent = false) {
     try {
@@ -75,7 +85,13 @@ export default function ParentCompetitionPage() {
       const data = await response.json().catch(() => ({}));
       if (response.status === 404 && data.error === "FEATURE_DISABLED") { setTournamentsByPupil((current) => ({ ...current, [pupilId]: [] })); return; }
       if (!response.ok) throw new Error(data.error || "Unable to load tournament opportunities.");
-      setTournamentsByPupil((current) => ({ ...current, [pupilId]: data.tournaments || [] }));
+      const tournaments = (data.tournaments || []) as Tournament[];
+      setTournamentsByPupil((current) => ({ ...current, [pupilId]: tournaments }));
+      const newInvitation = tournaments.find((tournament) => tournament.ownRegistration.status === "INVITED" && tournament.ownRegistration.nominated && !tournament.ownRegistration.guardianConsentStatus && !notifiedTournamentInvites.current.has(tournament.id));
+      if (newInvitation) {
+        notifiedTournamentInvites.current.add(newInvitation.id);
+        if (window.localStorage.getItem(COMPETITION_SOUND_PREFERENCE) !== "disabled") playBellTone("school", 0.75);
+      }
     } catch (loadError) { setError(loadError instanceof Error ? loadError.message : "Unable to load tournament opportunities."); }
   }
 
@@ -107,7 +123,15 @@ export default function ParentCompetitionPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, selectedChildId, matchesEnabled]);
 
+  useEffect(() => {
+    if (!enabled || !selectedChildId) return;
+    const intervalId = window.setInterval(() => { void loadTournaments(selectedChildId); }, 20000);
+    return () => window.clearInterval(intervalId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, selectedChildId]);
+
   async function registerChild(tournamentId: string, pupilId: string) {
+    setBusyTournamentId(tournamentId);
     setError(null);
     try {
       const response = await fetch(`/api/competition/school/tournaments/${tournamentId}/register?pupilId=${encodeURIComponent(pupilId)}`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pupilId }) });
@@ -115,9 +139,11 @@ export default function ParentCompetitionPage() {
       if (!response.ok) throw new Error(data.error || "Unable to request tournament participation.");
       await loadTournaments(pupilId);
     } catch (registerError) { setError(registerError instanceof Error ? registerError.message : "Unable to request tournament participation."); }
+    finally { setBusyTournamentId(null); }
   }
 
   async function declineInvitation(tournamentId: string, pupilId: string) {
+    setBusyTournamentId(tournamentId);
     setError(null);
     try {
       const response = await fetch(`/api/competition/school/tournaments/${tournamentId}/decline-invitation?pupilId=${encodeURIComponent(pupilId)}`, { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pupilId }) });
@@ -125,11 +151,14 @@ export default function ParentCompetitionPage() {
       if (!response.ok) throw new Error(data.error || "Unable to decline this school invitation.");
       await loadTournaments(pupilId);
     } catch (declineError) { setError(declineError instanceof Error ? declineError.message : "Unable to decline this school invitation."); }
+    finally { setBusyTournamentId(null); }
   }
 
   const selectedChild = children.find((child) => child.id === selectedChildId) || children[0] || null;
   const childInvites = selectedChild ? (matchesByPupil[selectedChild.id] || []).filter((match) => match.status === "PENDING" && !match.isSender) : [];
   const incomingInvite = childInvites.find((match) => !dismissedInviteIds.includes(match.id)) || null;
+  const pendingTournamentInvite = selectedChild ? (tournamentsByPupil[selectedChild.id] || []).find((tournament) => tournament.ownRegistration.status === "INVITED" && tournament.ownRegistration.nominated && !tournament.ownRegistration.guardianConsentStatus && !dismissedInviteIds.includes(tournament.id)) || null : null;
+  const tournamentInviteCanBeAccepted = Boolean(pendingTournamentInvite && pendingTournamentInvite.status === "REGISTRATION_OPEN" && (!pendingTournamentInvite.registrationClosesAt || new Date(pendingTournamentInvite.registrationClosesAt).getTime() > Date.now()));
 
   function toggleInviteSounds() {
     const nextEnabled = !soundsEnabled;
@@ -175,6 +204,7 @@ export default function ParentCompetitionPage() {
         </section>
       )) : null}
       {enabled && !loading && children.length === 0 ? <p className="border border-border bg-surface p-5 text-sm text-muted">No linked children found for this parent account.</p> : null}
+      {pendingTournamentInvite && selectedChild && !incomingInvite ? <div role="presentation" className="fixed inset-0 z-[69] flex items-center justify-center bg-[#101827]/60 p-4 backdrop-blur-[3px]" onMouseDown={(event) => { if (event.target === event.currentTarget) setDismissedInviteIds((current) => [...current, pendingTournamentInvite.id]); }}><section role="dialog" aria-modal="true" aria-labelledby="tournament-invite-title" className="tournament-invite-enter relative w-full max-w-lg overflow-hidden border border-border bg-surface shadow-2xl"><div className="h-1 bg-gradient-to-r from-emerald-500 via-teal-400 to-sky-500" /><div className="p-5 sm:p-7"><div className="flex items-start justify-between gap-4"><div className="relative grid h-14 w-14 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-700"><span className="tournament-invite-ring absolute inset-0 rounded-full border border-emerald-400/70" aria-hidden="true" /><Trophy className="h-6 w-6" /></div><div className="flex items-center gap-1"><button type="button" onClick={toggleInviteSounds} aria-label={soundsEnabled ? "Turn invitation sounds off" : "Turn invitation sounds on"} aria-pressed={soundsEnabled} title={soundsEnabled ? "Turn invitation sounds off" : "Turn invitation sounds on"} className="inline-flex h-9 w-9 items-center justify-center border border-border text-muted hover:border-brand hover:text-brand">{soundsEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}</button><button type="button" onClick={() => setDismissedInviteIds((current) => [...current, pendingTournamentInvite.id])} aria-label="Dismiss tournament invitation" className="inline-flex h-9 w-9 items-center justify-center text-muted hover:bg-background hover:text-foreground"><X className="h-4 w-4" /></button></div></div><p className="mt-5 text-xs font-bold uppercase tracking-[0.12em] text-emerald-800">School tournament invitation</p><h2 id="tournament-invite-title" className="mt-2 text-2xl font-semibold leading-tight text-foreground">{selectedChild.displayName} has been invited</h2><p className="mt-2 text-sm leading-6 text-muted">Review the school and event before choosing whether your child may participate.</p><div className="mt-5 flex flex-col items-center border-y border-border py-5 text-center"><InvitingSchoolLogo school={pendingTournamentInvite.ownRegistration.invitingSchool || { id: "", name: "Your school", logoUrl: null }} /><p className="mt-3 text-sm font-semibold text-foreground">{pendingTournamentInvite.ownRegistration.invitingSchool?.name || "Your school"}</p><p className="text-xs text-muted">Inviting school</p></div><div className="mt-4"><h3 className="text-base font-semibold text-foreground">{pendingTournamentInvite.title}</h3><p className="mt-1 text-xs text-muted">{pendingTournamentInvite.scope} event{pendingTournamentInvite.registrationClosesAt ? ` · registration closes ${new Date(pendingTournamentInvite.registrationClosesAt).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}` : ""}</p></div><div className="mt-4 flex items-center gap-2 border-y border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-semibold text-amber-900"><span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" /> {tournamentInviteCanBeAccepted ? "Guardian decision required · invitation pending" : "Registration closed · you may still decline this invitation"}</div><div className="mt-5 grid grid-cols-2 gap-2"><button type="button" disabled={busyTournamentId === pendingTournamentInvite.id} onClick={() => setDismissedInviteIds((current) => [...current, pendingTournamentInvite.id])} className="h-11 border border-border px-4 text-sm font-semibold text-foreground transition hover:bg-background disabled:opacity-50">Decide later</button><button type="button" disabled={busyTournamentId === pendingTournamentInvite.id} onClick={() => void declineInvitation(pendingTournamentInvite.id, selectedChild.id)} className="h-11 border border-rose-200 px-4 text-sm font-semibold text-rose-800 transition hover:bg-rose-50 disabled:opacity-50">{busyTournamentId === pendingTournamentInvite.id ? "Saving…" : "Decline"}</button><button type="button" disabled={busyTournamentId === pendingTournamentInvite.id || !tournamentInviteCanBeAccepted} onClick={() => void registerChild(pendingTournamentInvite.id, selectedChild.id)} className="col-span-2 inline-flex h-11 items-center justify-center gap-2 bg-emerald-700 px-4 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-50">{busyTournamentId === pendingTournamentInvite.id ? "Saving…" : <><Check className="h-4 w-4" /> Accept invitation</>}</button></div><p className="mt-3 text-center text-[11px] leading-5 text-muted">Accepting records guardian consent. Tournament participation still requires school review.</p></div><style>{`@keyframes tournament-invite-enter { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } } @keyframes tournament-invite-ring { 0% { transform: scale(.82); opacity: .7; } 100% { transform: scale(1.6); opacity: 0; } } .tournament-invite-enter { animation: tournament-invite-enter 260ms cubic-bezier(.2,.7,.2,1) both; } .tournament-invite-ring { animation: tournament-invite-ring 1.8s ease-out infinite; } @media (prefers-reduced-motion: reduce) { .tournament-invite-enter, .tournament-invite-ring { animation: none; } }`}</style></section></div> : null}
       {incomingInvite && selectedChild ? <div role="presentation" className="fixed inset-0 z-[70] flex items-center justify-center bg-[#101827]/60 p-4 backdrop-blur-[3px]" onMouseDown={(event) => { if (event.target === event.currentTarget) setDismissedInviteIds((current) => [...current, incomingInvite.id]); }}><section role="dialog" aria-modal="true" aria-labelledby="parent-invite-title" className="parent-invite-enter relative w-full max-w-lg overflow-hidden border border-border bg-surface shadow-2xl"><div className="h-1 bg-gradient-to-r from-emerald-500 via-teal-400 to-sky-500" /><div className="p-5 sm:p-7"><div className="flex items-start justify-between gap-4"><div className="grid h-11 w-11 place-items-center rounded-full bg-emerald-50 text-emerald-700"><BellRing className="h-5 w-5" /></div><div className="flex items-center gap-1"><button type="button" onClick={toggleInviteSounds} aria-label={soundsEnabled ? "Turn invitation sounds off" : "Turn invitation sounds on"} aria-pressed={soundsEnabled} title={soundsEnabled ? "Turn invitation sounds off" : "Turn invitation sounds on"} className="inline-flex h-9 w-9 items-center justify-center border border-border text-muted hover:border-brand hover:text-brand">{soundsEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}</button><button type="button" onClick={() => setDismissedInviteIds((current) => [...current, incomingInvite.id])} aria-label="Dismiss invitation" className="inline-flex h-9 w-9 items-center justify-center text-muted hover:bg-background"><X className="h-4 w-4" /></button></div></div><p className="mt-4 text-xs font-bold uppercase tracking-[0.12em] text-emerald-800">Parent approval · classmate challenge</p><h2 id="parent-invite-title" className="mt-2 text-2xl font-semibold leading-tight text-foreground">{selectedChild.displayName} has an invitation</h2><p className="mt-2 text-sm leading-6 text-muted">Review the challenge and the classmate who sent it before choosing.</p><div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-3 border-y border-border py-5"><div className="flex flex-col items-center text-center"><PupilAvatar photoUrl={incomingInvite.opponentPhotoUrl} name={incomingInvite.opponentName} size="large" /><p className="mt-2 text-sm font-semibold text-foreground">{incomingInvite.opponentName}</p><p className="text-[11px] text-muted">Inviter</p></div><div className="grid h-9 w-9 place-items-center rounded-full bg-background text-brand"><Swords className="h-4 w-4" /></div><div className="flex flex-col items-center text-center"><PupilAvatar photoUrl={selectedChild.photoUrl} name={selectedChild.displayName} size="large" /><p className="mt-2 text-sm font-semibold text-foreground">{selectedChild.displayName}</p><p className="text-[11px] text-muted">Your child</p></div></div><div className="mt-4"><p className="text-sm font-semibold text-foreground">{incomingInvite.challenge.title}</p><p className="mt-1 text-xs text-muted">Invitation expires {new Date(incomingInvite.expiresAt).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}.</p></div><div className="mt-5 grid grid-cols-2 gap-2"><button type="button" onClick={() => setDismissedInviteIds((current) => [...current, incomingInvite.id])} className="h-11 border border-border px-4 text-sm font-semibold text-foreground hover:bg-background">Decide later</button><button type="button" onClick={() => void decideInvite(incomingInvite, "DECLINE", selectedChild.id)} className="h-11 border border-rose-200 px-4 text-sm font-semibold text-rose-800 hover:bg-rose-50">Decline</button><button type="button" onClick={() => void decideInvite(incomingInvite, "ACCEPT", selectedChild.id)} className="col-span-2 inline-flex h-11 items-center justify-center gap-2 bg-emerald-700 px-4 text-sm font-semibold text-white hover:bg-emerald-800"><Check className="h-4 w-4" /> Accept invitation</button></div></div><style>{`@keyframes parent-invite-enter { from { opacity: 0; transform: translateY(12px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } } .parent-invite-enter { animation: parent-invite-enter 260ms cubic-bezier(.2,.7,.2,1) both; } @media (prefers-reduced-motion: reduce) { .parent-invite-enter { animation: none; } }`}</style></section></div> : null}
       <ErrorModal isOpen={Boolean(error)} onClose={() => setError(null)} title="Competition practice could not be loaded" message={error || "Unable to load Competition practice."} type="error" confirmLabel="Okay" />
       </div>

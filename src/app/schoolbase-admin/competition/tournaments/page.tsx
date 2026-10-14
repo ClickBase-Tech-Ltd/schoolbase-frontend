@@ -7,6 +7,17 @@ import CompetitionFeatureNotice from "@/components/competition/competition-featu
 import CompetitionDialog from "@/components/competition/competition-dialog";
 
 type Category = { id: string; name: string };
+type TournamentSchool = { id: string; name: string; logoUrl: string | null };
+
+function SchoolMark({ school, size = "large" }: { school: TournamentSchool; size?: "small" | "large" }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const initials = school.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase() || "").join("");
+  const sizeClass = size === "large" ? "h-16 w-16 text-lg" : "h-10 w-10 text-xs";
+  return <span className={`grid ${sizeClass} shrink-0 place-items-center overflow-hidden rounded-full border border-emerald-200 bg-white font-bold text-emerald-800 shadow-sm`}>
+    {school.logoUrl && !imageFailed ? <img src={`/api/school-logo/${encodeURIComponent(school.id)}`} alt={`${school.name} logo`} onError={() => setImageFailed(true)} className="h-full w-full object-contain p-1.5" /> : initials || "S"}
+  </span>;
+}
+
 type Match = {
   id: string;
   status: string;
@@ -32,20 +43,28 @@ type Tournament = {
   startsAt: string | null;
   category: { name: string };
   _count: { schools: number; participants: number };
-  schools: Array<{ id: string; status: string; school: { name: string } }>;
+  schools: Array<{ id: string; status: string; school: TournamentSchool }>;
   participants: Array<{
     id: string;
     status: string;
     displayNameSnapshot: string;
     visibilityApproved: boolean;
     guardianConsentStatus: "ACCEPTED" | "DECLINED" | null;
-    school: { name: string };
+    school: TournamentSchool;
     class: { name: string } | null;
   }>;
   rounds: Round[];
 };
 type TournamentDialog =
   "create" | "round" | "match" | "result" | "decision" | null;
+
+function registrationStatusClass(status: string) {
+  if (status === "APPROVED" || status === "ACCEPTED") return "border-emerald-200 bg-emerald-50 text-emerald-800";
+  if (status === "INVITED") return "border-amber-200 bg-amber-50 text-amber-900";
+  if (status === "PENDING") return "border-sky-200 bg-sky-50 text-sky-800";
+  if (status === "DECLINED" || status === "WITHDRAWN") return "border-rose-200 bg-rose-50 text-rose-800";
+  return "border-border bg-background text-muted";
+}
 
 export default function CompetitionTournamentsPage() {
   const [items, setItems] = useState<Tournament[]>([]);
@@ -77,6 +96,7 @@ export default function CompetitionTournamentsPage() {
     status: string;
     visibilityApproved?: boolean;
     title: string;
+    school?: TournamentSchool;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -320,6 +340,7 @@ export default function CompetitionTournamentsPage() {
     status: string,
     title: string,
     needsVisibilityConsent = false,
+    school?: TournamentSchool,
   ) {
     setReason("");
     setVisibilityApproved(false);
@@ -328,12 +349,14 @@ export default function CompetitionTournamentsPage() {
       status,
       title,
       visibilityApproved: needsVisibilityConsent ? false : undefined,
+      school,
     });
     setDialog("decision");
   }
 
   return (
     <main className="mx-auto max-w-7xl space-y-6 px-2 py-6 sm:px-8 sm:py-8 lg:px-12">
+      <style>{`@keyframes tournament-pending-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } } .tournament-pending-enter { animation: tournament-pending-enter 280ms cubic-bezier(.2,.7,.2,1) both; } @media (prefers-reduced-motion: reduce) { .tournament-pending-enter { animation: none; } }`}</style>
       <header className="flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand">
@@ -478,11 +501,9 @@ export default function CompetitionTournamentsPage() {
                     {selectedTournament.schools.map((registration) => (
                       <div
                         key={registration.id}
-                        className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"
+                        className={`flex flex-wrap items-center justify-between gap-2 py-3 text-sm ${registration.status === "PENDING" ? "tournament-pending-enter" : ""}`}
                       >
-                        <span>
-                          {registration.school.name} · {registration.status}
-                        </span>
+                        <span className="flex min-w-0 items-center gap-2"><SchoolMark school={registration.school} size="small" /><span className="truncate">{registration.school.name}</span><span className={`inline-flex shrink-0 border px-2 py-0.5 text-[10px] font-bold uppercase ${registrationStatusClass(registration.status)}`}>{registration.status}</span></span>
                         {registration.status === "PENDING" ? (
                           <div className="flex gap-2">
                             <button
@@ -527,21 +548,21 @@ export default function CompetitionTournamentsPage() {
                     {selectedTournament.participants.map((participant) => (
                       <div
                         key={participant.id}
-                        className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
+                        className={`flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between ${participant.status === "INVITED" || participant.status === "PENDING" ? "tournament-pending-enter" : ""}`}
                       >
-                        <div>
+                        <div className="flex min-w-0 items-center gap-3">
+                          <SchoolMark school={participant.school} size="small" />
+                          <div className="min-w-0">
                           <p className="text-sm font-medium text-foreground">
                             {participant.displayNameSnapshot}
                           </p>
-                          <p className="text-xs text-muted">
-                            {participant.school.name} ·{" "}
-                            {participant.class?.name || "Unassigned"} ·{" "}
-                            {participant.status} · guardian opt-in{" "}
-                            {participant.guardianConsentStatus?.toLowerCase() || "awaiting"} · public name visibility{" "}
-                            {participant.visibilityApproved
-                              ? "approved"
-                              : "not approved"}
+                          <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                            <span>{participant.school.name} · {participant.class?.name || "Unassigned"}</span>
+                            <span className={`inline-flex border px-1.5 py-0.5 text-[10px] font-bold uppercase ${registrationStatusClass(participant.status)}`}>{participant.status}</span>
+                            <span className={`inline-flex border px-1.5 py-0.5 text-[10px] font-semibold ${registrationStatusClass(participant.guardianConsentStatus || "PENDING")}`}>Guardian {participant.guardianConsentStatus?.toLowerCase() || "awaiting"}</span>
+                            <span className="text-[11px]">Name visibility {participant.visibilityApproved ? "approved" : "not approved"}</span>
                           </p>
+                          </div>
                         </div>
                         {participant.status === "PENDING" ? (
                           <div className="flex items-center gap-2">
