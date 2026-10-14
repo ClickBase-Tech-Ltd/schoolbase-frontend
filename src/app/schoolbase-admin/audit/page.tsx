@@ -15,7 +15,10 @@ export default function AuditPage() {
   const [pageSize, setPageSize] = useState(50);
   const [search, setSearch] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [schoolFilter, setSchoolFilter] = useState("ALL");
+  const [schoolFilter, setSchoolFilter] = useState(() => {
+    if (typeof window === "undefined") return "ALL";
+    return new URLSearchParams(window.location.search).get("school") || "ALL";
+  });
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [outcomeFilter, setOutcomeFilter] = useState("ALL");
   const [timeFilter, setTimeFilter] = useState("90D");

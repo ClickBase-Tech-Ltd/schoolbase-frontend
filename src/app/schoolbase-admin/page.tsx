@@ -34,6 +34,7 @@ import { resolveSchoolAssetUrl } from "@/lib/asset-urls";
 import { announceSupportAlert, playCloseTone, playOpenTone, stopSupportAlertSpeech } from "@/lib/sounds";
 
 function getActivityTitle(log: any) {
+  if (typeof log?.summary === "string" && log.summary.trim()) return log.summary;
   const raw = (log?.event ?? log?.action ?? "").toString().trim().toUpperCase();
   const labels: Record<string, string> = {
     LOGIN_SUCCESS: "Login succeeded",
@@ -84,17 +85,12 @@ function getActivityTitle(log: any) {
   return "Platform activity";
 }
 
-function isVisibleActivity(log: any) {
-  const raw = (log?.event ?? log?.action ?? "").toString().toUpperCase();
-  return !(
-    raw.includes("ADMIN_VERIFY") ||
-    raw.includes("AUTH_LOGIN") ||
-    raw.includes("AUDIT_LOG") ||
-    raw.includes("HEALTH")
-  );
-}
-
 function getActivityDetails(log: any) {
+  if (log?.outcome && log.outcome !== "UNKNOWN" && log.outcome !== "NOT_RECORDED") {
+    const outcome = log.outcome.toString().toLowerCase().replace(/_/g, " ");
+    const details = typeof log?.details === "string" ? log.details.trim() : "";
+    return details ? `${outcome} · ${details}` : outcome[0]?.toUpperCase() + outcome.slice(1);
+  }
   const details = typeof log?.details === "string" ? log.details.trim() : "";
   if (!details || /^\w+\s+\/api\//i.test(details)) return null;
   if ((log?.event ?? log?.action ?? "").toString().toUpperCase().startsWith("API_")) return null;
@@ -108,8 +104,8 @@ function getActivityDetails(log: any) {
 }
 
 interface ActivitySummary {
-  totals: { events: number; schools: number; activeSchools: number; silentSchools: number };
-  schoolActivity: { id: string; name: string; activityCount: number }[];
+  totals: { events: number; schools: number; schoolsWithEvents: number; schoolsWithoutEvents: number; failedEvents: number; verificationEvents: number };
+  schoolActivity: { id: string; name: string; eventCount: number; status?: string | null }[];
 }
 
 function getSchoolInitials(name?: string) {
@@ -209,7 +205,7 @@ export default function PlatformOverviewPage() {
 
         setStats(statsData);
         setSchools(schoolsData.schools || []);
-        const initialActivity = (activityData.logs || []).filter(isVisibleActivity);
+        const initialActivity = activityData.logs || [];
         setActivityLogs(initialActivity);
         knownActivityIdsRef.current = new Set(initialActivity.map((log: any) => log.id));
         setEmailLogs(emailData.logs || []);
@@ -249,7 +245,7 @@ export default function PlatformOverviewPage() {
         if (!response.ok) return;
 
         const data = await response.json();
-        const incoming = (data.logs || []).filter(isVisibleActivity);
+        const incoming = data.logs || [];
         const freshIds = incoming
           .filter((log: any) => log.id && !knownActivityIdsRef.current.has(log.id))
           .map((log: any) => log.id as string);
@@ -648,23 +644,25 @@ export default function PlatformOverviewPage() {
                   <section className="border border-border bg-surface p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-[11px] font-bold uppercase tracking-[.12em] text-brand">30-day activity health</p>
-                        <p className="mt-1 text-xs text-muted">Meaningful school actions, not page views.</p>
+                        <p className="text-[11px] font-bold uppercase tracking-[.12em] text-brand">30-day audit summary</p>
+                        <p className="mt-1 text-xs text-muted">Recorded platform and school events.</p>
                       </div>
                       <Link href="/schoolbase-admin/audit" className="text-xs font-semibold text-brand hover:text-brand/80">Full report</Link>
                     </div>
-                    <div className="mt-4 grid grid-cols-3 gap-2">
-                      <div className="bg-[#eaf4ff] p-3"><p className="text-xl font-semibold text-foreground">{activitySummary.totals.events}</p><p className="mt-1 text-[11px] text-muted">Events</p></div>
-                      <div className="bg-[#f1f7f4] p-3"><p className="text-xl font-semibold text-foreground">{activitySummary.totals.activeSchools}</p><p className="mt-1 text-[11px] text-muted">Active schools</p></div>
-                      <div className="bg-[#fff7e8] p-3"><p className="text-xl font-semibold text-foreground">{activitySummary.totals.silentSchools}</p><p className="mt-1 text-[11px] text-muted">Silent schools</p></div>
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <div className="bg-[#eaf4ff] p-3"><p className="text-xl font-semibold text-foreground">{activitySummary.totals.events.toLocaleString()}</p><p className="mt-1 text-[11px] text-muted">Events recorded</p></div>
+                      <div className="bg-rose-50 p-3"><p className="text-xl font-semibold text-rose-800">{activitySummary.totals.failedEvents.toLocaleString()}</p><p className="mt-1 text-[11px] text-muted">Failed or denied</p></div>
+                      <div className="bg-[#f1f7f4] p-3"><p className="text-xl font-semibold text-foreground">{activitySummary.totals.schoolsWithEvents}</p><p className="mt-1 text-[11px] text-muted">Schools with events</p></div>
+                      <div className="bg-[#fff7e8] p-3"><p className="text-xl font-semibold text-foreground">{activitySummary.totals.schoolsWithoutEvents}</p><p className="mt-1 text-[11px] text-muted">No events recorded</p></div>
                     </div>
-                    {activitySummary.totals.silentSchools > 0 ? (
+                    {activitySummary.totals.schoolsWithoutEvents > 0 ? (
                       <div className="mt-4 border-t border-border pt-3">
-                        <p className="text-xs font-semibold text-foreground">Schools needing attention</p>
+                        <p className="text-xs font-semibold text-foreground">Schools with no recorded events</p>
+                        <p className="mt-1 text-[11px] leading-4 text-muted">This is an audit-activity signal, not a school usage or health rating.</p>
                         <div className="mt-2 space-y-2">
-                          {activitySummary.schoolActivity.filter((school) => school.activityCount === 0).slice(0, 3).map((school) => (
-                            <Link key={school.id} href={`/schoolbase-admin/schools?search=${encodeURIComponent(school.name)}`} className="flex items-center justify-between gap-2 text-xs text-muted hover:text-brand">
-                              <span className="truncate">{school.name}</span><span className="shrink-0">Follow up</span>
+                          {activitySummary.schoolActivity.filter((school) => school.eventCount === 0).slice(0, 3).map((school) => (
+                            <Link key={school.id} href={`/schoolbase-admin/audit?school=${encodeURIComponent(school.id)}`} className="flex items-center justify-between gap-2 text-xs text-muted hover:text-brand">
+                              <span className="truncate">{school.name}</span><span className="shrink-0">Inspect</span>
                             </Link>
                           ))}
                         </div>
@@ -686,10 +684,10 @@ export default function PlatformOverviewPage() {
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <h3 className="text-sm font-semibold text-foreground">Live activity monitor</h3>
+                          <h3 className="text-sm font-semibold text-foreground">Live audit activity</h3>
                           <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-600"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Live</span>
                         </div>
-                        <p className="text-[11px] text-muted">New school actions appear here automatically.</p>
+                        <p className="text-[11px] text-muted">Recent audit events refresh automatically.</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -710,8 +708,9 @@ export default function PlatformOverviewPage() {
                           <div key={log.id} className={`activity-event border-b border-border px-3 py-3 last:border-b-0 ${newActivityIds.has(log.id) ? "activity-event-new" : ""}`}>
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold text-foreground">{getActivityTitle(log)}</p>
+                                <p className="break-words text-sm font-semibold text-foreground">{getActivityTitle(log)}</p>
                                 {getActivityDetails(log) ? <p className="mt-1 text-xs text-muted">{getActivityDetails(log)}</p> : null}
+                                {log.category || log.outcome ? <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-brand">{[log.category, log.outcome === "UNKNOWN" || log.outcome === "NOT_RECORDED" ? null : log.outcome].filter(Boolean).join(" · ")}</p> : null}
                               </div>
                               <p className="shrink-0 text-[11px] uppercase tracking-[0.18em] text-muted">
                                 {log.createdAt ? new Date(log.createdAt).toLocaleString() : "—"}
