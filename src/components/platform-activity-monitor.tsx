@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { BellRing, Volume2, X } from "lucide-react";
 import { getBackendUrl } from "@/lib/backend-url";
 import { playBellTone, playLoginSuccessTone, playOpenTone, unlockAudio } from "@/lib/sounds";
@@ -58,6 +59,8 @@ function getActivityNotice(log: ActivityLog): ActivityNotice | null {
 }
 
 export default function PlatformActivityMonitor() {
+  const pathname = usePathname();
+  const isAuditPage = pathname === "/schoolbase-admin/audit";
   const [notice, setNotice] = useState<ActivityNotice | null>(null);
   const [soundReady, setSoundReady] = useState(false);
   const knownIdsRef = useRef<Set<string>>(new Set());
@@ -129,7 +132,7 @@ export default function PlatformActivityMonitor() {
 
   return (
     <>
-      {!soundReady ? (
+      {!soundReady && !isAuditPage ? (
         <div className="fixed inset-x-4 top-20 z-[70] mx-auto max-w-md animate-platform-notice">
           <div className="border border-brand/30 bg-surface p-4 shadow-2xl">
             <div className="flex items-start gap-3">
@@ -147,12 +150,12 @@ export default function PlatformActivityMonitor() {
           </div>
         </div>
       ) : null}
-      <div className="fixed bottom-5 right-5 z-[60] flex items-center gap-2 rounded-full border border-border bg-surface/95 p-1.5 shadow-lg backdrop-blur">
+      {soundReady && !isAuditPage ? <div className="fixed bottom-5 right-5 z-[60] flex items-center gap-2 rounded-full border border-border bg-surface/95 p-1.5 shadow-lg backdrop-blur">
         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-white shadow-sm" title="Activity sounds are on" aria-label="Activity sounds are on">
           <Volume2 className="h-4 w-4" aria-hidden="true" />
         </span>
         <span className="pr-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Activity sounds</span>
-      </div>
+      </div> : null}
 
       {notice ? (
         <div className="fixed right-5 top-20 z-[60] w-[min(380px,calc(100vw-2rem))] animate-platform-notice">
