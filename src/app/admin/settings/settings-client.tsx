@@ -51,6 +51,7 @@ interface SchoolSettingsProps {
     }>;
     enabledPhases: Array<{ phase: string }>;
     partner?: { name: string } | null;
+    admissionsCapabilityEnabled?: boolean;
     admissionsEnabled?: boolean;
     admissionsOpeningDate?: string | null;
     admissionsClosingDate?: string | null;
@@ -193,6 +194,7 @@ export default function SettingsPageClient({
   const [resultAccessPinValidity, setResultAccessPinValidity] = useState(school.resultAccess?.pinValidity || "TERM");
   const [resultAccessAllowRegeneration, setResultAccessAllowRegeneration] = useState(Boolean(school.resultAccess?.allowRegeneration));
   const [admissionsEnabled, setAdmissionsEnabled] = useState(Boolean(school.admissionsEnabled));
+  const [admissionsCapabilityEnabled, setAdmissionsCapabilityEnabled] = useState(Boolean(school.admissionsCapabilityEnabled));
   const [admissionsOpeningDate, setAdmissionsOpeningDate] = useState(school.admissionsOpeningDate ? school.admissionsOpeningDate.slice(0, 10) : "");
   const [admissionsClosingDate, setAdmissionsClosingDate] = useState(school.admissionsClosingDate ? school.admissionsClosingDate.slice(0, 10) : "");
   const publicAdmissionsUrl = useMemo(() => {
@@ -332,6 +334,7 @@ export default function SettingsPageClient({
           allowRegeneration: resultAccessAllowRegeneration,
         },
         admissionsEnabled,
+        admissionsCapabilityEnabled,
         admissionsOpeningDate,
         admissionsClosingDate,
         admissionsIntroText,
@@ -1005,6 +1008,13 @@ export default function SettingsPageClient({
 
           {openPanels.admissions && (
             <div id="online-admissions-panel" className="p-6 space-y-5">
+            <div className="flex flex-col gap-3 border border-amber-300 bg-amber-50 p-4 sm:flex-row sm:items-start">
+              <input id="admissions-capability-enabled" type="checkbox" checked={admissionsCapabilityEnabled} onChange={(event) => setAdmissionsCapabilityEnabled(event.target.checked)} className="mt-1 h-4 w-4 shrink-0 border-border text-brand focus:ring-brand" />
+              <div>
+                <label htmlFor="admissions-capability-enabled" className="text-sm font-semibold text-amber-950">Enable admissions pilot capability</label>
+                <p className="mt-1 text-xs leading-5 text-amber-900">Off by default. Enables the enhanced public application and secure applicant status/reply workflow for this school. This is separate from whether applications are currently open.</p>
+              </div>
+            </div>
             <div className="flex flex-col gap-4 rounded-lg border border-border bg-background p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <input

@@ -46,8 +46,10 @@ export default function PublicAdmissionsPage() {
   const [modalTitle, setModalTitle] = useState<string>('');
   const [modalMessage, setModalMessage] = useState<string>('');
   const [modalDetails, setModalDetails] = useState<string>('');
+  const [statusLink, setStatusLink] = useState<string>('');
   const [activeTab, setActiveTab] = useState<"applicant" | "student" | "guardian" | "photo">("applicant");
   const submissionKeyRef = useRef<string>(crypto.randomUUID());
+  const statusTokenRef = useRef<string>(crypto.randomUUID() + crypto.randomUUID());
 
   useEffect(() => {
     async function loadSettings() {
@@ -248,7 +250,10 @@ export default function PublicAdmissionsPage() {
       const response = await fetch(`${backendUrl}/api/admissions`, {
         method: 'POST',
         body: formData,
-        headers: { 'X-Admission-Request-Id': submissionKeyRef.current },
+        headers: {
+          'X-Admission-Request-Id': submissionKeyRef.current,
+          'X-Admission-Status-Token': statusTokenRef.current,
+        },
         signal: controller.signal,
       });
       window.clearTimeout(timeout);
@@ -258,7 +263,10 @@ export default function PublicAdmissionsPage() {
 
       setModalTitle('Application submitted');
       setModalMessage('Your admission request has been received. Our admissions team will review it shortly.');
-      setModalDetails(data?.application?.id ? `Application ID: ${data.application.id}` : '');
+      const reference = data?.application?.applicationNumber || data?.application?.id;
+      const statusUrl = `${window.location.origin}/admissions/${encodeURIComponent(schoolSlug)}/status#${encodeURIComponent(statusTokenRef.current)}`;
+      setModalDetails(reference ? `Application reference: ${reference}` : '');
+      setStatusLink(statusUrl);
       setModalOpen(true);
       setForm({
         firstName: "",
@@ -292,6 +300,7 @@ export default function PublicAdmissionsPage() {
       setPhotoFile(null);
       setPhotoPreview("");
       submissionKeyRef.current = crypto.randomUUID();
+      statusTokenRef.current = crypto.randomUUID() + crypto.randomUUID();
     } catch (err) {
       setError(err instanceof DOMException && err.name === 'AbortError'
         ? 'Submission timed out. Please check your connection and try again.'
@@ -754,6 +763,7 @@ export default function PublicAdmissionsPage() {
                   <p className="text-xs text-slate-700">{modalDetails}</p>
                 </div>
               ) : null}
+              {statusLink ? <a href={statusLink} className="mt-3 inline-flex min-h-10 items-center text-sm font-semibold text-[#0A66C2] underline underline-offset-2">Check application status securely</a> : null}
             </div>
 
             <div className="border-t border-slate-100 bg-slate-50 px-6 py-4">

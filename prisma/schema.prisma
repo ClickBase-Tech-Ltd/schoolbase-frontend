@@ -671,6 +671,23 @@ model VideoTutorial {
   @@index([category])
 }
 
+model SchoolAdminNotification {
+  id                    String   @id @default(cuid()) @db.VarChar(191)
+  schoolId              String   @db.VarChar(191)
+  recipientUserId       String   @db.VarChar(191)
+  admissionApplicationId String  @db.VarChar(255)
+  type                  String   @default("ADMISSION_APPLICATION") @db.VarChar(64)
+  title                 String   @db.VarChar(180)
+  body                  String   @db.VarChar(500)
+  createdAt             DateTime @default(now())
+  readAt                DateTime?
+
+  @@unique([recipientUserId, admissionApplicationId, type], map: "SchoolAdminNotification_recipient_application_type_key")
+  @@index([recipientUserId, readAt, createdAt])
+  @@index([schoolId, createdAt])
+  @@index([admissionApplicationId])
+}
+
 model AdmissionCounter {
   schoolId String
   year     Int

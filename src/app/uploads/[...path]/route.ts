@@ -1,14 +1,8 @@
 import { NextResponse } from 'next/server';
+import { getBackendUrl } from '@/lib/backend-url';
 
 export async function GET(request: Request) {
   try {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL;
-
-    if (!apiBase) {
-      throw new Error('NEXT_PUBLIC_API_URL is not defined');
-    }
-
-    const base = apiBase.replace(/\/$/, '');
     const url = new URL(request.url);
     const prefix = '/uploads/';
     const uploadPath = url.pathname.startsWith(prefix)
@@ -19,7 +13,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Upload path required' }, { status: 400 });
     }
 
-    const backendUrl = new URL(`/uploads/${uploadPath}`, base).toString();
+    const backendUrl = new URL(`/uploads/${uploadPath}`, getBackendUrl()).toString();
     const resp = await fetch(backendUrl, {
       headers: {
         cookie: request.headers.get('cookie') || '',

@@ -7,8 +7,10 @@ import {
   CircleAlert,
   CircleX,
   Clock3,
+  Download,
   FileText,
   Loader2,
+  SlidersHorizontal,
   Sparkles,
   Users,
   X,
@@ -24,15 +26,19 @@ import { playCloseTone, playOpenTone } from "@/lib/sounds";
 const statusStyles: Record<string, string> = {
   SUBMITTED: "border-border bg-surface text-foreground",
   UNDER_REVIEW: "border-border bg-surface text-foreground",
+  NEEDS_INFORMATION: "border-amber-200 bg-amber-50 text-amber-800",
   APPROVED: "border-emerald-200 bg-emerald-50 text-emerald-700",
   REJECTED: "border-rose-200 bg-rose-50 text-rose-700",
+  WITHDRAWN: "border-border bg-background text-muted",
 };
 
 const statusBadgeStyles: Record<string, string> = {
   SUBMITTED: "border-border bg-surface text-foreground",
   UNDER_REVIEW: "border-border bg-surface text-foreground",
+  NEEDS_INFORMATION: "border-amber-200 bg-amber-50 text-amber-800",
   APPROVED: "border-emerald-200 bg-emerald-50 text-emerald-700",
   REJECTED: "border-rose-200 bg-rose-50 text-rose-700",
+  WITHDRAWN: "border-border bg-background text-muted",
 };
 
 const statusBadgeIcons: Record<string, typeof FileText> = {
@@ -51,12 +57,36 @@ function getStatusLabel(status: string) {
 export default function AdminAdmissionsPage() {
   const [applications, setApplications] = useState<any[]>([]);
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [searchValue, setSearchValue] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [classFilter, setClassFilter] = useState("");
+  const [reviewerFilter, setReviewerFilter] = useState("");
+  const [completeness, setCompleteness] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [sortBy, setSortBy] = useState("createdAt");
+  const [queueView, setQueueView] = useState("");
+  const [pagination, setPagination] = useState({ page: 1, pageSize: 25, total: 0, pageCount: 1 });
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
+  const [reportSummary, setReportSummary] = useState<{ total: number; approvalRate: number | null; averageHoursToFirstReview: number | null } | null>(null);
+  const [reviewers, setReviewers] = useState<Array<{ id: string; name: string; email: string }>>([]);
+  const [currentReviewerId, setCurrentReviewerId] = useState("");
+  const [classes, setClasses] = useState<Array<{ id: string; name: string; arm: string | null }>>([]);
+  const [classesLoading, setClassesLoading] = useState(true);
+  const [classesError, setClassesError] = useState<string | null>(null);
+  const [selectedClassId, setSelectedClassId] = useState("");
+  const [reviewEvents, setReviewEvents] = useState<Array<{ id: string; type: string; actorName: string; reason: string | null; fromStatus: string | null; toStatus: string | null; createdAt: string }>>([]);
+  const [reviewDraft, setReviewDraft] = useState({ assignedReviewerId: "", internalReviewNotes: "", followUpAt: "" });
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState("Success");
   const [modalMessage, setModalMessage] = useState("");
   const [modalType, setModalType] = useState<"success" | "error" | "rejected">("success");
+  const [decisionRequest, setDecisionRequest] = useState<{ id: string; status: string; classId?: string } | null>(null);
+  const [decisionReason, setDecisionReason] = useState("");
+  const [decisionReasonError, setDecisionReasonError] = useState<string | null>(null);
   const [selectedApplication, setSelectedApplication] = useState<any | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
@@ -65,32 +95,31 @@ export default function AdminAdmissionsPage() {
   const [updatingApplicationId, setUpdatingApplicationId] = useState<string | null>(null);
   const [subscriptionBlocked, setSubscriptionBlocked] = useState<{ reason: string } | null>(null);
 
-  const summary = useMemo(() => {
-    const counts: Record<string, number> = {
-      total: applications.length,
-      SUBMITTED: 0,
-      UNDER_REVIEW: 0,
-      APPROVED: 0,
-      REJECTED: 0,
-    };
+  const summary = useMemo(() => ({
+    total: pagination.total,
+    SUBMITTED: statusCounts.SUBMITTED || 0,
+    UNDER_REVIEW: statusCounts.UNDER_REVIEW || 0,
+    APPROVED: statusCounts.APPROVED || 0,
+    REJECTED: statusCounts.REJECTED || 0,
+  }), [pagination.total, statusCounts]);
 
-    applications.forEach((application) => {
-      const status = String(application.status || "SUBMITTED").toUpperCase();
-      if (status in counts) {
-        counts[status] += 1;
-      }
-    });
-
-    return counts;
-  }, [applications]);
-
-  async function loadApplications() {
+  async function loadApplications(page = 1, search = searchValue, status = statusFilter) {
     setLoading(true);
     setMessage(null);
 
     try {
       const backendUrl = getBackendUrl();
-      const response = await fetch(`${backendUrl}/api/admin/admissions`, { credentials: "include" });
+      const query = new URLSearchParams({ page: String(page), pageSize: "25" });
+      if (search.trim()) query.set("search", search.trim());
+      if (status !== "ALL") query.set("status", status);
+      if (classFilter) query.set("intendedClass", classFilter);
+      if (reviewerFilter) query.set("reviewerId", reviewerFilter);
+      if (completeness) query.set("completeness", completeness);
+      if (fromDate) query.set("from", fromDate);
+      if (toDate) query.set("to", toDate);
+      query.set("sortBy", sortBy);
+      if (queueView) query.set("view", queueView);
+      const response = await fetch(`${backendUrl}/api/admin/admissions?${query}`, { credentials: "include" });
       const data = await response.json().catch(() => null);
 
       if (response.status === 403 && data?.code === "SUBSCRIPTION_INACTIVE") {
@@ -102,7 +131,20 @@ export default function AdminAdmissionsPage() {
         throw new Error(data?.error || "Unable to load admissions");
       }
 
-      setApplications(data?.applications || []);
+      const loadedApplications = (data?.applications || []) as any[];
+      setApplications(loadedApplications);
+      setPagination(data?.pagination || { page, pageSize: 25, total: loadedApplications.length, pageCount: 1 });
+      setStatusCounts(data?.statusCounts || {});
+      const requestedApplicationId = new URLSearchParams(window.location.search).get("applicationId");
+      if (requestedApplicationId) {
+        const requestedApplication = loadedApplications.find((application) => application.id === requestedApplicationId);
+        if (requestedApplication) openApplicationDetail(requestedApplication);
+        else {
+          const detailResponse = await fetch(`${backendUrl}/api/admin/admissions/${encodeURIComponent(requestedApplicationId)}`, { credentials: "include" });
+          if (detailResponse.ok) openApplicationDetail((await detailResponse.json()).application);
+          else setMessage("The linked application is unavailable in your school workspace.");
+        }
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to load admissions");
     } finally {
@@ -112,11 +154,141 @@ export default function AdminAdmissionsPage() {
 
   useEffect(() => {
     void loadApplications();
+    fetch(`${getBackendUrl()}/api/admin/classes/data`, { credentials: "include", cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(data?.error || "Could not load school classes");
+        setClasses(Array.isArray(data?.classes) ? data.classes : []);
+        setClassesError(null);
+      })
+      .catch((error) => {
+        setClasses([]);
+        setClassesError(error instanceof Error ? error.message : "Could not load school classes");
+      })
+      .finally(() => setClassesLoading(false));
+    fetch(`${getBackendUrl()}/api/admin/admissions/reviewers`, { credentials: "include" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        setReviewers(data?.reviewers || []);
+        setCurrentReviewerId(data?.currentUserId || "");
+      })
+      .catch(() => setReviewers([]));
+    fetch(`${getBackendUrl()}/api/admin/admissions/reports`, { credentials: "include" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => { if (data) setReportSummary(data); })
+      .catch(() => setReportSummary(null));
   }, []);
 
-  async function updateStatus(id: string, status: string) {
+  useEffect(() => {
+    if (!detailModalVisible) return;
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setDetailModalOpen(false);
+      setDetailModalVisible(false);
+      setSelectedApplication(null);
+      if (openModalTimerRef.current) window.clearTimeout(openModalTimerRef.current);
+      if (closeModalTimerRef.current) window.clearTimeout(closeModalTimerRef.current);
+    };
+    window.addEventListener("keydown", dismissOnEscape);
+    return () => window.removeEventListener("keydown", dismissOnEscape);
+  }, [detailModalVisible]);
+
+  async function openApplicationDetail(application: any) {
+    setSelectedApplication(application);
+    setSelectedClassId("");
+    setReviewEvents([]);
+    setReviewDraft({
+      assignedReviewerId: application.assignedReviewerId || currentReviewerId,
+      internalReviewNotes: application.internalReviewNotes || "",
+      followUpAt: application.followUpAt ? new Date(application.followUpAt).toISOString().slice(0, 10) : "",
+    });
+    setDetailModalVisible(true);
+    try {
+      const backendUrl = getBackendUrl();
+      const [detailResponse, eventsResponse] = await Promise.all([
+        fetch(`${backendUrl}/api/admin/admissions/${encodeURIComponent(application.id)}`, { credentials: "include" }),
+        fetch(`${backendUrl}/api/admin/admissions/${encodeURIComponent(application.id)}/events`, { credentials: "include" }),
+      ]);
+      if (detailResponse.ok) {
+        const detailData = await detailResponse.json();
+        setSelectedApplication(detailData.application);
+        setSelectedClassId("");
+        setReviewDraft({
+          assignedReviewerId: detailData.application.assignedReviewerId || currentReviewerId,
+          internalReviewNotes: detailData.application.internalReviewNotes || "",
+          followUpAt: detailData.application.followUpAt ? new Date(detailData.application.followUpAt).toISOString().slice(0, 10) : "",
+        });
+      }
+      if (eventsResponse.ok) setReviewEvents((await eventsResponse.json()).events || []);
+    } catch {
+      setMessage("Could not load full application details. Please retry.");
+    }
+    if (openModalTimerRef.current) clearTimeout(openModalTimerRef.current);
+    openModalTimerRef.current = window.setTimeout(() => {
+      setDetailModalOpen(true);
+      openModalTimerRef.current = null;
+    }, 10);
+    playOpenTone();
+  }
+
+  async function saveReview() {
+    if (!selectedApplication) return;
+    const response = await fetch(`${getBackendUrl()}/api/admin/admissions/${encodeURIComponent(selectedApplication.id)}/review`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        assignedReviewerId: reviewDraft.assignedReviewerId || null,
+        internalReviewNotes: reviewDraft.internalReviewNotes,
+        followUpAt: reviewDraft.followUpAt || null,
+      }),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(data?.error || "Unable to save review details");
+    setSelectedApplication(data.application);
+    const eventsResponse = await fetch(`${getBackendUrl()}/api/admin/admissions/${encodeURIComponent(selectedApplication.id)}/events`, { credentials: "include" });
+    if (eventsResponse.ok) setReviewEvents((await eventsResponse.json()).events || []);
+  }
+
+  async function exportApplications() {
+    setExporting(true);
+    setMessage(null);
+    try {
+      const query = new URLSearchParams();
+      if (statusFilter !== "ALL") query.set("status", statusFilter);
+      if (classFilter) query.set("intendedClass", classFilter);
+      if (reviewerFilter) query.set("reviewerId", reviewerFilter);
+      if (fromDate) query.set("from", fromDate);
+      if (toDate) query.set("to", toDate);
+      const response = await fetch(`${getBackendUrl()}/api/admin/admissions/export?${query}`, { credentials: "include", cache: "no-store" });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(data?.error || "Unable to export admissions");
+      }
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = downloadUrl;
+      anchor.download = `admissions-${new Date().toISOString().slice(0, 10)}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to export admissions");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function updateStatus(id: string, status: string, classId?: string, confirmedReason?: string) {
+    if (["REJECTED", "WITHDRAWN", "NEEDS_INFORMATION"].includes(status) && confirmedReason === undefined) {
+      setDecisionRequest({ id, status, classId });
+      setDecisionReason("");
+      setDecisionReasonError(null);
+      return;
+    }
     setUpdatingApplicationId(id);
     setMessage(null);
+    const reason = confirmedReason?.trim() || "";
 
     try {
       const backendUrl = getBackendUrl();
@@ -124,7 +296,7 @@ export default function AdminAdmissionsPage() {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, reason, ...(classId ? { classId } : {}) }),
       });
       const data = await response.json().catch(() => null);
 
@@ -190,23 +362,26 @@ export default function AdminAdmissionsPage() {
     }
   }
 
-  const filteredApplications = useMemo(
-    () => applications.filter((application) => statusFilter === "ALL" || application.status === statusFilter),
-    [applications, statusFilter]
-  );
-
-  function openApplicationDetail(application: any) {
-    setSelectedApplication(application);
-    setDetailModalVisible(true);
-    if (openModalTimerRef.current) {
-      clearTimeout(openModalTimerRef.current);
-    }
-    openModalTimerRef.current = window.setTimeout(() => {
-      setDetailModalOpen(true);
-      openModalTimerRef.current = null;
-    }, 10);
-    playOpenTone();
+  function cancelDecisionRequest() {
+    setDecisionRequest(null);
+    setDecisionReason("");
+    setDecisionReasonError(null);
   }
+
+  function confirmDecisionRequest() {
+    if (!decisionRequest) return;
+    const normalizedReason = decisionReason.trim();
+    if (normalizedReason.length < 2) {
+      setDecisionReasonError("Enter at least 2 characters to continue.");
+      return;
+    }
+    const request = decisionRequest;
+    cancelDecisionRequest();
+    void updateStatus(request.id, request.status, request.classId, normalizedReason);
+  }
+
+  const filteredApplications = applications;
+  const activeAdvancedFilterCount = [classFilter, reviewerFilter, completeness, fromDate, toDate].filter(Boolean).length + (sortBy !== "createdAt" ? 1 : 0);
 
   function closeApplicationDetail() {
     setDetailModalOpen(false);
@@ -237,13 +412,17 @@ export default function AdminAdmissionsPage() {
   const detailActionOptions = (() => {
     switch (detailStatus) {
       case "APPROVED":
-        return ["UNDER_REVIEW", "REJECTED"];
+        return [];
       case "REJECTED":
-        return ["APPROVED", "UNDER_REVIEW"];
+        return [];
+      case "WITHDRAWN":
+        return [];
       case "UNDER_REVIEW":
-        return ["APPROVED", "REJECTED"];
+        return ["NEEDS_INFORMATION", "APPROVED", "REJECTED", "WITHDRAWN"];
+      case "NEEDS_INFORMATION":
+        return ["UNDER_REVIEW", "REJECTED", "WITHDRAWN"];
       default:
-        return ["APPROVED", "UNDER_REVIEW", "REJECTED"];
+        return ["UNDER_REVIEW", "NEEDS_INFORMATION", "APPROVED", "REJECTED", "WITHDRAWN"];
     }
   })();
 
@@ -311,16 +490,22 @@ export default function AdminAdmissionsPage() {
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Admissions requests</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Review applications, confirm student details, and move each request through the admissions workflow.</p>
           </div>
-          <Button
-            type="button"
-            className="inline-flex h-10 items-center gap-2 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
-            onClick={() => void loadApplications()}
-            disabled={loading}
-            aria-busy={loading}
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={() => void exportApplications()} disabled={exporting} aria-busy={exporting}>
+              {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Export CSV
+            </Button>
+            <Button
+              type="button"
+              className="inline-flex h-10 items-center gap-2 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+              onClick={() => void loadApplications(pagination.page)}
+              disabled={loading}
+              aria-busy={loading}
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Refresh
+            </Button>
+          </div>
         </div>
         </header>
 
@@ -358,6 +543,11 @@ export default function AdminAdmissionsPage() {
             <div className="mt-1 text-xs text-muted">Declined or need follow-up</div>
           </div>
         </div>
+        {reportSummary ? <section aria-label="Admissions performance" className="grid grid-cols-1 divide-y divide-border border border-border bg-surface sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <div className="p-4"><p className="text-[10px] font-bold uppercase tracking-wide text-muted">Applications received · 12 months</p><p className="mt-1 text-xl font-semibold text-foreground">{reportSummary.total}</p></div>
+          <div className="p-4"><p className="text-[10px] font-bold uppercase tracking-wide text-muted">Approval rate</p><p className="mt-1 text-xl font-semibold text-foreground">{reportSummary.approvalRate === null ? "Suppressed" : `${Math.round(reportSummary.approvalRate * 100)}%`}</p></div>
+          <div className="p-4"><p className="text-[10px] font-bold uppercase tracking-wide text-muted">Average time to first review</p><p className="mt-1 text-xl font-semibold text-foreground">{reportSummary.averageHoursToFirstReview === null ? "—" : `${Math.round(reportSummary.averageHoursToFirstReview)} hours`}</p></div>
+        </section> : null}
         {message ? (
           <div className="border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             {message}
@@ -372,23 +562,46 @@ export default function AdminAdmissionsPage() {
               <p className="text-[11px] font-bold uppercase tracking-[.12em] text-muted">Incoming requests</p>
               <h2 className="mt-1 text-lg font-semibold text-foreground">Admission applications</h2>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground">
-                <span className="font-medium text-muted">Status filter</span>
-                <select
-                  value={statusFilter}
-                  onChange={(event) => setStatusFilter(event.target.value)}
-                  className="bg-transparent text-sm text-foreground outline-none"
-                >
-                  <option value="ALL">All</option>
-                  <option value="SUBMITTED">Submitted</option>
-                  <option value="UNDER_REVIEW">Under Review</option>
-                  <option value="APPROVED">Approved</option>
-                  <option value="REJECTED">Rejected</option>
-                </select>
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center">
+              <label className="flex min-w-0 flex-1 items-center gap-2 border border-border bg-background px-3 py-2 text-sm text-foreground sm:max-w-md">
+                <span className="sr-only">Search applications</span>
+                <input value={searchValue} onChange={(event) => setSearchValue(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void loadApplications(1, searchValue); }} placeholder="Search applicant or reference" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2 border border-border bg-background px-3 py-2 text-sm text-foreground">
+                  <span className="text-xs font-medium text-muted">Status</span>
+                  <select aria-label="Filter by status" value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); void loadApplications(1, searchValue, event.target.value); }} className="max-w-36 bg-transparent text-sm text-foreground outline-none">
+                    <option value="ALL">All</option><option value="SUBMITTED">Submitted</option><option value="UNDER_REVIEW">Under Review</option><option value="NEEDS_INFORMATION">Needs Information</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option>
+                  </select>
+                </label>
+                <Button type="button" variant="outline" aria-expanded={filtersOpen} aria-controls="admissions-advanced-filters" onClick={() => setFiltersOpen((open) => !open)} className="inline-flex items-center gap-2">
+                  <SlidersHorizontal className="h-4 w-4" />
+                  More filters
+                  {activeAdvancedFilterCount ? <span className="grid h-5 min-w-5 place-items-center bg-brand px-1 text-[10px] font-bold text-white">{activeAdvancedFilterCount}</span> : null}
+                </Button>
               </div>
             </div>
+            {filtersOpen ? <div id="admissions-advanced-filters" className="grid gap-3 border-t border-border pt-4 sm:grid-cols-2 xl:grid-cols-3">
+              <label className="grid gap-1 text-xs font-medium text-muted">Intended class
+                <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} className="w-full border border-border bg-background px-3 py-2 text-sm text-foreground"><option value="">All classes</option>{classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.name}>{schoolClass.name}{schoolClass.arm ? ` ${schoolClass.arm}` : ""}</option>)}</select>
+              </label>
+              <label className="grid gap-1 text-xs font-medium text-muted">Reviewer
+                <select value={reviewerFilter} onChange={(event) => setReviewerFilter(event.target.value)} className="w-full border border-border bg-background px-3 py-2 text-sm text-foreground"><option value="">All reviewers</option><option value="UNASSIGNED">Unassigned</option>{reviewers.map((reviewer) => <option key={reviewer.id} value={reviewer.id}>{reviewer.name}</option>)}</select>
+              </label>
+              <label className="grid gap-1 text-xs font-medium text-muted">Completeness
+                <select value={completeness} onChange={(event) => setCompleteness(event.target.value)} className="w-full border border-border bg-background px-3 py-2 text-sm text-foreground"><option value="">All applications</option><option value="COMPLETE">Complete</option><option value="INCOMPLETE">Incomplete</option></select>
+              </label>
+              <label className="grid gap-1 text-xs font-medium text-muted">Submitted from<input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} className="w-full border border-border bg-background px-3 py-2 text-sm text-foreground" /></label>
+              <label className="grid gap-1 text-xs font-medium text-muted">Submitted to<input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} className="w-full border border-border bg-background px-3 py-2 text-sm text-foreground" /></label>
+              <label className="grid gap-1 text-xs font-medium text-muted">Sort by
+                <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} className="w-full border border-border bg-background px-3 py-2 text-sm text-foreground"><option value="createdAt">Newest</option><option value="updatedAt">Recently updated</option><option value="status">Status</option></select>
+              </label>
+              <div className="flex items-end gap-2 sm:col-span-2 xl:col-span-3"><Button type="button" onClick={() => void loadApplications(1, searchValue)}>Apply filters</Button><Button type="button" variant="outline" onClick={() => { setClassFilter(""); setReviewerFilter(""); setCompleteness(""); setFromDate(""); setToDate(""); setSortBy("createdAt"); setQueueView(""); void loadApplications(1, searchValue, statusFilter); }}>Clear advanced filters</Button></div>
+            </div> : null}
           </div>
+          <nav aria-label="Saved admissions views" className="flex gap-2 overflow-x-auto border-b border-border px-4 py-3">
+            {[{ id: "", label: "All", count: pagination.total }, { id: "NEEDS_REVIEW", label: "Needs review" }, { id: "AWAITING_FAMILY", label: "Awaiting family" }, { id: "UNASSIGNED", label: "Unassigned" }, { id: "RECENTLY_UPDATED", label: "Recently updated" }].map((view) => <button key={view.id || "all"} type="button" aria-pressed={queueView === view.id} onClick={() => { setQueueView(view.id); void loadApplications(1); }} className={`shrink-0 border px-3 py-1.5 text-xs font-semibold ${queueView === view.id ? "border-brand bg-brand text-white" : "border-border bg-background text-foreground hover:bg-surface"}`}>{view.label}</button>)}
+          </nav>
 
           {loading ? (
             <div className="flex items-center justify-center gap-3 px-6 py-16 text-sm text-muted">
@@ -400,13 +613,13 @@ export default function AdminAdmissionsPage() {
               No applications match this filter.
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="hidden overflow-x-auto md:block">
               <table className="min-w-full divide-y divide-border text-sm">
                 <thead className="bg-background text-left text-xs font-semibold uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-5 py-3">Applicant</th>
                     <th className="px-5 py-3">Child</th>
-                    <th className="px-5 py-3">Contact</th>
                     <th className="px-5 py-3">Status</th>
                     <th className="px-5 py-3">Updated</th>
                   <th className="px-5 py-3 text-right">Action</th>
@@ -418,32 +631,20 @@ export default function AdminAdmissionsPage() {
                       <td className="px-5 py-4">
                         <div className="font-medium text-foreground">{application.applicantName || `${application.firstName || ""} ${application.lastName || ""}`.trim() || "Unnamed applicant"}</div>
                         <div className="mt-1 text-xs text-muted">{application.intendedClass || "No intended class"}</div>
+                        <div className="mt-1 text-xs text-muted">{application.assignedReviewer?.name || "Unassigned"}</div>
+                        <div className="mt-1 text-xs text-muted">{Math.max(0, Math.floor((Date.now() - new Date(application.createdAt).getTime()) / 86400000))} days in queue</div>
+                        <div className="mt-1 text-xs text-muted">{application.email && application.phone && application.guardianPhone && application.photoUrl ? "Complete" : "Incomplete"}</div>
                       </td>
                       <td className="px-5 py-4">
                         <div className="font-medium text-foreground">{application.childName || "—"}</div>
-                        <div className="mt-1 text-xs text-muted">{application.parentName || "—"}</div>
+                        <div className="mt-1 text-xs text-muted">Received {new Date(application.createdAt).toLocaleDateString("en-NG")}</div>
                         {application.admissionNo ? <div className="mt-1 text-xs font-semibold text-brand">{application.admissionNo}</div> : null}
-                      </td>
-                      <td className="px-5 py-4">
-                        <div className="text-foreground">{application.email || "—"}</div>
-                        <div className="mt-1 text-xs text-muted">{application.phone || "—"}</div>
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex flex-wrap items-center gap-2">
                             <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-semibold ${statusStyles[application.status] || statusStyles.SUBMITTED}`}>
                             {application.status.replace(/_/g, " ")}
                           </span>
-                          <select
-                            value={application.status}
-                            onChange={(event) => void updateStatus(application.id, event.target.value)}
-                            disabled={updatingApplicationId === application.id}
-                            className="rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground outline-none focus:border-brand"
-                          >
-                            <option value="SUBMITTED">Submitted</option>
-                            <option value="UNDER_REVIEW">Under Review</option>
-                            <option value="APPROVED">Approved</option>
-                            <option value="REJECTED">Rejected</option>
-                          </select>
                         </div>
                       </td>
                       <td className="px-5 py-4 text-muted">
@@ -468,9 +669,45 @@ export default function AdminAdmissionsPage() {
                 </tbody>
               </table>
             </div>
+            <div className="divide-y divide-border md:hidden">
+              {filteredApplications.map((application) => <article key={application.id} className="space-y-3 px-4 py-4">
+                <div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-semibold text-foreground">{application.applicantName || `${application.firstName || ""} ${application.lastName || ""}`.trim()}</h3><p className="mt-1 text-xs text-muted">{application.childName || "Student name unavailable"} · {application.intendedClass || "Class unconfirmed"}</p></div><span className={`shrink-0 border px-2 py-1 text-[10px] font-semibold ${statusBadgeStyles[application.status] || statusBadgeStyles.SUBMITTED}`}>{getStatusLabel(application.status)}</span></div>
+                <div className="flex items-center justify-between gap-3 text-xs text-muted"><span>{application.assignedReviewer?.name || "Unassigned"} · {application.email && application.phone && application.guardianPhone && application.photoUrl ? "Complete" : "Incomplete"}</span><span>{Math.max(0, Math.floor((Date.now() - new Date(application.createdAt).getTime()) / 86400000))} days in queue</span></div>
+                <Button type="button" className="w-full" onClick={() => openApplicationDetail(application)}>Review application</Button>
+              </article>)}
+            </div>
+            </>
           )}
+          {!loading && pagination.total > 0 ? <footer className="flex items-center justify-between border-t border-border px-4 py-3 text-sm text-muted">
+            <span>Page {pagination.page} of {Math.max(1, pagination.pageCount)} · {pagination.total} applications</span>
+            <div className="flex gap-2"><Button type="button" variant="outline" disabled={pagination.page <= 1} onClick={() => void loadApplications(pagination.page - 1)}>Previous</Button><Button type="button" variant="outline" disabled={pagination.page >= pagination.pageCount} onClick={() => void loadApplications(pagination.page + 1)}>Next</Button></div>
+          </footer> : null}
         </section>
       </div>
+
+      {decisionRequest ? <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4 py-6" onMouseDown={(event) => { if (event.target === event.currentTarget) cancelDecisionRequest(); }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="decision-reason-title" aria-describedby="decision-reason-description" className="w-full max-w-[520px] overflow-hidden rounded-md border border-border bg-surface shadow-[0_16px_50px_rgba(10,102,194,0.16)]">
+          <header className="flex items-start justify-between gap-4 border-b border-border bg-brand/10 px-4 py-4 sm:px-5">
+            <div className="flex items-start gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md border border-brand/20 bg-brand/10"><CircleAlert className="h-5 w-5 text-brand" /></span>
+              <div>
+                <h2 id="decision-reason-title" className="text-lg font-semibold text-foreground">{decisionRequest.status === "NEEDS_INFORMATION" ? "Request information" : decisionRequest.status === "REJECTED" ? "Reject application" : "Withdraw application"}</h2>
+                <p id="decision-reason-description" className="mt-1 text-sm leading-5 text-muted">{decisionRequest.status === "NEEDS_INFORMATION" ? "Tell the applicant exactly what information is needed. This message will be sent to them." : decisionRequest.status === "REJECTED" ? "Enter the reason for this decision. It will be recorded in the application history." : "Enter the reason for withdrawing this application. It will be recorded in the application history."}</p>
+              </div>
+            </div>
+            <button type="button" aria-label="Close decision dialog" onClick={cancelDecisionRequest} className="rounded-md border border-border bg-background p-2 text-muted transition hover:bg-surface hover:text-foreground"><X className="h-4 w-4" /></button>
+          </header>
+          <div className="px-4 py-5 sm:px-5">
+            <label htmlFor="admissions-decision-reason" className="text-sm font-semibold text-foreground">{decisionRequest.status === "NEEDS_INFORMATION" ? "Message to applicant" : "Decision reason"}<span className="ml-1 text-rose-700" aria-hidden="true">*</span></label>
+            <textarea id="admissions-decision-reason" autoFocus required minLength={2} maxLength={5000} rows={5} value={decisionReason} onChange={(event) => { setDecisionReason(event.target.value); setDecisionReasonError(null); }} aria-invalid={Boolean(decisionReasonError)} aria-describedby={decisionReasonError ? "admissions-decision-error" : undefined} placeholder={decisionRequest.status === "NEEDS_INFORMATION" ? "List the specific information or documents needed" : "Explain the reason for this decision"} className="mt-2 w-full resize-y rounded-md border border-border bg-background px-3 py-2.5 text-sm leading-6 text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/20" />
+            <div className="mt-1 flex items-center justify-between gap-3 text-xs text-muted"><span>{decisionReasonError ? <span id="admissions-decision-error" role="alert" className="text-rose-700">{decisionReasonError}</span> : "Required"}</span><span>{decisionReason.length}/5000</span></div>
+          </div>
+          <footer className="flex flex-col-reverse gap-2 border-t border-border bg-background px-4 py-4 sm:flex-row sm:justify-end sm:px-5">
+            <Button type="button" variant="outline" onClick={cancelDecisionRequest}>Cancel</Button>
+            <Button type="button" onClick={confirmDecisionRequest} disabled={decisionReason.trim().length < 2}>{decisionRequest.status === "NEEDS_INFORMATION" ? "Send request" : decisionRequest.status === "REJECTED" ? "Confirm rejection" : "Confirm withdrawal"}</Button>
+          </footer>
+        </section>
+      </div> : null}
 
       {successModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
@@ -498,8 +735,8 @@ export default function AdminAdmissionsPage() {
       )}
 
       {detailModalVisible && selectedApplication && (
-        <div className={`fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-3 py-4 sm:px-4 transition-opacity duration-300 ease-out ${detailModalOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-          <div className={`w-full max-w-[1120px] max-h-[calc(100vh-1.5rem)] overflow-hidden rounded-md border border-border bg-surface shadow-[0_16px_50px_rgba(10,102,194,0.16)] transition-all duration-500 ease-out ${detailModalOpen ? "translate-y-0 opacity-100" : "translate-y-16 opacity-0"}`}>
+        <div className={`fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-3 py-4 sm:px-4 transition-opacity duration-300 ease-out motion-reduce:transition-none ${detailModalOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+          <div role="dialog" aria-modal="true" aria-labelledby="admission-review-title" className={`w-full max-w-[1120px] max-h-[calc(100vh-1.5rem)] overflow-hidden rounded-md border border-border bg-surface shadow-[0_16px_50px_rgba(10,102,194,0.16)] transition-all duration-500 ease-out motion-reduce:transition-none ${detailModalOpen ? "translate-y-0 opacity-100" : "translate-y-16 opacity-0"}`}>
             <div
               className="flex flex-col gap-4 border-b border-border bg-brand/10 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"
             >
@@ -511,7 +748,7 @@ export default function AdminAdmissionsPage() {
                 </div>
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-[.12em] text-muted">Application details</p>
-                  <h2 className="text-2xl font-semibold text-foreground mt-1">Application Review</h2>
+                  <h2 id="admission-review-title" className="text-2xl font-semibold text-foreground mt-1">Application Review</h2>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -646,6 +883,39 @@ export default function AdminAdmissionsPage() {
 
               <aside className="border-t border-border bg-background px-5 py-4 lg:border-l lg:border-t-0 lg:border-border lg:px-6">
                 <div className="space-y-3">
+                  <section className="border border-border bg-surface p-5">
+                    <p className="text-[10px] font-bold uppercase tracking-[.12em] text-muted">Review ownership</p>
+                    <label className="mt-3 block text-xs font-medium text-foreground" htmlFor="admissions-placement">Confirmed class placement</label>
+                    <select id="admissions-placement" value={selectedClassId} onChange={(event) => setSelectedClassId(event.target.value)} className="mt-1 w-full border border-border bg-background px-3 py-2 text-sm text-foreground">
+                      <option value="">{classesLoading ? "Loading classes..." : classesError ? "Classes unavailable" : classes.length ? "Select an available class" : "No classes configured"}</option>
+                      {classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.name}{schoolClass.arm ? ` ${schoolClass.arm}` : ""}</option>)}
+                    </select>
+                    {classesError ? <p role="alert" className="mt-2 text-xs text-rose-700">{classesError}</p> : null}
+                    <label className="mt-3 block text-xs font-medium text-foreground" htmlFor="admissions-reviewer">Assigned reviewer</label>
+                    <select id="admissions-reviewer" value={reviewDraft.assignedReviewerId} onChange={(event) => setReviewDraft((current) => ({ ...current, assignedReviewerId: event.target.value }))} className="mt-1 w-full border border-border bg-background px-3 py-2 text-sm text-foreground">
+                      <option value="">Unassigned</option>
+                      {reviewers.map((reviewer) => <option key={reviewer.id} value={reviewer.id}>{reviewer.name}</option>)}
+                    </select>
+                    <label className="mt-3 block text-xs font-medium text-foreground" htmlFor="admissions-follow-up">Follow-up date</label>
+                    <input id="admissions-follow-up" type="date" value={reviewDraft.followUpAt} onChange={(event) => setReviewDraft((current) => ({ ...current, followUpAt: event.target.value }))} className="mt-1 w-full border border-border bg-background px-3 py-2 text-sm text-foreground" />
+                    <label className="mt-3 block text-xs font-medium text-foreground" htmlFor="admissions-internal-notes">Private internal notes</label>
+                    <textarea id="admissions-internal-notes" rows={4} maxLength={10000} value={reviewDraft.internalReviewNotes} onChange={(event) => setReviewDraft((current) => ({ ...current, internalReviewNotes: event.target.value }))} className="mt-1 w-full resize-y border border-border bg-background px-3 py-2 text-sm text-foreground" />
+                    <Button type="button" variant="outline" className="mt-3 w-full" onClick={() => void saveReview().catch((error) => setMessage(error instanceof Error ? error.message : "Unable to save review details"))}>Save review details</Button>
+                  </section>
+                  <section className="border border-border bg-surface p-5">
+                    <p className="text-[10px] font-bold uppercase tracking-[.12em] text-muted">Application history</p>
+                    <ol className="mt-3 space-y-3">
+                      {reviewEvents.map((event) => <li key={event.id} className="border-l-2 border-brand/40 pl-3 text-xs text-foreground"><p className="font-semibold">{event.type.replace(/_/g, " ")}{event.toStatus ? ` · ${getStatusLabel(event.toStatus)}` : ""}</p><p className="mt-1 text-muted">{event.actorName} · {new Date(event.createdAt).toLocaleString()}</p>{event.reason ? <p className="mt-1">{event.reason}</p> : null}</li>)}
+                      {!reviewEvents.length ? <li className="text-xs text-muted">No review events recorded.</li> : null}
+                    </ol>
+                  </section>
+                  <section className="border border-border bg-surface p-5">
+                    <p className="text-[10px] font-bold uppercase tracking-[.12em] text-muted">Message delivery</p>
+                    <ul className="mt-3 space-y-2">
+                      {(selectedApplication.deliveryAttempts || []).map((attempt: any) => <li key={attempt.id} className="border-b border-border pb-2 text-xs last:border-0"><p className="font-semibold text-foreground">{attempt.audience} · {attempt.channel} · {attempt.status}</p><p className="mt-1 text-muted">Attempt {attempt.attemptNumber} · {attempt.provider || "provider unknown"} · {new Date(attempt.attemptedAt).toLocaleString()}</p>{attempt.error ? <p className="mt-1 text-rose-700">{attempt.error}</p> : null}</li>)}
+                      {!selectedApplication.deliveryAttempts?.length ? <li className="text-xs text-muted">No external delivery attempts recorded.</li> : null}
+                    </ul>
+                  </section>
                   {selectedApplication.photoUrl ? (
                     <section className="border border-border bg-surface p-5">
                       <p className="text-[10px] font-bold uppercase tracking-[.12em] text-muted mb-4">Uploaded Photo</p>
@@ -653,19 +923,12 @@ export default function AdminAdmissionsPage() {
                     </section>
                   ) : null}
 
-                  <section className="border border-border bg-surface p-5">
-                    <p className="text-[10px] font-bold uppercase tracking-[.12em] text-muted mb-4">Internal Review Notes</p>
-                    <div className="mt-4 rounded-lg bg-background p-4 text-sm leading-6 text-foreground whitespace-pre-wrap">
-                      {selectedApplication.note || "No internal review notes are currently attached to this application."}
+                  <details className="border border-border bg-surface p-4">
+                    <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-brand">Sensitive medical information</summary>
+                    <div className="mt-4 bg-background p-4 text-sm leading-6 text-foreground whitespace-pre-wrap">
+                      {selectedApplication.medicalNotes || "No medical notes submitted."}
                     </div>
-                  </section>
-
-                  <section className="rounded-lg border border-border bg-surface p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand">Medical Notes</p>
-                    <div className="mt-4 rounded-lg bg-background p-4 text-sm leading-6 text-foreground whitespace-pre-wrap">
-                      {selectedApplication.medicalNotes || "—"}
-                    </div>
-                  </section>
+                  </details>
 
                   <section className="rounded-lg border border-border bg-surface p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand">Meta</p>
@@ -702,10 +965,13 @@ export default function AdminAdmissionsPage() {
                   {detailActionOptions.includes("APPROVED") ? (
                     <button
                       type="button"
-                      onClick={() => void updateStatus(selectedApplication.id, "APPROVED")}
+                      onClick={() => {
+                        if (!selectedClassId) { setMessage("Choose an available class before approving this application."); return; }
+                        void updateStatus(selectedApplication.id, "APPROVED", selectedClassId);
+                      }}
                       className="rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-hover focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2"
                     >
-                      Approve
+                      Approve and enroll
                     </button>
                   ) : null}
                   {detailActionOptions.includes("UNDER_REVIEW") ? (
@@ -717,6 +983,8 @@ export default function AdminAdmissionsPage() {
                       Under Review
                     </button>
                   ) : null}
+                  {detailActionOptions.includes("NEEDS_INFORMATION") ? <button type="button" onClick={() => void updateStatus(selectedApplication.id, "NEEDS_INFORMATION")} className="rounded-md border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-900">Needs information</button> : null}
+                  {detailActionOptions.includes("WITHDRAWN") ? <button type="button" onClick={() => void updateStatus(selectedApplication.id, "WITHDRAWN")} className="rounded-md border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground">Withdraw</button> : null}
                   {detailActionOptions.includes("REJECTED") ? (
                     <button
                       type="button"
