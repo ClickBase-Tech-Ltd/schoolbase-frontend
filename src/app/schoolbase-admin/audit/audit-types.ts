@@ -25,7 +25,7 @@ export interface ActivitySummary {
     schoolsWithEvents: number;
     schoolsWithoutEvents: number;
   };
-  actionBreakdown: { category: string; action: string; summary: string; count: number }[];
+  actionBreakdown: { category: string; action: string; summary: string; count: number; events: string[]; eventPrefixes: string[] }[];
   trend: { date: string; count: number }[];
   schoolActivity: {
     id: string;

@@ -4,11 +4,12 @@ import { getBackendUrl } from "@/lib/backend-url";
 export async function GET(request: NextRequest) {
   try {
     const backendUrl = getBackendUrl();
-    const response = await fetch(`${backendUrl}/schoolbase-admin/api/audit-logs`, {
+    const response = await fetch(`${backendUrl}/schoolbase-admin/api/audit-logs${request.nextUrl.search}`, {
       headers: {
         Cookie: request.headers.get("cookie") || "",
         "Content-Type": "application/json",
       },
+      cache: "no-store",
     });
 
     const data = await response.json().catch(() => ({ message: "Failed to parse response." }));

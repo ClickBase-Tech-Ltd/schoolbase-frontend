@@ -22,6 +22,8 @@ export default function AuditPage() {
   const [categoryFilter, setCategoryFilter] = useState("ALL");
   const [outcomeFilter, setOutcomeFilter] = useState("ALL");
   const [timeFilter, setTimeFilter] = useState("90D");
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [eventFilter, setEventFilter] = useState<{ events: string[]; eventPrefixes: string[] } | null>(null);
   const [summary, setSummary] = useState<ActivitySummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -65,10 +67,18 @@ export default function AuditPage() {
       setError(null);
       const days = timeFilter === "24H" ? 1 : Number.parseInt(timeFilter, 10);
       const params = new URLSearchParams({ page: String(page), limit: String(pageSize), days: String(days) });
+      if (selectedDay) {
+        const dayStart = new Date(`${selectedDay}T00:00:00.000Z`);
+        const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+        params.set("from", dayStart.toISOString());
+        params.set("to", dayEnd.toISOString());
+      }
       if (searchQuery) params.set("search", searchQuery);
       if (schoolFilter !== "ALL") params.set("school", schoolFilter);
       if (categoryFilter !== "ALL") params.set("category", categoryFilter);
       if (outcomeFilter !== "ALL") params.set("outcome", outcomeFilter);
+      if (eventFilter?.events.length) params.set("events", eventFilter.events.join(","));
+      if (eventFilter?.eventPrefixes.length) params.set("eventPrefixes", eventFilter.eventPrefixes.join(","));
       try {
         const response = await fetch(`${getBackendUrl()}/schoolbase-admin/api/audit-logs?${params.toString()}`, {
           credentials: "include",
@@ -96,7 +106,7 @@ export default function AuditPage() {
     }
     void loadAuditEvents();
     return () => controller.abort();
-  }, [categoryFilter, outcomeFilter, page, pageSize, refreshToken, schoolFilter, searchQuery, timeFilter]);
+  }, [categoryFilter, eventFilter, outcomeFilter, page, pageSize, refreshToken, schoolFilter, searchQuery, selectedDay, timeFilter]);
 
   return <AuditReportView
     logs={logs}
@@ -108,15 +118,18 @@ export default function AuditPage() {
     setPage={setPage}
     setPageSize={setPageSize}
     search={search}
-    setSearch={(value) => { setSearch(value); setPage(1); }}
+    setSearch={(value) => { setSearch(value); setEventFilter(null); setPage(1); }}
+    setEventFilter={(filter) => { setEventFilter(filter); setSearch(""); setSearchQuery(""); setPage(1); }}
     schoolFilter={schoolFilter}
-    setSchoolFilter={setSchoolFilter}
+    setSchoolFilter={(value) => { setSchoolFilter(value); setEventFilter(null); setPage(1); }}
     categoryFilter={categoryFilter}
     setCategoryFilter={setCategoryFilter}
     outcomeFilter={outcomeFilter}
     setOutcomeFilter={setOutcomeFilter}
     timeFilter={timeFilter}
-    setTimeFilter={setTimeFilter}
+    setTimeFilter={(value) => { setTimeFilter(value); setSelectedDay(null); setPage(1); }}
+    selectedDay={selectedDay}
+    setSelectedDay={(value) => { setSelectedDay(value); setPage(1); }}
     loading={loading}
     refreshing={refreshing}
     error={error}
@@ -128,6 +141,8 @@ export default function AuditPage() {
       setCategoryFilter("ALL");
       setOutcomeFilter("ALL");
       setTimeFilter("90D");
+      setSelectedDay(null);
+      setEventFilter(null);
       setPage(1);
     }}
   />;
