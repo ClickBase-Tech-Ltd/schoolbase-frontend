@@ -21,6 +21,8 @@ for (const [path, allowedRole] of portalCases) {
 
 assert.equal(roleCanAccess(roleRequirementForPath('/api/bursar/overview'), 'BURSAR'), true);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/bursar/overview'), 'SCHOOL_ADMIN'), false);
+assert.equal(roleCanAccess(roleRequirementForPath('/api/teacher/school'), 'TEACHER'), true);
+assert.equal(roleCanAccess(roleRequirementForPath('/api/teacher/school'), 'SCHOOL_ADMIN'), false);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/students/data'), 'SCHOOL_ADMIN'), true);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/students/data'), 'TEACHER'), false);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/invoices/invoice-1'), 'BURSAR'), true);

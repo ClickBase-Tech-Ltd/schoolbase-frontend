@@ -3,9 +3,11 @@ import { buildApiUrl } from "@/lib/api-client";
 import { cookies } from "next/headers";
 
 // Fetch school data from the backend API instead of direct database access
-async function fetchSchoolFromAPI(schoolId: string) {
+async function fetchSchoolFromAPI(schoolId: string, role: string) {
   try {
-    const url = buildApiUrl(`/admin/school/${encodeURIComponent(schoolId)}`);
+    const url = role === "TEACHER"
+      ? buildApiUrl("/teacher/school")
+      : buildApiUrl(`/admin/school/${encodeURIComponent(schoolId)}`);
     const cookieStore = await cookies();
     const sessionCookie =
       cookieStore.get("schoolbase_session")?.value ||
@@ -48,7 +50,7 @@ export async function getCurrentSchool() {
     throw new Error("Your session is invalid. Please log in again.");
   }
 
-  const school = await fetchSchoolFromAPI(session.schoolId);
+  const school = await fetchSchoolFromAPI(session.schoolId, session.role);
   if (!school) {
     console.error(`School not found or backend unavailable for staff session: ${session.schoolId}`);
     throw new Error("Your school information could not be loaded. Please log in again.");

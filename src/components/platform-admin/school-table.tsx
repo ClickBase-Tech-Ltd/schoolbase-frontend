@@ -477,8 +477,11 @@ export function SchoolTable({
         setMessage(result.message || "Impersonation failed.");
         return;
       }
-      const redirectUrl = result.redirectUrl || `/admin?impersonate=${encodeURIComponent(result.token)}`;
-      window.location.href = redirectUrl;
+      if (result.success !== true || result.redirectUrl !== "/admin") {
+        setMessage("Impersonation response did not establish a school session.");
+        return;
+      }
+      window.location.assign(result.redirectUrl);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Impersonation failed.");
     } finally {

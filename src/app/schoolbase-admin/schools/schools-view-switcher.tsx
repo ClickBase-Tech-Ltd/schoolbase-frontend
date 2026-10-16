@@ -256,8 +256,11 @@ export default function SchoolsViewSwitcher({
         console.error(result.message || "Impersonation failed.");
         return;
       }
-      const redirectUrl = result.redirectUrl || `/admin?impersonate=${encodeURIComponent(result.token)}`;
-      window.location.href = redirectUrl;
+      if (result.success !== true || result.redirectUrl !== "/admin") {
+        console.error("Impersonation response did not establish a school session.");
+        return;
+      }
+      window.location.assign(result.redirectUrl);
     } catch (err) {
       console.error("Impersonation failed", err);
     } finally {
