@@ -18,6 +18,11 @@ function getSessionCookieOptions() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const requestedSchoolId = typeof body?.schoolId === "string" ? body.schoolId.trim() : "";
+    if (!requestedSchoolId) {
+      return NextResponse.json({ message: "A school ID is required." }, { status: 400 });
+    }
+
     const backendUrl = getBackendUrl();
 
     const tokenResponse = await fetch(
@@ -37,7 +42,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(handoff, { status: tokenResponse.status });
     }
 
-    if (typeof handoff.token !== "string" || typeof handoff.schoolId !== "string") {
+    if (typeof handoff.token !== "string" || !handoff.token) {
       return NextResponse.json({ message: "Impersonation token response was invalid." }, { status: 502 });
     }
 
@@ -52,7 +57,7 @@ export async function POST(req: NextRequest) {
     if (!exchangeResponse.ok
       || exchange.success !== true
       || typeof exchange.token !== "string"
-      || exchange.schoolId !== handoff.schoolId) {
+      || exchange.schoolId !== requestedSchoolId) {
       return NextResponse.json(
         { message: "Unable to establish the impersonated school session." },
         { status: exchangeResponse.ok ? 502 : exchangeResponse.status },
