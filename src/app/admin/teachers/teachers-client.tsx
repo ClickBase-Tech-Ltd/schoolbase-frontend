@@ -66,7 +66,7 @@ const TEACHER_GUIDE = {
     },
     {
       question: "What happens when I delete a teacher?",
-      answer: "Deleting a teacher removes them from all class and subject assignments. Their account is deactivated but historical records remain for audit purposes."
+      answer: "Deactivating a teacher disables their login and removes current class and subject assignments. Their employee record and historical records are retained."
     },
     {
       question: "Can teachers reset their passwords?",
@@ -870,7 +870,7 @@ export default function TeachersPageClient({
                   <AlertCircle className="h-6 w-6 text-error" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-foreground">Delete staff member?</h2>
+                  <h2 className="text-lg font-semibold text-foreground">Deactivate staff account?</h2>
                   <p className="mt-1 text-sm text-muted">This action cannot be undone.</p>
                 </div>
               </div>
@@ -878,11 +878,11 @@ export default function TeachersPageClient({
 
             <div className="px-6 py-5">
               <p className="text-sm leading-6 text-muted">
-                You are about to permanently delete <strong>“{deletingTeacherName}”</strong>.
+                You are about to disable sign-in for <strong>“{deletingTeacherName}”</strong>.
               </p>
               <div className="mt-4 border border-error/20 bg-error/10 p-3">
                 <p className="text-xs text-error">
-                  <strong>Warning:</strong> This will remove the staff member from assigned classes and subjects.
+                  <strong>Effect:</strong> Current class and subject assignments will be removed. The employee record and historical records will be retained.
                 </p>
               </div>
             </div>
@@ -910,7 +910,7 @@ export default function TeachersPageClient({
                 ) : (
                   <>
                     <Trash2 className="h-4 w-4" />
-                    Delete Permanently
+                    Deactivate account
                   </>
                 )}
               </button>

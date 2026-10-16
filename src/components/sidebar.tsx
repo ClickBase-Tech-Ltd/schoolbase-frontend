@@ -46,6 +46,7 @@ import {
   Music,
   Activity,
   WalletCards,
+  QrCode,
 } from "lucide-react";
 import { WhatsAppIcon } from "@/components/ui/icons";
 
@@ -94,6 +95,7 @@ const icons: Record<string, ComponentType<{ className?: string }>> = {
   CheckSquare,
   Activity,
   WalletCards,
+  QrCode,
 };
 
 export default function Sidebar({

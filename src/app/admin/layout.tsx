@@ -27,6 +27,8 @@ const baseNav = [
   { href: "/admin/promotions", label: "Promotions", icon: "TrendingUp" },
   { href: "/admin/analytics", label: "Analytics", icon: "BarChart3" },
   { href: "/admin/attendance", label: "Attendance", icon: "ClipboardList" },
+  { href: "/admin/staff-attendance", label: "Staff Attendance", icon: "ClipboardList" },
+  { href: "/admin/staff-attendance/stations", label: "Attendance Stations", icon: "QrCode" },
   { href: "/admin/activities", label: "Activities", icon: "Sparkles" },
   { href: "/admin/timetable", label: "Timetable", icon: "CalendarDays" },
   { href: "/admin/whatsapp", label: "WhatsApp", icon: "WhatsApp" },

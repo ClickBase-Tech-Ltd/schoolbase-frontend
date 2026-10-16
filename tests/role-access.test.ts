@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { roleCanAccess, roleRequirementForPath } from '../src/lib/role-access.js';
+import { portalForRole, roleCanAccess, roleRequirementForPath } from '../src/lib/role-access.js';
 
 const portalCases = [
   ['/admin/fees', 'SCHOOL_ADMIN'],
@@ -29,5 +29,16 @@ assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/invoices/invoice-1
 assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/invoices/invoice-1'), 'PARENT'), false);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/verify', 'POST'), null), true);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/parent/login', 'POST'), null), true);
+assert.equal(roleCanAccess(roleRequirementForPath('/staff'), 'STAFF'), true);
+assert.equal(roleCanAccess(roleRequirementForPath('/api/staff/me'), 'STAFF'), true);
+assert.equal(roleCanAccess(roleRequirementForPath('/staff/attendance'), 'STAFF'), true);
+assert.equal(roleCanAccess(roleRequirementForPath('/api/staff/attendance/scan', 'POST'), 'STAFF'), true);
+assert.equal(roleCanAccess(roleRequirementForPath('/api/staff/attendance/scan', 'POST'), 'SCHOOL_ADMIN'), false);
+assert.equal(roleCanAccess(roleRequirementForPath('/admin/staff-attendance/stations'), 'SCHOOL_ADMIN'), true);
+assert.equal(roleCanAccess(roleRequirementForPath('/admin/staff-attendance/stations'), 'STAFF'), false);
+assert.equal(roleCanAccess(roleRequirementForPath('/admin/staff'), 'STAFF'), false);
+assert.equal(roleCanAccess(roleRequirementForPath('/teacher'), 'STAFF'), false);
+assert.equal(roleCanAccess(roleRequirementForPath('/accounting'), 'STAFF'), false);
+assert.equal(portalForRole('STAFF'), '/staff');
 
 console.log('Frontend role access tests passed');

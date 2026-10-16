@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { sendEmail, buildSignupVerificationEmail } from "@/lib/email";
 
-export type UserRole = "SCHOOL_ADMIN" | "BURSAR" | "TEACHER" | "PARENT" | "STUDENT" | "PLATFORM_ADMIN";
+export type UserRole = "SCHOOL_ADMIN" | "BURSAR" | "TEACHER" | "STAFF" | "PARENT" | "STUDENT" | "PLATFORM_ADMIN";
 
 const SESSION_COOKIE = "schoolbase_session"; // Unified session cookie for all user types
 

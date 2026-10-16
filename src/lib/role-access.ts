@@ -2,6 +2,7 @@ export type SchoolBaseRole =
   | 'SCHOOL_ADMIN'
   | 'BURSAR'
   | 'TEACHER'
+  | 'STAFF'
   | 'PARENT'
   | 'STUDENT'
   | 'PLATFORM_ADMIN';
@@ -41,6 +42,8 @@ export function roleRequirementForPath(pathname: string, method = 'GET'): RoleRe
     return ACCOUNTING_ROLES;
   }
   if (isWithin(pathname, '/teacher') || isWithin(pathname, '/api/teacher')) return ['TEACHER'];
+  if (isWithin(pathname, '/api/staff/attendance')) return ['STAFF'];
+  if (isWithin(pathname, '/staff') || isWithin(pathname, '/api/staff')) return ['STAFF'];
   if (isWithin(pathname, '/parent') || isWithin(pathname, '/api/parent')) return ['PARENT'];
 
   if (isWithin(pathname, '/api/admin')) {
@@ -66,6 +69,7 @@ export function portalForRole(role?: string | null): string {
     case 'SCHOOL_ADMIN': return '/admin';
     case 'BURSAR': return '/accounting';
     case 'TEACHER': return '/teacher';
+    case 'STAFF': return '/staff';
     case 'PARENT': return '/parent';
     case 'PLATFORM_ADMIN': return '/schoolbase-admin';
     default: return '/login';

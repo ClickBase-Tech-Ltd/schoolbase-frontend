@@ -101,6 +101,9 @@ export function LoginForm({ redirectTo, teacherLoginRequested = false }: { redir
       } else if (sessionRole === "BURSAR") {
         redirectUrl = "/accounting";
         console.log('Bursar login detected, redirecting to /accounting');
+      } else if (sessionRole === "STAFF") {
+        redirectUrl = "/staff";
+        console.log('Staff login detected, redirecting to /staff');
       }
 
       console.log('Performing full page redirect to:', redirectUrl);
