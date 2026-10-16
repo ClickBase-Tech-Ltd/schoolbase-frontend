@@ -71,11 +71,16 @@ export async function getStaffSession(): Promise<StaffSession | null> {
   if (!token) return null;
 
   const backendSession = await getBackendSession(token);
-  if (backendSession) return backendSession;
+  if (backendSession) {
+    return ['SCHOOL_ADMIN', 'BURSAR', 'TEACHER', 'PLATFORM_ADMIN'].includes(backendSession.role)
+      ? backendSession
+      : null;
+  }
 
   try {
     const { payload } = await jwtVerify(token, secret());
-    return payload as unknown as StaffSession;
+    const session = payload as unknown as StaffSession;
+    return ['SCHOOL_ADMIN', 'BURSAR', 'TEACHER', 'PLATFORM_ADMIN'].includes(session.role) ? session : null;
   } catch {
     return null;
   }
@@ -112,11 +117,11 @@ export async function getParentSession(): Promise<ParentSession | null> {
   if (!token) return null;
 
   const backendSession = await getBackendSession(token);
-  if (backendSession) return backendSession as unknown as ParentSession;
+  if (backendSession) return backendSession.role === 'PARENT' ? backendSession as unknown as ParentSession : null;
 
   try {
     const { payload } = await jwtVerify(token, secret());
-    return payload as unknown as ParentSession;
+    return payload.role === 'PARENT' ? payload as unknown as ParentSession : null;
   } catch {
     return null;
   }

@@ -1,9 +1,11 @@
-import { jwtVerify, SignJWT } from "jose";
+import { SignJWT } from "jose";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { loginForPath, roleCanAccess, roleRequirementForPath } from "@/lib/role-access";
 
 // Unified session cookie for all user types (staff, teachers, parents, admins)
 const SESSION_COOKIE = "schoolbase_session";
+const SESSION_COOKIE_NAMES = [SESSION_COOKIE, "schoolbase_staff", "staff_session"] as const;
 
 function secret() {
   const key = process.env.SESSION_SECRET?.trim();
@@ -27,13 +29,13 @@ function getAuthBackendUrl() {
     .replace(/\/api$/, "");
 }
 
-async function readValidToken(cookie?: string) {
-  if (!cookie) return null;
+async function readValidToken(cookieName: string, cookieValue?: string) {
+  if (!cookieValue) return null;
 
   try {
     const response = await fetch(`${getAuthBackendUrl()}/api/auth/verify`, {
       method: "GET",
-      headers: { Cookie: `${SESSION_COOKIE}=${cookie}` },
+      headers: { Cookie: `${cookieName}=${cookieValue}` },
       cache: "no-store",
     });
 
@@ -50,55 +52,35 @@ async function readValidToken(cookie?: string) {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const isApiRequest = pathname.startsWith('/api/') || pathname.startsWith('/schoolbase-admin/api/');
+  const requirement = roleRequirementForPath(pathname, request.method);
+  const cookie = SESSION_COOKIE_NAMES
+    .map((name) => ({ name, value: request.cookies.get(name)?.value }))
+    .find((candidate) => candidate.value);
+  const session = cookie ? await readValidToken(cookie.name, cookie.value) : null;
+  const role = typeof session?.role === 'string' ? session.role : null;
+  const impersonationEntry = pathname === '/admin'
+    && request.nextUrl.searchParams.has('impersonate')
+    && role === 'PLATFORM_ADMIN';
 
-  // Check for unified session cookie
-  const sessionCookie = request.cookies.get(SESSION_COOKIE)?.value;
-  const tokenPayload = sessionCookie ? await readValidToken(sessionCookie) : null;
-  const isValidToken = Boolean(tokenPayload);
+  if (requirement !== null && !session) {
+    if (isApiRequest) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  // Protect platform admin routes
-  if (pathname.startsWith("/schoolbase-admin")) {
-    if (!isValidToken) {
-      const response = NextResponse.redirect(new URL("/login", request.url));
-      response.cookies.delete(SESSION_COOKIE);
-      return response;
-    }
+    const login = new URL(loginForPath(pathname), request.url);
+    login.searchParams.set('next', pathname);
+    const response = NextResponse.redirect(login);
+    for (const cookieName of SESSION_COOKIE_NAMES) response.cookies.delete(cookieName);
+    return response;
   }
 
-  // Protect school admin routes
-  if (pathname.startsWith("/admin")) {
-    if (!isValidToken) {
-      const login = new URL("/login", request.url);
-      login.searchParams.set("next", pathname);
-      const response = NextResponse.redirect(login);
-      response.cookies.delete(SESSION_COOKIE);
-      return response;
-    }
+  if (requirement !== null && !roleCanAccess(requirement, role) && !impersonationEntry) {
+    if (isApiRequest) return NextResponse.json({ error: 'Forbidden: role is not authorized for this resource' }, { status: 403 });
 
-    if (tokenPayload?.role === "PLATFORM_ADMIN") {
-      return NextResponse.redirect(new URL("/schoolbase-admin", request.url));
-    }
-  }
-
-  if (pathname.startsWith("/teacher")) {
-    if (!isValidToken) {
-      const login = new URL("/login", request.url);
-      login.searchParams.set("next", pathname);
-      const response = NextResponse.redirect(login);
-      // Clear the invalid cookie
-      response.cookies.delete(SESSION_COOKIE);
-      return response;
-    }
-  }
-
-  if (
-    pathname.startsWith("/parent") &&
-    !pathname.startsWith("/parent/login")
-  ) {
-    const parentToken = request.cookies.get(SESSION_COOKIE)?.value;
-    if (!parentToken || !(await readValidToken(parentToken))) {
-      return NextResponse.redirect(new URL("/parent/login", request.url));
-    }
+    const login = new URL(loginForPath(pathname), request.url);
+    login.searchParams.set('next', pathname);
+    const response = NextResponse.redirect(login);
+    for (const cookieName of SESSION_COOKIE_NAMES) response.cookies.delete(cookieName);
+    return response;
   }
 
   // Multi-tenant: detect subdomain and set a `schoolSlug` cookie for server-side resolution.
@@ -131,7 +113,7 @@ export async function middleware(request: NextRequest) {
         }
       }
     }
-  } catch (e) {
+  } catch {
     // best-effort; don't block requests
   }
 
@@ -139,5 +121,16 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/teacher/:path*", "/parent/:path*"],
+  matcher: [
+    "/admin/:path*",
+    "/accounting/:path*",
+    "/schoolbase-admin/:path*",
+    "/teacher/:path*",
+    "/parent/:path*",
+    "/api/admin/:path*",
+    "/api/bursar/:path*",
+    "/api/teacher/:path*",
+    "/api/parent/:path*",
+    "/schoolbase-admin/api/:path*",
+  ],
 };
