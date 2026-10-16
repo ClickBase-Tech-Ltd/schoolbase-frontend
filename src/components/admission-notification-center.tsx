@@ -128,7 +128,7 @@ export default function AdmissionNotificationCenter() {
     <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
       {unreadCount} unread admissions notification{unreadCount === 1 ? "" : "s"}
     </span>
-    <div className="fixed right-4 top-4 z-[65] sm:right-6 sm:top-5">
+    <div className="fixed right-4 top-4 z-[65] sm:right-6 sm:top-5 print:hidden">
       <button type="button" onClick={() => { setOpen((current) => !current); setNewAlert(null); }} aria-label={`Admissions notifications${unreadCount ? `, ${unreadCount} unread` : ""}`} aria-expanded={open} className="relative grid h-11 w-11 place-items-center rounded-full border border-border bg-surface text-brand shadow-md transition hover:border-brand hover:bg-brand-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand motion-reduce:transition-none">
         <BellRing className="h-5 w-5" />
         {unreadCount > 0 ? <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-surface bg-rose-600 px-1 text-[10px] font-bold leading-none text-white">{unreadCount > 99 ? "99+" : unreadCount}</span> : null}
@@ -140,6 +140,6 @@ export default function AdmissionNotificationCenter() {
         </div>
       </section> : null}
     </div>
-    {newAlert ? <div role="status" aria-live="polite" className="fixed right-4 top-[4.5rem] z-[64] w-[min(25rem,calc(100vw-2rem))] border border-brand/30 bg-surface p-4 shadow-2xl sm:right-6 sm:top-[4.75rem]"><div className="flex items-start gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center bg-brand text-white"><BellRing className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="text-sm font-semibold text-foreground">{newAlert.title}</p><p className="mt-1 text-xs leading-5 text-muted">{newAlert.body}</p><button type="button" onClick={() => void openApplication(newAlert)} className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-brand hover:text-brand-hover">Review application <ExternalLink className="h-3.5 w-3.5" /></button></div><button type="button" onClick={() => setNewAlert(null)} aria-label="Dismiss new admission alert" className="text-muted hover:text-foreground"><X className="h-4 w-4" /></button></div></div> : null}
+    {newAlert ? <div role="status" aria-live="polite" className="fixed right-4 top-[4.5rem] z-[64] w-[min(25rem,calc(100vw-2rem))] border border-brand/30 bg-surface p-4 shadow-2xl sm:right-6 sm:top-[4.75rem] print:hidden"><div className="flex items-start gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center bg-brand text-white"><BellRing className="h-4 w-4" /></span><div className="min-w-0 flex-1"><p className="text-sm font-semibold text-foreground">{newAlert.title}</p><p className="mt-1 text-xs leading-5 text-muted">{newAlert.body}</p><button type="button" onClick={() => void openApplication(newAlert)} className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-brand hover:text-brand-hover">Review application <ExternalLink className="h-3.5 w-3.5" /></button></div><button type="button" onClick={() => setNewAlert(null)} aria-label="Dismiss new admission alert" className="text-muted hover:text-foreground"><X className="h-4 w-4" /></button></div></div> : null}
   </>;
 }

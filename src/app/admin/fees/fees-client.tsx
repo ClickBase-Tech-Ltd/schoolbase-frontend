@@ -612,6 +612,9 @@ export default function FeesPageClient({
                     type="number"
                     name="amount"
                     value={paymentAmount}
+                    min="0.01"
+                    max={((selectedInvoice.amountDue - selectedInvoice.amountPaid) / 100).toFixed(2)}
+                    step="0.01"
                     onChange={(e) => {
                       const value = e.target.value;
                       setPaymentAmount(value);
@@ -619,12 +622,11 @@ export default function FeesPageClient({
                         setPaymentAllocations(distributePaymentAcrossItems(selectedInvoice.items, Math.round(Number(value || 0) * 100)));
                       }
                     }}
-                    step="0.01"
                     required
-                    readOnly={(selectedInvoice.items?.length || 0) > 0}
                     disabled={isSubmittingPayment}
                     className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder-muted focus:outline-none focus:ring-2 focus:ring-brand disabled:cursor-not-allowed disabled:opacity-50"
                   />
+                  <p className="mt-1 text-xs text-muted">Enter the amount received; fee-item allocations adjust automatically.</p>
                 </div>
 
                 <div>

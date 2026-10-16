@@ -32,6 +32,7 @@ interface UserSession {
 interface AccountingOverview {
   currency?: string;
   cashPosition?: number;
+  netMovement?: number;
   monthlyIncome?: number;
   monthlyExpenses?: number;
   transactionTotal?: number;
@@ -42,6 +43,23 @@ interface AccountingOverview {
     description?: string | null;
     transactionDate: string;
   }>;
+}
+
+interface TrialBalanceRow {
+  accountId: string;
+  code: string;
+  name: string;
+  type: string;
+  debitTotal: number;
+  creditTotal: number;
+  balanceMinor: number;
+}
+
+interface TrialBalanceSummary {
+  accounts?: TrialBalanceRow[];
+  totalDebit?: number;
+  totalCredit?: number;
+  isBalanced?: boolean;
 }
 
 interface Category {
@@ -68,6 +86,7 @@ function formatDate(value?: string) {
 export default function SettingsPage() {
   const [session, setSession] = useState<UserSession | null>(null);
   const [overview, setOverview] = useState<AccountingOverview | null>(null);
+  const [trialBalance, setTrialBalance] = useState<TrialBalanceSummary | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -80,10 +99,11 @@ export default function SettingsPage() {
   async function loadSettings() {
     setError(null);
     try {
-      const [sessionResponse, overviewResponse, categoriesResponse] = await Promise.all([
+      const [sessionResponse, overviewResponse, categoriesResponse, trialBalanceResponse] = await Promise.all([
         fetch('/api/auth/verify', { credentials: 'include', cache: 'no-store' }),
         fetch('/api/bursar/overview?limit=5', { credentials: 'include', cache: 'no-store' }),
         fetch('/api/bursar/categories', { credentials: 'include', cache: 'no-store' }),
+        fetch('/api/bursar/trial-balance', { credentials: 'include', cache: 'no-store' }),
       ]);
 
       const sessionData = await sessionResponse.json().catch(() => ({}));
@@ -98,6 +118,10 @@ export default function SettingsPage() {
         const nextCategories = Array.isArray(categoriesData.categories) ? categoriesData.categories : Array.isArray(categoriesData) ? categoriesData : [];
         setCategories(nextCategories);
       }
+
+      const trialBalanceData = await trialBalanceResponse.json().catch(() => ({}));
+      if (trialBalanceResponse.ok) setTrialBalance(trialBalanceData);
+
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Unable to load accounting settings.');
     } finally {
@@ -105,10 +129,6 @@ export default function SettingsPage() {
       setRefreshing(false);
     }
   }
-
-  useEffect(() => {
-    loadSettings();
-  }, []);
 
   async function handleChangePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -150,6 +170,7 @@ export default function SettingsPage() {
   if (loading) return <div className="min-h-screen bg-background"><AdminSkeleton /></div>;
 
   const currency = overview?.currency || 'NGN';
+  const netMovement = overview?.netMovement ?? overview?.cashPosition ?? 0;
   const incomeCategories = categories.filter((category) => category.type === 'INCOME');
   const expenseCategories = categories.filter((category) => category.type !== 'INCOME');
   const latestActivity = overview?.recentTransactions?.[0];
@@ -181,7 +202,7 @@ export default function SettingsPage() {
 
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { label: 'Cash position', value: formatMoney(overview?.cashPosition || 0, currency), icon: Wallet, tone: 'text-brand', detail: 'Current accounting balance' },
+            { label: 'Net movement', value: formatMoney(netMovement, currency), icon: Wallet, tone: 'text-brand', detail: 'Selected-period movement; not yet a reconciled bank balance' },
             { label: 'Period income', value: formatMoney(overview?.monthlyIncome || 0, currency), icon: ArrowUpRight, tone: 'text-emerald-700', detail: 'Income in current range' },
             { label: 'Period expenses', value: formatMoney(overview?.monthlyExpenses || 0, currency), icon: ArrowDownRight, tone: 'text-rose-700', detail: 'Expenses in current range' },
             { label: 'Categories', value: String(categories.length), icon: CircleDollarSign, tone: 'text-sky-700', detail: `${incomeCategories.length} income · ${expenseCategories.length} expense` },
@@ -210,9 +231,23 @@ export default function SettingsPage() {
 
         <section className="border border-border bg-surface p-5 sm:p-6"><div className="mb-5 flex items-center gap-3 border-b border-border pb-4"><CircleDollarSign className="h-5 w-5 text-brand" /><div><p className="text-[11px] font-bold uppercase tracking-[.14em] text-muted">Financial defaults</p><h2 className="mt-1 text-lg font-semibold text-foreground">Accounting configuration</h2></div></div><div className="grid gap-4 md:grid-cols-3"><div className="border border-border bg-background p-4"><p className="text-sm text-muted">Reporting currency</p><p className="mt-2 text-xl font-semibold text-foreground">{currency}</p><p className="mt-1 text-xs text-muted">Used for accounting summaries and reports.</p></div><div className="border border-border bg-background p-4"><p className="text-sm text-muted">Transaction records</p><p className="mt-2 text-xl font-semibold text-foreground">{overview?.transactionTotal || 0}</p><p className="mt-1 text-xs text-muted">Records available to this workspace.</p></div><div className="border border-border bg-background p-4"><p className="text-sm text-muted">Latest activity</p><p className="mt-2 text-base font-semibold text-foreground">{latestActivity ? formatDate(latestActivity.transactionDate) : 'No activity yet'}</p><p className="mt-1 truncate text-xs text-muted">{latestActivity?.description || 'Post an income or expense to begin.'}</p></div></div></section>
 
+        <section className="border border-border bg-surface p-5 sm:p-6">
+          <div className="mb-5 flex items-center gap-3 border-b border-border pb-4"><BarChart3 className="h-5 w-5 text-brand" /><div><p className="text-[11px] font-bold uppercase tracking-[.14em] text-muted">Accounting controls</p><h2 className="mt-1 text-lg font-semibold text-foreground">Ledger health and bank reconciliation</h2></div></div>
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+            <div className="border border-border bg-background p-4 sm:min-w-64">
+              <p className="text-sm text-muted">Trial balance</p>
+              <p className="mt-2 text-xl font-semibold text-foreground">{trialBalance?.isBalanced ? 'Balanced' : 'Needs review'}</p>
+              <p className="mt-1 text-xs text-muted">{trialBalance?.isBalanced ? 'Posted debits equal posted credits.' : 'Review journal postings before period close.'}</p>
+            </div>
+            <Link href="/accounting/reconciliation" className="inline-flex items-center justify-center gap-2 border border-brand bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:opacity-90">
+              Open bank reconciliation <ChevronRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </section>
+
         <section className="border border-border bg-surface p-5 sm:p-6"><div className="mb-5 flex items-center gap-3 border-b border-border pb-4"><CircleDollarSign className="h-5 w-5 text-brand" /><div><p className="text-[11px] font-bold uppercase tracking-[.14em] text-muted">Category visibility</p><h2 className="mt-1 text-lg font-semibold text-foreground">Available accounting categories</h2></div></div>{categories.length === 0 ? <p className="border border-dashed border-border bg-background p-6 text-sm text-muted">No categories are available yet. Use the income or expense workspace to add the first category.</p> : <div className="grid gap-4 md:grid-cols-2"><div><p className="mb-2 text-xs font-bold uppercase tracking-[.12em] text-muted">Income ({incomeCategories.length})</p><div className="flex flex-wrap gap-2">{incomeCategories.map((category) => <span key={category.id} className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">{category.name}</span>)}</div></div><div><p className="mb-2 text-xs font-bold uppercase tracking-[.12em] text-muted">Expenses ({expenseCategories.length})</p><div className="flex flex-wrap gap-2">{expenseCategories.map((category) => <span key={category.id} className="rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground">{category.name}</span>)}</div></div></div>}</section>
 
-        <section className="border border-border bg-surface p-5 sm:p-6"><div className="mb-5 flex items-center gap-3 border-b border-border pb-4"><KeyRound className="h-5 w-5 text-brand" /><div><p className="text-[11px] font-bold uppercase tracking-[.14em] text-muted">Session security</p><h2 className="mt-1 text-lg font-semibold text-foreground">Protect this account</h2></div></div><div className="grid gap-6 lg:grid-cols-[.8fr_1.2fr]"><div><p className="text-sm leading-6 text-muted">Change your password regularly and keep access limited to trusted bursar staff. Your current password is never stored in this page state after a successful change.</p>{passwordSuccess && <div className="mt-4 flex items-center gap-2 border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"><CheckCircle2 className="h-4 w-4" />Password changed successfully.</div>}</div><form onSubmit={handleChangePassword} className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3"><label className="text-sm font-medium text-foreground">Current password<input type="password" required autoComplete="current-password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm({ ...passwordForm, currentPassword: event.target.value })} className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10" /></label><label className="text-sm font-medium text-foreground">New password<input type="password" required autoComplete="new-password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm({ ...passwordForm, newPassword: event.target.value })} className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10" /><span className="mt-1 block text-xs font-normal text-muted">At least 8 characters.</span></label><label className="text-sm font-medium text-foreground">Confirm password<input type="password" required autoComplete="new-password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm({ ...passwordForm, confirmPassword: event.target.value })} className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10" /></label><div className="sm:col-span-3 xl:col-span-1"><button type="submit" disabled={changingPassword} className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:opacity-60"><KeyRound className="h-4 w-4" />{changingPassword ? 'Updating...' : 'Update password'}</button></div></form></div>{passwordError && <div className="mt-4 flex items-start gap-2 border border-red-200 bg-red-50 p-3 text-sm text-red-800"><AlertCircle className="mt-0.5 h-4 w-4" />{passwordError}</div>}</section>
+        <section className="border border-border bg-surface p-5 sm:p-6"><div className="mb-5 flex items-center gap-3 border-b border-border pb-4"><KeyRound className="h-5 w-5 text-brand" /><div><p className="text-[11px] font-bold uppercase tracking-[.14em] text-muted">Session security</p><h2 className="mt-1 text-lg font-semibold text-foreground">Protect this account</h2></div></div><div className="grid gap-6 lg:grid-cols-[.8fr_1.2fr]"><div><p className="text-sm leading-6 text-muted">Change your password regularly and keep access limited to trusted bursar staff. Your current password is never stored in this page state after a successful change.</p>{passwordSuccess && <div className="mt-4 flex items-center gap-2 border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800"><CheckCircle2 className="h-4 w-4" />Password changed successfully.</div>}</div><form onSubmit={handleChangePassword} className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3"><label className="text-sm font-medium text-foreground">Current password<input type="password" required autoComplete="current-password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm({ ...passwordForm, currentPassword: event.target.value })} className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10" /></label><label className="text-sm font-medium text-foreground">New password<input type="password" required autoComplete="new-password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm({ ...passwordForm, newPassword: event.target.value })} className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10" /><span className="mt-1 block text-xs font-normal text-muted">At least 8 characters.</span></label><label className="text-sm font-medium text-foreground">Confirm password<input type="password" required autoComplete="new-password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm({ ...passwordForm, confirmPassword: event.target.value })} className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10" /></label>{passwordError && <div className="sm:col-span-3 lg:col-span-1 xl:col-span-3 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{passwordError}</div>}<div className="sm:col-span-3 lg:col-span-1 xl:col-span-3 flex justify-end"><button type="submit" disabled={changingPassword} className="inline-flex items-center justify-center rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">{changingPassword ? 'Updating...' : 'Change password'}</button></div></form></div>{passwordError && <div className="mt-4 flex items-start gap-2 border border-red-200 bg-red-50 p-3 text-sm text-red-800"><AlertCircle className="mt-0.5 h-4 w-4" />{passwordError}</div>}</section>
       </div>
     </main>
   );

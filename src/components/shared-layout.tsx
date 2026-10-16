@@ -58,7 +58,8 @@ export default function SharedLayout({
   const [isVolumePopoverOpen, setIsVolumePopoverOpen] = useState(false);
   const [isAudioPlayerOpen, setIsAudioPlayerOpen] = useState(false);
   const [isAudioBuffering, setIsAudioBuffering] = useState(false);
-  const [themeMode, setThemeMode] = useState<ThemeMode>(() => resolveStoredTheme());
+  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
+  const [themeHydrated, setThemeHydrated] = useState(false);
   const [isToolsOpen, setIsToolsOpen] = useState(false);
   const [toolPanelPosition, setToolPanelPosition] = useState({ x: 680, y: 120 });
   const [audioPanelPosition, setAudioPanelPosition] = useState({ x: 24, y: 200 });
@@ -112,18 +113,24 @@ export default function SharedLayout({
   });
 
   useEffect(() => {
-    applyTheme(themeMode === "system" ? detectSystemTheme() : themeMode);
-  }, [themeMode]);
+    setThemeMode(resolveStoredTheme());
+    setThemeHydrated(true);
+  }, []);
 
   useEffect(() => {
-    if (themeMode !== "system") return;
+    if (!themeHydrated) return;
+    applyTheme(themeMode === "system" ? detectSystemTheme() : themeMode);
+  }, [themeMode, themeHydrated]);
+
+  useEffect(() => {
+    if (!themeHydrated || themeMode !== "system") return;
 
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const handleSystemChange = () => applyTheme("system");
 
     media.addEventListener("change", handleSystemChange);
     return () => media.removeEventListener("change", handleSystemChange);
-  }, [themeMode]);
+  }, [themeMode, themeHydrated]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;

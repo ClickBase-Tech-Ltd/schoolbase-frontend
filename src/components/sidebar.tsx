@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { createElement, type ComponentType } from "react";
+import { createElement, type ComponentType, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AppLogo } from "@/components/app-logo";
@@ -128,7 +128,9 @@ export default function Sidebar({
   onClose?: () => void;
 }) {
   const pathname = usePathname();
-  const schoolLogo = school?.logoUrl ? resolveSchoolAssetUrl(school.logoUrl) : null;
+  const [failedSchoolLogo, setFailedSchoolLogo] = useState<string | null>(null);
+  const resolvedSchoolLogo = school?.logoUrl ? resolveSchoolAssetUrl(school.logoUrl) : null;
+  const schoolLogo = resolvedSchoolLogo && resolvedSchoolLogo !== failedSchoolLogo ? resolvedSchoolLogo : null;
   const schoolName = school?.name || "SchoolBase";
   const portalName = logoHref.startsWith("/parent")
     ? "Parent portal"
@@ -174,7 +176,7 @@ export default function Sidebar({
         <Link href={logoHref} className="group flex items-center gap-3 px-1 py-1 transition-colors">
           {schoolLogo ? (
             <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-white shadow-sm">
-              <Image src={schoolLogo} alt={schoolName} width={40} height={40} className="h-full w-full object-contain p-1" unoptimized />
+              <Image src={schoolLogo} alt={schoolName} width={40} height={40} className="h-full w-full object-contain p-1" unoptimized onError={() => setFailedSchoolLogo(schoolLogo)} />
             </div>
           ) : (
             <AppLogo size="md" showText={false} href={null} />

@@ -1,13 +1,11 @@
 import { getStaffSession } from "@/lib/auth";
-import { getBackendUrl } from "@/lib/backend-url";
+import { buildApiUrl } from "@/lib/api-client";
 import { cookies } from "next/headers";
 
 // Fetch school data from the backend API instead of direct database access
 async function fetchSchoolFromAPI(schoolId: string) {
-  const baseUrl = getBackendUrl();
-
   try {
-    const url = `${baseUrl.replace(/\/$/, "")}/api/admin/school/${schoolId}`;
+    const url = buildApiUrl(`/admin/school/${encodeURIComponent(schoolId)}`);
     const cookieStore = await cookies();
     const sessionCookie =
       cookieStore.get("schoolbase_session")?.value ||
@@ -33,7 +31,7 @@ async function fetchSchoolFromAPI(schoolId: string) {
 
     return await response.json();
   } catch (error) {
-    console.error(`Error fetching school ${schoolId} from ${baseUrl}:`, error);
+    console.error(`Error fetching school ${schoolId}:`, error);
     return null;
   }
 }

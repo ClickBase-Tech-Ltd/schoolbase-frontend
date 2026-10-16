@@ -52,6 +52,12 @@ export default async function AccountingLayout({
       section: "Accounting",
     },
     {
+      label: "Bank Reconciliation",
+      href: "/accounting/reconciliation",
+      icon: "Activity",
+      section: "Accounting",
+    },
+    {
       label: "Reports",
       href: "/accounting/reports",
       icon: "FileText",

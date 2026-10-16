@@ -19,7 +19,8 @@ interface OverviewTransaction {
 
 interface OverviewData {
   currency: string;
-  cashPosition: number;
+  cashPosition?: number;
+  netMovement?: number;
   feeIncome: number;
   otherIncome: number;
   monthlyIncome: number;
@@ -116,8 +117,9 @@ export default function AccountingDashboard() {
   }
 
   const currency = overview?.currency || 'NGN';
+  const netMovement = overview?.netMovement ?? overview?.cashPosition ?? 0;
   const metrics = [
-    { label: 'Cash position', value: overview?.cashPosition || 0, icon: Wallet, tone: 'text-brand', background: 'bg-brand-light' },
+    { label: 'Net movement', value: netMovement, icon: Wallet, tone: 'text-brand', background: 'bg-brand-light' },
     { label: 'Fee income', value: overview?.feeIncome || 0, icon: ArrowUpRight, tone: 'text-emerald-700', background: 'bg-emerald-50' },
     { label: 'Other income', value: overview?.otherIncome || 0, icon: ArrowUpRight, tone: 'text-sky-700', background: 'bg-sky-50' },
     { label: 'Expenses', value: overview?.monthlyExpenses || 0, icon: ArrowDownRight, tone: 'text-rose-700', background: 'bg-rose-50' },
@@ -175,7 +177,7 @@ export default function AccountingDashboard() {
                   <span className="text-[10px] font-bold uppercase tracking-[.12em] text-muted">{metric.label}</span>
                 </div>
                 <div className={`text-3xl font-semibold ${metric.tone}`}>{formatMoney(metric.value, currency)}</div>
-                <div className="mt-1 text-xs text-muted">Posted activity in selected period</div>
+                <div className="mt-1 text-xs text-muted">{metric.label === 'Net movement' ? 'Selected-period movement; not a reconciled bank balance' : 'Posted activity in selected period'}</div>
               </article>
             );
           })}

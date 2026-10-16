@@ -8,6 +8,8 @@ import {
   BookOpen,
   RotateCcw,
   X,
+  Download,
+  Search,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { playCloseTone, playOpenTone } from '@/lib/sounds';
@@ -19,7 +21,7 @@ interface Transaction {
   amount: number;
   description?: string;
   transactionDate: string;
-  status: 'DRAFT' | 'POSTED' | 'REVERSED';
+  status: 'DRAFT' | 'POSTED' | 'REVERSED' | 'VOIDED';
   category: {
     name: string;
   };
@@ -27,6 +29,9 @@ interface Transaction {
     name: string;
   };
   referenceNumber?: string;
+  categoryId?: string;
+  postedBy?: string | null;
+  postedByUser?: { name: string } | null;
 }
 
 interface CashbookData {
@@ -34,6 +39,10 @@ interface CashbookData {
   total: number;
   skip: number;
   take: number;
+  filterOptions?: {
+    categories: Array<{ id: string; name: string }>;
+    users: Array<{ id: string; name: string; role: string }>;
+  };
 }
 
 export default function CashbookPage() {
@@ -42,6 +51,17 @@ export default function CashbookPage() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'POSTED' | 'ALL' | 'DRAFT' | 'REVERSED' | 'VOIDED'>('POSTED');
+  const [search, setSearch] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [minAmount, setMinAmount] = useState('');
+  const [maxAmount, setMaxAmount] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [creatorId, setCreatorId] = useState('');
+  const [approverId, setApproverId] = useState('');
+  const [exporting, setExporting] = useState(false);
   const [skip, setSkip] = useState(0);
   const [take, setTake] = useState(50);
   const [reversingId, setReversingId] = useState<string | null>(null);
@@ -51,14 +71,20 @@ export default function CashbookPage() {
   async function loadData() {
     try {
       setError(null);
-      const typeParam = typeFilter !== 'ALL' ? `&type=${typeFilter}` : '';
-      const response = await fetch(
-        `/api/bursar/cashbook?skip=${skip}&take=${take}${typeParam}`,
-        { credentials: 'include' }
-      );
+      const params = new URLSearchParams({ skip: String(skip), take: String(take), type: typeFilter, status: statusFilter });
+      if (appliedSearch) params.set('search', appliedSearch);
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
+      if (minAmount) params.set('minAmount', minAmount);
+      if (maxAmount) params.set('maxAmount', maxAmount);
+      if (categoryId) params.set('categoryId', categoryId);
+      if (creatorId) params.set('creatorId', creatorId);
+      if (approverId) params.set('approverId', approverId);
+      const response = await fetch(`/api/bursar/cashbook?${params.toString()}`, { credentials: 'include', cache: 'no-store' });
 
       if (!response.ok) {
-        throw new Error('Failed to load cashbook');
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || 'Failed to load cashbook');
       }
 
       const result = await response.json();
@@ -74,7 +100,7 @@ export default function CashbookPage() {
 
   useEffect(() => {
     loadData();
-  }, [skip, take, typeFilter]);
+  }, [skip, take, typeFilter, statusFilter, appliedSearch, startDate, endDate, minAmount, maxAmount, categoryId, creatorId, approverId]);
 
   useEffect(() => {
     if (!reverseTarget) return;
@@ -149,6 +175,53 @@ export default function CashbookPage() {
     }
   }
 
+  async function exportCashbook() {
+    setExporting(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({ type: typeFilter, status: statusFilter });
+      if (appliedSearch) params.set('search', appliedSearch);
+      if (startDate) params.set('startDate', startDate);
+      if (endDate) params.set('endDate', endDate);
+      if (minAmount) params.set('minAmount', minAmount);
+      if (maxAmount) params.set('maxAmount', maxAmount);
+      if (categoryId) params.set('categoryId', categoryId);
+      if (creatorId) params.set('creatorId', creatorId);
+      if (approverId) params.set('approverId', approverId);
+      const response = await fetch(`/api/bursar/cashbook/export?${params.toString()}`, { credentials: 'include', cache: 'no-store' });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || 'Unable to export cashbook');
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const download = document.createElement('a');
+      download.href = url;
+      download.download = `cashbook-${new Date().toISOString().slice(0, 10)}.csv`;
+      download.click();
+      URL.revokeObjectURL(url);
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : 'Unable to export cashbook');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function resetFilters() {
+    setTypeFilter('ALL');
+    setStatusFilter('POSTED');
+    setSearch('');
+    setAppliedSearch('');
+    setStartDate('');
+    setEndDate('');
+    setMinAmount('');
+    setMaxAmount('');
+    setCategoryId('');
+    setCreatorId('');
+    setApproverId('');
+    setSkip(0);
+  }
+
   const totalPages = data ? Math.ceil(data.total / take) : 0;
   const currentPage = data ? Math.floor(data.skip / take) + 1 : 1;
 
@@ -193,40 +266,35 @@ export default function CashbookPage() {
       )}
 
       <section className="border border-border bg-surface p-4 sm:p-5">
-      <div className="flex flex-wrap items-end gap-4">
-        <div>
-          <label className="mb-2 block text-sm font-medium text-foreground">Type</label>
-          <select
-            value={typeFilter}
-            onChange={(e) => {
-              setTypeFilter(e.target.value as 'ALL' | 'INCOME' | 'EXPENSE');
-              setSkip(0);
-            }}
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
-          >
-            <option value="ALL">All Transactions</option>
-            <option value="INCOME">Income Only</option>
-            <option value="EXPENSE">Expenses Only</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="mb-2 block text-sm font-medium text-foreground">Per Page</label>
-          <select
-            value={take}
-            onChange={(e) => {
-              setTake(parseInt(e.target.value));
-              setSkip(0);
-            }}
-            className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-        </div>
-      </div>
+        <form onSubmit={(event) => { event.preventDefault(); setAppliedSearch(search.trim()); setSkip(0); }} className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <label className="text-sm font-medium text-foreground sm:col-span-2 xl:col-span-3">Search
+            <span className="mt-1.5 flex border border-border bg-background focus-within:border-brand"><input value={search} onChange={(event) => setSearch(event.target.value)} maxLength={100} placeholder="Description, reference, category, ID, staff" className="min-w-0 flex-1 bg-transparent px-3 py-2.5 text-sm outline-none" /><button type="submit" aria-label="Search cashbook" className="px-3 text-brand"><Search className="h-4 w-4" /></button></span>
+          </label>
+          <label className="text-sm font-medium text-foreground">Type
+            <select value={typeFilter} onChange={(event) => { setTypeFilter(event.target.value as 'ALL' | 'INCOME' | 'EXPENSE'); setSkip(0); }} className="mt-1.5 w-full border border-border bg-background px-3 py-2.5 text-sm"><option value="ALL">All types</option><option value="INCOME">Income</option><option value="EXPENSE">Expense</option></select>
+          </label>
+          <label className="text-sm font-medium text-foreground">Status
+            <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter); setSkip(0); }} className="mt-1.5 w-full border border-border bg-background px-3 py-2.5 text-sm"><option value="POSTED">Posted</option><option value="DRAFT">Draft</option><option value="REVERSED">Reversed</option><option value="VOIDED">Voided</option><option value="ALL">All statuses</option></select>
+          </label>
+          <label className="text-sm font-medium text-foreground">Category
+            <select value={categoryId} onChange={(event) => { setCategoryId(event.target.value); setSkip(0); }} className="mt-1.5 w-full border border-border bg-background px-3 py-2.5 text-sm"><option value="">All categories</option>{data?.filterOptions?.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select>
+          </label>
+          <label className="text-sm font-medium text-foreground">Recorded by
+            <select value={creatorId} onChange={(event) => { setCreatorId(event.target.value); setSkip(0); }} className="mt-1.5 w-full border border-border bg-background px-3 py-2.5 text-sm"><option value="">Anyone</option>{data?.filterOptions?.users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select>
+          </label>
+          <label className="text-sm font-medium text-foreground">Approved by
+            <select value={approverId} onChange={(event) => { setApproverId(event.target.value); setSkip(0); }} className="mt-1.5 w-full border border-border bg-background px-3 py-2.5 text-sm"><option value="">Anyone</option>{data?.filterOptions?.users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}</select>
+          </label>
+          <label className="text-sm font-medium text-foreground">From date<input type="date" value={startDate} onChange={(event) => { setStartDate(event.target.value); setSkip(0); }} className="mt-1.5 w-full border border-border bg-background px-3 py-2.5 text-sm" /></label>
+          <label className="text-sm font-medium text-foreground">To date<input type="date" value={endDate} onChange={(event) => { setEndDate(event.target.value); setSkip(0); }} className="mt-1.5 w-full border border-border bg-background px-3 py-2.5 text-sm" /></label>
+          <label className="text-sm font-medium text-foreground">Minimum amount<input type="number" min="0" step="0.01" value={minAmount} onChange={(event) => { setMinAmount(event.target.value); setSkip(0); }} className="mt-1.5 w-full border border-border bg-background px-3 py-2.5 text-sm" /></label>
+          <label className="text-sm font-medium text-foreground">Maximum amount<input type="number" min="0" step="0.01" value={maxAmount} onChange={(event) => { setMaxAmount(event.target.value); setSkip(0); }} className="mt-1.5 w-full border border-border bg-background px-3 py-2.5 text-sm" /></label>
+          <div className="flex flex-wrap items-end gap-2 sm:col-span-2 xl:col-span-4">
+            <label className="text-sm font-medium text-foreground">Rows per page<select value={take} onChange={(event) => { setTake(Number(event.target.value)); setSkip(0); }} className="mt-1.5 block border border-border bg-background px-3 py-2.5 text-sm"><option value={10}>10</option><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label>
+            <button type="button" onClick={resetFilters} className="border border-border px-3 py-2.5 text-sm font-medium text-muted hover:text-foreground">Reset filters</button>
+            <button type="button" onClick={exportCashbook} disabled={exporting} className="ml-auto inline-flex items-center gap-2 bg-brand px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"><Download className="h-4 w-4" />{exporting ? 'Preparing CSV...' : 'Export CSV'}</button>
+          </div>
+        </form>
       </section>
 
       <section className="border border-border bg-surface">

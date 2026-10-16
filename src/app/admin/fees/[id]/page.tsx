@@ -20,6 +20,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [invoiceId, setInvoiceId] = useState<string>("");
   const [invoice, setInvoice] = useState<any>(null);
   const [school, setSchool] = useState<any>(null);
+  const [failedSchoolLogo, setFailedSchoolLogo] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [adjustmentModalOpen, setAdjustmentModalOpen] = useState(false);
@@ -381,6 +382,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const termName = invoice.feeSchedule?.term?.name || "Unknown Term";
   const academicYear = invoice.feeSchedule?.term?.academicYear?.name || "";
   const currency = school?.currency || "NGN";
+  const schoolLogoUrl = typeof school?.logoUrl === "string" ? school.logoUrl : null;
   const invoiceDate = new Date(invoice.createdAt);
   const dueDate = invoice.dueDate ? new Date(invoice.dueDate) : null;
   const lineItems = invoice.items && invoice.items.length > 0 ? invoice.items : [{
@@ -448,8 +450,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           <div className="invoice-header flex flex-col gap-7 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <div className="flex items-center gap-3">
-                {school?.logoUrl ? (
-                  <img src={school.logoUrl} alt="School logo" className="h-12 w-12 rounded-md border border-border object-cover" />
+                {schoolLogoUrl && schoolLogoUrl !== failedSchoolLogo ? (
+                  <img src={schoolLogoUrl} alt="School logo" onError={() => setFailedSchoolLogo(schoolLogoUrl)} className="h-12 w-12 rounded-md border border-border object-cover" />
                 ) : (
                   <div className="flex h-12 w-12 items-center justify-center rounded-md bg-brand/10 text-lg font-semibold text-brand">
                     {school?.name?.charAt(0) || "S"}

@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildApiUrl } from '@/lib/api-client';
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> } | { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    // Handle both async and sync params (Next.js version compatibility)
-    const resolvedParams = await Promise.resolve(params);
-    const { id } = resolvedParams as { id: string };
+    const { id } = await params;
     
     const backendUrl = buildApiUrl(`/admin/students/${id}`);
 
@@ -30,11 +28,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> } | { params: { id: string } }) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    // Handle both async and sync params (Next.js version compatibility)
-    const resolvedParams = await Promise.resolve(params);
-    const { id } = resolvedParams as { id: string };
+    const { id } = await params;
     
     const backendUrl = buildApiUrl(`/admin/students/${id}`);
     const isJsonRequest = request.headers.get('content-type')?.includes('application/json') ?? false;
