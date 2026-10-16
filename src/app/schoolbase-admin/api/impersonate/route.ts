@@ -59,8 +59,28 @@ export async function POST(req: NextRequest) {
       || typeof exchange.token !== "string"
       || exchange.schoolId !== requestedSchoolId) {
       return NextResponse.json(
-        { message: "Unable to establish the impersonated school session." },
+        {
+          message: exchange.message || exchange.error || "Impersonation session exchange failed.",
+          stage: "session-exchange",
+        },
         { status: exchangeResponse.ok ? 502 : exchangeResponse.status },
+      );
+    }
+
+    const verificationResponse = await fetch(`${backendUrl}/api/auth/verify`, {
+      method: "GET",
+      headers: { Cookie: `${SESSION_COOKIE_NAME}=${exchange.token}` },
+      cache: "no-store",
+    });
+    const verification = await verificationResponse.json().catch(() => ({}));
+    const verifiedSession = verification.session || verification.user;
+    if (!verificationResponse.ok
+      || verification.authenticated !== true
+      || verifiedSession?.role !== "SCHOOL_ADMIN"
+      || verifiedSession?.schoolId !== requestedSchoolId) {
+      return NextResponse.json(
+        { message: "The backend rejected the impersonated school session.", stage: "session-verification" },
+        { status: 502 },
       );
     }
 
@@ -81,6 +101,9 @@ export async function POST(req: NextRequest) {
     return response;
   } catch (error) {
     console.error("Error impersonating school:", error);
-    return NextResponse.json({ message: "Impersonation failed" }, { status: 500 });
+    return NextResponse.json({
+      message: "Impersonation failed before the school session was established.",
+      stage: "proxy",
+    }, { status: 500 });
   }
 }
