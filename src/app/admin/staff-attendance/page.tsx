@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft, CalendarClock, ClipboardCheck, History, Loader2, Save, Users } from 'lucide-react';
 import { getBackendUrl } from '@/lib/backend-url';
 import { Button } from '@/components/ui/button';
+import { ErrorModal } from '@/components/ui/error-modal';
 
 interface EmployeeSummary {
   id: string;
@@ -56,6 +57,7 @@ interface AttendanceEvent {
 }
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
+type Feedback = { type: 'success' | 'error'; title: string; message: string };
 
 export default function StaffAttendancePage() {
   const [date, setDate] = useState('');
@@ -78,8 +80,7 @@ export default function StaffAttendancePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingPolicy, setSavingPolicy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [historyRecordId, setHistoryRecordId] = useState<string | null>(null);
   const [historyEvents, setHistoryEvents] = useState<AttendanceEvent[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -105,7 +106,6 @@ export default function StaffAttendancePage() {
   async function loadData() {
     try {
       setLoading(true);
-      setError(null);
       const backendUrl = getBackendUrl();
 
       const dateQuery = date ? `?date=${encodeURIComponent(date)}` : '';
@@ -141,7 +141,11 @@ export default function StaffAttendancePage() {
         setSelectedEmployeeId(loadedEmployees[0].id);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load staff attendance data');
+      setFeedback({
+        type: 'error',
+        title: 'Unable to load staff attendance',
+        message: err instanceof Error ? err.message : 'Failed to load staff attendance data',
+      });
     } finally {
       setLoading(false);
     }
@@ -150,14 +154,13 @@ export default function StaffAttendancePage() {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedEmployeeId) {
-      setError('Select a staff member before saving.');
+      setFeedback({ type: 'error', title: 'Staff member required', message: 'Select a staff member before saving.' });
       return;
     }
 
     try {
       setSaving(true);
-      setError(null);
-      setNotice(null);
+      setFeedback(null);
       const backendUrl = getBackendUrl();
       const idempotencyKey = crypto.randomUUID();
       const response = await fetch(`${backendUrl}/api/admin/staff-attendance`, {
@@ -184,10 +187,18 @@ export default function StaffAttendancePage() {
       setCheckOutTime('');
       setAttendanceAction('CHECK_IN');
       setReason('');
-      setNotice('Attendance saved and recorded in the audit history.');
       await loadData();
+      setFeedback({
+        type: 'success',
+        title: 'Attendance saved',
+        message: 'Attendance saved and recorded in the audit history.',
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save staff attendance record.');
+      setFeedback({
+        type: 'error',
+        title: 'Unable to save attendance',
+        message: err instanceof Error ? err.message : 'Failed to save staff attendance record.',
+      });
     } finally {
       setSaving(false);
     }
@@ -197,8 +208,7 @@ export default function StaffAttendancePage() {
     event.preventDefault();
     try {
       setSavingPolicy(true);
-      setError(null);
-      setNotice(null);
+      setFeedback(null);
       const response = await fetch(`${getBackendUrl()}/api/admin/staff-attendance/policy`, {
         method: 'PUT',
         credentials: 'include',
@@ -216,11 +226,18 @@ export default function StaffAttendancePage() {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.error || 'Unable to save attendance policy.');
       setPolicy(data.policy);
-      setNotice('Attendance policy saved with the selected effective date.');
       await loadData();
-      setNotice('Attendance policy saved with the selected effective date.');
+      setFeedback({
+        type: 'success',
+        title: 'Attendance policy saved',
+        message: 'Attendance policy saved with the selected effective date.',
+      });
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Unable to save attendance policy.');
+      setFeedback({
+        type: 'error',
+        title: 'Unable to save attendance policy',
+        message: saveError instanceof Error ? saveError.message : 'Unable to save attendance policy.',
+      });
     } finally {
       setSavingPolicy(false);
     }
@@ -239,13 +256,17 @@ export default function StaffAttendancePage() {
     try {
       setHistoryRecordId(recordId);
       setLoadingHistory(true);
-      setError(null);
+      setFeedback(null);
       const response = await fetch(`${getBackendUrl()}/api/admin/staff-attendance/${encodeURIComponent(recordId)}/events`, { credentials: 'include', cache: 'no-store' });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.error || 'Unable to load attendance history.');
       setHistoryEvents(data.events ?? []);
     } catch (historyError) {
-      setError(historyError instanceof Error ? historyError.message : 'Unable to load attendance history.');
+      setFeedback({
+        type: 'error',
+        title: 'Unable to load attendance history',
+        message: historyError instanceof Error ? historyError.message : 'Unable to load attendance history.',
+      });
       setHistoryRecordId(null);
     } finally {
       setLoadingHistory(false);
@@ -295,9 +316,6 @@ export default function StaffAttendancePage() {
             </label>
           </div>
         </header>
-
-        {error ? <div role="alert" className="border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">{error}</div> : null}
-        {notice ? <div role="status" className="border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{notice}</div> : null}
 
         <details className="border border-border bg-surface">
           <summary className="cursor-pointer border-b border-border px-4 py-3 text-sm font-semibold text-foreground sm:px-6">Attendance policy</summary>
@@ -392,6 +410,14 @@ export default function StaffAttendancePage() {
           </section>
         </section>
       </div>
+      <ErrorModal
+        isOpen={feedback !== null}
+        onClose={() => setFeedback(null)}
+        type={feedback?.type ?? 'error'}
+        title={feedback?.title}
+        message={feedback?.message ?? ''}
+        confirmLabel="Okay"
+      />
     </main>
   );
 }

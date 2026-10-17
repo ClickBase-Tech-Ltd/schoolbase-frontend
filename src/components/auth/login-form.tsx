@@ -14,7 +14,7 @@ type LoginResponse = {
   role?: string | null;
 };
 
-export function LoginForm({ redirectTo, teacherLoginRequested = false }: { redirectTo: string; teacherLoginRequested?: boolean }) {
+export function LoginForm({ redirectTo, teacherLoginRequested = false, attendanceLoginRequested = false }: { redirectTo: string; teacherLoginRequested?: boolean; attendanceLoginRequested?: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -89,6 +89,13 @@ export function LoginForm({ redirectTo, teacherLoginRequested = false }: { redir
         return;
       }
 
+      if (attendanceLoginRequested && sessionRole !== "STAFF") {
+        setError("Staff attendance scanning requires an active STAFF account provided by your school administrator.");
+        setNotice(null);
+        setPending(false);
+        return;
+      }
+
       if (sessionRole === "TEACHER") {
         redirectUrl = "/teacher";
         console.log('Teacher login detected, redirecting to /teacher');
@@ -102,8 +109,8 @@ export function LoginForm({ redirectTo, teacherLoginRequested = false }: { redir
         redirectUrl = "/accounting";
         console.log('Bursar login detected, redirecting to /accounting');
       } else if (sessionRole === "STAFF") {
-        redirectUrl = "/staff";
-        console.log('Staff login detected, redirecting to /staff');
+        redirectUrl = attendanceLoginRequested ? "/staff/attendance" : "/staff";
+        console.log(`Staff login detected, redirecting to ${redirectUrl}`);
       }
 
       console.log('Performing full page redirect to:', redirectUrl);

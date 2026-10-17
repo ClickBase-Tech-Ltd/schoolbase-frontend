@@ -110,7 +110,6 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
       const response = await fetch(`${getBackendUrl()}/api/admin/staff/${encodeURIComponent(employeeId)}`, {
         method: 'PATCH',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
         body: (() => {
           const formData = new FormData();
           for (const [key, value] of Object.entries({ firstName, middleName, lastName, phone, jobTitle, department, classification, employmentType, startDate, emergencyContactName, emergencyContactPhone, reason })) formData.append(key, value);

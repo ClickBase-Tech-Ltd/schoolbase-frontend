@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
     }
     response.cookies.set(SESSION_COOKIE_NAME, exchange.token, {
       ...cookieOptions,
-      maxAge: 7 * 24 * 60 * 60,
+      maxAge: 60 * 60,
     });
 
     return response;
