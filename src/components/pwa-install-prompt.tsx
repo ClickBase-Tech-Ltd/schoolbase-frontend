@@ -110,7 +110,7 @@ export default function PwaInstallPrompt() {
   if (!mounted || installed) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-[60] print:hidden">
+    <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] right-4 z-[60] print:hidden">
       {showInstallHelp && (
         <section
           id="schoolbase-install-help"
@@ -141,7 +141,7 @@ export default function PwaInstallPrompt() {
         aria-expanded={showInstallHelp}
         aria-controls={showInstallHelp ? "schoolbase-install-help" : undefined}
         title="Install SchoolBase"
-        className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-brand bg-brand text-white shadow-md transition hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+        className="inline-flex h-12 w-12 items-center justify-center rounded-xl border border-brand bg-brand text-white shadow-md transition hover:bg-brand-hover hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
       >
         <Download className="h-5 w-5" aria-hidden="true" />
       </button>
