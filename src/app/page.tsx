@@ -18,7 +18,7 @@ import { CountrySelectModal } from "@/components/country-select-modal";
 import countriesJson from "../../config/countries.json";
 import { getCountryFromHeaders } from "@/lib/country";
 import { getParentSession, getStaffSession } from "@/lib/auth";
-import { getBackendUrl } from "@/lib/backend-url";
+import { getPublicPricing } from "@/lib/public-pricing";
 
 const features = [
   {
@@ -75,16 +75,6 @@ async function getCountryConfig() {
   return { country: countryKey, config };
 }
 
-async function getPublicPricing() {
-  try {
-    const response = await fetch(`${getBackendUrl()}/api/pricing`, { cache: "no-store" });
-    if (!response.ok) return null;
-    return await response.json();
-  } catch {
-    return null;
-  }
-}
-
 export default async function HomePage() {
   const staffSession = await getStaffSession();
   if (staffSession) {
@@ -106,15 +96,12 @@ export default async function HomePage() {
   }
   const [{ country, config }, pricingData] = await Promise.all([getCountryConfig(), getPublicPricing()]);
   const configuredPlans = pricingData?.plans;
-  const starterPlan = configuredPlans?.starter || config.plans.starter;
-  const standardPlan = configuredPlans?.standard || config.plans.standard;
-  const groupPlan = configuredPlans?.group || config.plans.group;
-  const plans = [
-    { name: starterPlan.label || "Starter", pupils: starterPlan.studentLimit ? `Up to ${starterPlan.studentLimit.toLocaleString()} pupils` : "Unlimited pupils", price: starterPlan.priceLabel },
-    { name: standardPlan.label || "Standard", pupils: standardPlan.studentLimit ? `Up to ${standardPlan.studentLimit.toLocaleString()} pupils` : "Unlimited pupils", price: standardPlan.priceLabel },
-    { name: groupPlan.label || "Group", pupils: groupPlan.studentLimit ? `Up to ${groupPlan.studentLimit.toLocaleString()} pupils` : "Multiple campuses", price: groupPlan.priceLabel },
-  ];
-  const starterPriceLabel = starterPlan.priceLabel;
+  const plans = configuredPlans ? [
+    { id: "starter", name: configuredPlans.starter.label || "Starter", pupils: configuredPlans.starter.studentLimit ? `Up to ${configuredPlans.starter.studentLimit.toLocaleString()} pupils` : "Unlimited pupils", price: configuredPlans.starter.priceLabel },
+    { id: "standard", name: configuredPlans.standard.label || "Growth", pupils: configuredPlans.standard.studentLimit ? `Up to ${configuredPlans.standard.studentLimit.toLocaleString()} pupils` : "Unlimited pupils", price: configuredPlans.standard.priceLabel },
+    { id: "group", name: configuredPlans.group.label || "Enterprise", pupils: configuredPlans.group.studentLimit ? `Up to ${configuredPlans.group.studentLimit.toLocaleString()} pupils` : "Multiple campuses", price: configuredPlans.group.priceLabel },
+  ] : [];
+  const starterPriceLabel = configuredPlans?.starter.priceLabel ?? "Current price unavailable";
   const countryLabel = config.name || country;
 
   return (
@@ -174,12 +161,12 @@ export default async function HomePage() {
             One plan. Everything included.
           </h2>
           <p className="mt-3 max-w-3xl text-muted">SchoolBase plans are shown for {countryLabel}. Choose the operating level that fits your school and keep the core workflows together.</p>
-          <div className="mt-12 grid gap-6 md:grid-cols-3">
+          {plans.length ? <div className="mt-12 grid gap-6 md:grid-cols-3">
             {plans.map((plan) => (
               <div
-                key={plan.name}
+                key={plan.id}
                 className={`rounded-xl border p-8 ${
-                  plan.name === "Standard"
+                  plan.id === "standard"
                     ? "border-brand bg-brand-light shadow-md"
                     : "border-border bg-background"
                 }`}
@@ -195,15 +182,15 @@ export default async function HomePage() {
                   <li>✓ Parent app</li>
                 </ul>
                 <Button
-                  href={plan.name === "Standard" ? "#buy" : `/purchase?plan=${plan.name.toLowerCase()}`}
-                  variant={plan.name === "Standard" ? "primary" : "secondary"}
+                  href={`/purchase?plan=${plan.id}`}
+                  variant={plan.id === "standard" ? "primary" : "secondary"}
                   className="mt-8 w-full"
                 >
-                  {plan.name === "Standard" ? "Buy now" : "Choose plan"}
+                  {plan.id === "standard" ? "Buy now" : "Choose plan"}
                 </Button>
               </div>
             ))}
-          </div>
+          </div> : <p role="status" className="mt-8 border-y border-border py-5 text-sm text-muted">Current plan prices are temporarily unavailable. Please try again shortly.</p>}
           <p className="mt-8 text-center text-sm text-muted">Administrator onboarding included · clear plan limits · one connected school platform</p>
           <div className="mt-6 border-l-2 border-brand bg-brand-light px-4 py-3 text-center text-sm text-foreground sm:text-left">
             Need to train your whole team? <Link href="/staff-training" className="font-semibold text-brand hover:text-brand-hover">Explore optional school-wide staff training</Link>.

@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { ArrowRight, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
+import { parsePublicPricing, type PublicPlan, type PublicPricing } from "@/lib/public-pricing";
 import { PaystackPurchaseButton } from "@/components/paystack-purchase-button";
 
 interface PurchaseFormProps {
@@ -9,55 +11,47 @@ interface PurchaseFormProps {
   success?: boolean;
 }
 
-const defaultPlans = [
-  {
-    id: "starter",
-    name: "Starter",
-    description: "For smaller schools that want a dependable digital foundation",
-    amountMinor: 6000000,
-    priceLabel: "₦60,000 / term",
-  },
-  {
-    id: "standard",
-    name: "Standard",
-    description: "For growing schools that need automation, parent engagement, and results control",
-    amountMinor: 8500000,
-    priceLabel: "₦85,000 / term",
-  },
-  {
-    id: "group",
-    name: "Group",
-    description: "Multiple campuses",
-    amountMinor: 0,
-    priceLabel: "Custom from ₦150,000 / term",
-    disabled: true,
-  },
-];
+const planDescriptions: Record<string, string> = {
+  starter: "Core school operations for up to 150 pupils.",
+  standard: "More room for a growing school, up to 600 pupils.",
+  group: "A tailored arrangement for larger or multi-campus schools.",
+};
+
+type PurchasePlan = PublicPlan & { id: "starter" | "standard" | "group"; description: string; disabled: boolean };
+
+function toPurchasePlans(pricing: PublicPricing | null): PurchasePlan[] {
+  if (!pricing) return [];
+  return (["starter", "standard", "group"] as const).map((id) => ({
+    ...pricing.plans[id],
+    id,
+    description: planDescriptions[id],
+    disabled: id === "group" || pricing.plans[id].amountMinor <= 0,
+  }));
+}
 
 export function PurchaseForm({ initialPlan = "starter", success = false }: PurchaseFormProps) {
-  const [plans, setPlans] = useState(defaultPlans);
+  const [plans, setPlans] = useState<PurchasePlan[]>([]);
   const [currency, setCurrency] = useState("NGN");
+  const [pricingLoading, setPricingLoading] = useState(true);
+  const [pricingError, setPricingError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
-    fetch("/api/country/config")
-      .then((r) => r.json())
-      .then((data) => {
+    fetch("/api/pricing", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((payload) => {
         if (!mounted) return;
-        const countryData = data?.data;
-        if (!countryData?.plans) return;
-        if (countryData.currency) setCurrency(countryData.currency);
-        setPlans((prev) =>
-          prev.map((p) => ({
-            ...p,
-            amountMinor: countryData.plans[p.id]?.amountMinor ?? p.amountMinor,
-            priceLabel: countryData.plans[p.id]?.priceLabel ?? p.priceLabel,
-          })),
-        );
+        const pricing = parsePublicPricing(payload);
+        if (!pricing) {
+          setPricingError("We couldn't load current plan prices. Please retry before continuing to checkout.");
+          return;
+        }
+        setCurrency(pricing.currency);
+        setPlans(toPurchasePlans(pricing));
       })
-      .catch(() => {})
+      .catch(() => setPricingError("We couldn't load current plan prices. Please retry before continuing to checkout."))
       .finally(() => {
-        /* noop */
+        if (mounted) setPricingLoading(false);
       });
     return () => {
       mounted = false;
@@ -69,233 +63,71 @@ export function PurchaseForm({ initialPlan = "starter", success = false }: Purch
   const [contactName, setContactName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
-  const [selectedPlan, setSelectedPlan] = useState(
-    plans.find((plan) => plan.id === initialPlan) ?? plans[0],
-  );
+  const [selectedPlanId, setSelectedPlanId] = useState(initialPlan);
 
-  // keep selectedPlan in sync when plans update
-  useEffect(() => {
-    setSelectedPlan((prev) => plans.find((p) => p.id === prev.id) ?? plans[0]);
-  }, [plans]);
+  const selectedPlan = plans.find((plan) => plan.id === selectedPlanId) ?? plans[0];
 
   const canPay = useMemo(
     () =>
-      !!schoolName && !!contactName && !!email && !!selectedPlan && !selectedPlan.disabled,
+      !!schoolName && !!contactName && !!email && !!selectedPlan && !selectedPlan.disabled && !pricingLoading && !pricingError,
     [contactName, email, schoolName, selectedPlan],
   );
-
-  const [trialLoading, setTrialLoading] = useState(false);
-  const [trialStarted, setTrialStarted] = useState(false);
-  const [trialError, setTrialError] = useState<string | null>(null);
 
   const bankAccountName = process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME;
   const bankAccountNumber = process.env.NEXT_PUBLIC_BANK_ACCOUNT_NUMBER;
   const bankName = process.env.NEXT_PUBLIC_BANK_NAME;
 
   if (success) {
-    return (
-      <div className="rounded-3xl border border-green-200 bg-green-50 p-8 text-sm text-green-900">
-        <p className="text-lg font-semibold">Thanks! Your payment is confirmed.</p>
-        <p className="mt-3">
-          Your SchoolBase subscription purchase is complete. A member of our team will contact you for onboarding and next steps.
-        </p>
-      </div>
-    );
+    return <section className="border border-emerald-200 bg-white p-6 sm:p-9"><div className="flex items-start gap-4"><CheckCircle2 className="mt-1 h-6 w-6 shrink-0 text-emerald-700"/><div><p className="text-xl font-semibold text-foreground">Payment confirmed</p><p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Your SchoolBase subscription purchase is complete. Our team will contact you about onboarding and next steps.</p></div></div></section>;
   }
 
+  const fieldClass = "mt-1.5 h-11 w-full border border-border bg-white px-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/10";
+  const labelClass = "block text-sm font-medium text-foreground";
+
   return (
-    <div className="space-y-10">
-      <div className="rounded-none bg-background p-4 shadow-none sm:rounded-3xl sm:p-8 sm:shadow-sm">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-widest text-brand">
-            Secure your school subscription
-          </p>
-          <h1 className="mt-3 text-2xl font-bold text-foreground sm:text-3xl">
-            Start with the plan that fits your school.
-          </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
-            Choose a term plan, tell us who to contact, and pay ClickBase Technologies Ltd securely via Paystack.
-          </p>
-        </div>
+    <main className="learning-centre min-h-screen bg-background text-foreground">
+      <div className="mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6 sm:pt-12">
+        <header className="max-w-3xl border-b border-border pb-7">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-brand">SchoolBase subscription</p>
+          <h1 className="mt-3 text-3xl font-semibold leading-tight sm:text-4xl">Choose a plan for your school.</h1>
+          <p className="mt-3 text-sm leading-6 text-muted sm:text-base">Select a plan, enter the school contact details, and continue to secure checkout. Current prices are loaded from SchoolBase plan settings.</p>
+        </header>
 
-        <div className="mt-8 grid gap-3 lg:grid-cols-3">
-          {plans.map((plan) => (
-            <button
-              key={plan.id}
-              type="button"
-              onClick={() => setSelectedPlan(plan)}
-              disabled={plan.disabled}
-              className={`rounded-3xl px-5 py-4 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-brand/40 ${
-                selectedPlan.id === plan.id
-                  ? "bg-white shadow-sm"
-                  : "bg-surface/90 hover:bg-surface"
-              } ${plan.disabled ? "opacity-70 cursor-not-allowed" : ""}`}
-            >
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">{plan.name}</h2>
-                <p className="mt-1 text-sm text-muted">{plan.description}</p>
-              </div>
-              <div className="mt-4 rounded-full bg-background px-3 py-2 text-xs font-semibold text-muted">
-                {plan.priceLabel}
-              </div>
-            </button>
-          ))}
-        </div>
+        {pricingLoading ? <div className="flex items-center gap-3 border-b border-border py-8 text-sm text-muted"><Loader2 className="h-4 w-4 animate-spin"/>Loading current plans…</div> : null}
+        {pricingError ? <div role="alert" className="mt-6 flex flex-col gap-4 border border-amber-300 bg-[#fff9ed] p-4 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between"><p>{pricingError}</p><button type="button" onClick={() => window.location.reload()} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 border border-amber-400 bg-white px-3 font-semibold"><ArrowRight className="h-4 w-4"/>Retry</button></div> : null}
 
-        <div className="mt-8 grid gap-4 lg:grid-cols-2">
-          <label className="block text-sm font-medium">
-            School name
-            <input
-              value={schoolName}
-              onChange={(event) => setSchoolName(event.target.value)}
-              type="text"
-              placeholder="Greenfield School"
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm"
-            />
-          </label>
-            <label className="block text-sm font-medium">
-              School slug (for your dashboard URL)
-              <input
-                value={slug}
-                onChange={(event) => setSlug(event.target.value)}
-                placeholder="greenfield"
-                className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm"
-              />
-              <p className="text-xs text-muted mt-1">Lowercase letters, numbers and hyphens only.</p>
-            </label>
-          <label className="block text-sm font-medium">
-            Contact name
-            <input
-              value={contactName}
-              onChange={(event) => setContactName(event.target.value)}
-              type="text"
-              placeholder="Aisha Bello"
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm"
-            />
-          </label>
-          <label className="block text-sm font-medium">
-            Contact email
-            <input
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              type="email"
-              placeholder="admin@example.com"
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm"
-            />
-          </label>
-          <label className="block text-sm font-medium">
-            Contact phone
-            <input
-              value={phone}
-              onChange={(event) => setPhone(event.target.value)}
-              type="tel"
-              placeholder="+234 801 234 5678"
-              className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm"
-            />
-          </label>
-        </div>
+        {plans.length > 0 ? <>
+          <section className="mt-8" aria-labelledby="plans-heading">
+            <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-muted">Step 1</p><h2 id="plans-heading" className="mt-1 text-xl font-semibold">Select your plan</h2></div><p className="text-xs text-muted">Billed per term</p></div>
+            <div className="mt-4 divide-y divide-border border-y border-border bg-white">
+              {plans.map((plan) => <button key={plan.id} type="button" onClick={() => setSelectedPlanId(plan.id)} disabled={plan.disabled} aria-pressed={selectedPlan?.id === plan.id} className={`grid w-full gap-3 px-4 py-4 text-left transition sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center sm:px-5 ${selectedPlan?.id === plan.id ? "bg-[#f6faff]" : "hover:bg-background"} disabled:cursor-not-allowed disabled:opacity-70`}>
+                <span className="flex min-w-0 items-start gap-3"><span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center border ${selectedPlan?.id === plan.id ? "border-brand bg-brand text-white" : "border-border bg-white"}`}>{selectedPlan?.id === plan.id ? <CheckCircle2 className="h-4 w-4"/> : null}</span><span><span className="block font-semibold">{plan.label}</span><span className="mt-1 block text-sm leading-5 text-muted">{plan.description}{plan.studentLimit ? ` Up to ${plan.studentLimit.toLocaleString()} pupils.` : ""}</span></span></span>
+                <span className="pl-8 text-sm font-bold text-brand sm:pl-0">{plan.priceLabel}</span>
+                {plan.disabled ? <span className="pl-8 text-xs font-semibold text-muted sm:pl-0">Contact us</span> : <span className="hidden text-xs text-muted sm:block">{selectedPlan?.id === plan.id ? "Selected" : "Select"}</span>}
+              </button>)}
+            </div>
+          </section>
 
-        <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-foreground">Payment details</p>
-            <p className="mt-1 text-sm text-muted">
-              {selectedPlan.name} plan · {selectedPlan.priceLabel}
-            </p>
-          </div>
+          <section className="mt-10 border-t border-border pt-7" aria-labelledby="contact-heading">
+            <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-muted">Step 2</p><h2 id="contact-heading" className="mt-1 text-xl font-semibold">School and contact details</h2><p className="mt-2 text-sm text-muted">We use these details to set up your school subscription.</p></div>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <label className={labelClass}>School name<input required value={schoolName} onChange={(event) => setSchoolName(event.target.value)} type="text" autoComplete="organization" placeholder="Greenfield School" className={fieldClass}/></label>
+              <label className={labelClass}>School URL name <span className="font-normal text-muted">Optional</span><input value={slug} onChange={(event) => setSlug(event.target.value)} placeholder="greenfield" className={fieldClass}/><span className="mt-1 block text-xs font-normal text-muted">Lowercase letters, numbers, and hyphens.</span></label>
+              <label className={labelClass}>Contact name<input required value={contactName} onChange={(event) => setContactName(event.target.value)} type="text" autoComplete="name" placeholder="Aisha Bello" className={fieldClass}/></label>
+              <label className={labelClass}>Contact email<input required value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="admin@example.com" className={fieldClass}/></label>
+              <label className={labelClass}>Contact phone<input value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" autoComplete="tel" placeholder="+234 801 234 5678" className={fieldClass}/></label>
+            </div>
+          </section>
 
-          <div className="flex items-center gap-3">
-            {selectedPlan.disabled ? (
-              <Button href="mailto:hello@schoolbase.com" variant="secondary">
-                Contact sales
-              </Button>
-            ) : (
-              <PaystackPurchaseButton
-                amountMinor={selectedPlan.amountMinor}
-                currency={currency}
-                email={email}
-                name={contactName}
-                plan={selectedPlan.name}
-                schoolName={schoolName}
-                // include slug for provisioning on payment verification
-                // if empty, the server will derive one from the school name
-                slug={slug}
-                phone={phone}
-                disabled={!canPay}
-                isSubscription={true}
-              />
-            )}
+          <section className="mt-10 border-y border-border py-6" aria-labelledby="payment-heading">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-muted">Step 3</p><h2 id="payment-heading" className="mt-1 text-xl font-semibold">Review and continue</h2><p className="mt-2 text-sm text-muted">{selectedPlan ? `${selectedPlan.label} · ${selectedPlan.priceLabel}` : "Select a paid plan to continue."}</p></div><div className="flex flex-wrap items-center gap-3">{selectedPlan?.disabled ? <a href="mailto:sales@schoolbase.live" className="inline-flex min-h-11 items-center gap-2 border border-border bg-white px-4 text-sm font-semibold">Contact sales <ArrowRight className="h-4 w-4"/></a> : selectedPlan ? <PaystackPurchaseButton amountMinor={selectedPlan.amountMinor} currency={currency} email={email} name={contactName} plan={selectedPlan.id === "standard" ? "GROWTH" : "STARTER"} schoolName={schoolName} slug={slug} phone={phone} disabled={!canPay} isSubscription={true}/> : null}
+              {selectedPlan?.id === "starter" && !selectedPlan.disabled ? <Link href="/signup" className="inline-flex min-h-11 items-center gap-2 border border-border bg-white px-4 text-sm font-semibold text-foreground transition hover:border-brand hover:text-brand"><CheckCircle2 className="h-4 w-4"/>Start free trial</Link> : null}</div></div>
+            <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-muted"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand"/>Checkout is processed securely by Paystack. Your selected price and amount are validated against current SchoolBase plan settings.</p>
+          </section>
+        </> : null}
 
-            {/* Free trial CTA for Starter plan */}
-            {selectedPlan.id === "starter" && !selectedPlan.disabled ? (
-              <button
-                type="button"
-                disabled={trialLoading || trialStarted || !schoolName || !contactName || !email}
-                onClick={async () => {
-                  setTrialError(null);
-                  setTrialLoading(true);
-                  try {
-                    const res = await fetch("/api/trial/start", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        plan: selectedPlan.name,
-                        schoolName,
-                        name: contactName,
-                        email,
-                        phone,
-                        trialDays: 7,
-                      }),
-                    });
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data.error || "Could not start trial.");
-                    setTrialStarted(true);
-                  } catch (err) {
-                    setTrialError((err as Error).message || "Failed to start trial.");
-                  } finally {
-                    setTrialLoading(false);
-                  }
-                }}
-                className="ml-2 rounded-lg bg-white border border-border px-4 py-2 text-sm font-semibold text-foreground shadow-sm disabled:opacity-70"
-              >
-                {trialLoading ? "Starting…" : trialStarted ? "Trial started" : "Start free trial"}
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        <p className="mt-3 text-xs text-muted">
-          {trialStarted
-            ? "Your free trial has started. Check your email for confirmation."
-            : canPay
-            ? "Click the button to proceed with Paystack checkout."
-            : "Fill in all contact fields to enable payment."}
-        </p>
-
-        {trialError ? <p className="mt-2 text-xs text-error">{trialError}</p> : null}
+        {bankAccountNumber ? <section className="mt-8 border-t border-border pt-6"><h2 className="font-semibold">Bank transfer</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-muted">Use your school name as the payment description, then email the receipt to <a className="font-semibold text-brand" href="mailto:sales@schoolbase.live">sales@schoolbase.live</a> so we can confirm payment and continue onboarding.</p><div className="mt-4 grid gap-4 border-y border-border py-4 text-sm sm:grid-cols-3"><p><span className="block text-xs text-muted">Account name</span>{bankAccountName}</p><p><span className="block text-xs text-muted">Account number</span>{bankAccountNumber}</p><p><span className="block text-xs text-muted">Bank</span>{bankName}</p></div></section> : null}
       </div>
-
-      {bankAccountNumber ? (
-        <div className="rounded-none bg-background p-4 text-sm text-foreground shadow-none sm:rounded-3xl sm:p-6 sm:shadow-sm">
-          <p className="font-semibold">Prefer bank transfer?</p>
-          <p className="mt-2 text-sm leading-6 text-muted">
-            You can also complete payment by bank transfer. Please use your school name as the payment description, then email your payment receipt to <a className="text-brand" href="mailto:sales@schoolbase.live">sales@schoolbase.live</a> so we can confirm your payment and continue onboarding.
-          </p>
-          <div className="mt-4 grid gap-3 text-xs text-muted sm:grid-cols-3">
-            <div>
-              <div className="font-semibold text-foreground">Account name</div>
-              {bankAccountName}
-            </div>
-            <div>
-              <div className="font-semibold text-foreground">Account number</div>
-              {bankAccountNumber}
-            </div>
-            <div>
-              <div className="font-semibold text-foreground">Bank</div>
-              {bankName}
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
+    </main>
   );
 }

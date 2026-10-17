@@ -1,6 +1,7 @@
 import { Metadata } from 'next'
 import { ChevronDown } from 'lucide-react'
 import { ContentSection, PublicContentShell } from '@/components/public-content-shell'
+import { getPublicPricing } from '@/lib/public-pricing'
 
 export const metadata: Metadata = {
   title: 'FAQ | SchoolBase Frequently Asked Questions',
@@ -38,11 +39,11 @@ const faqs = [
     questions: [
       {
         q: 'How much does SchoolBase cost?',
-        a: 'Plans start from ₦60,000/term for schools up to 150 pupils. Growth is ₦85,000/term for schools up to 600 pupils. Larger and multi-campus schools can contact us for custom pricing from ₦150,000/term.',
+        a: 'Current plan prices and billing periods are shown on the SchoolBase homepage and subscription page. Pricing can vary by country and may change; confirm the amount shown before payment.',
       },
       {
         q: 'Is billing per term or annual?',
-        a: 'We charge per term (usually 3 months). You can also arrange annual billing for a discount.',
+        a: 'The published Nigeria plans are billed per school term. Contact our team to discuss billing arrangements for your school.',
       },
       {
         q: 'What payment methods do you accept?',
@@ -123,7 +124,15 @@ const faqs = [
   },
 ]
 
-export default function FAQPage() {
+export default async function FAQPage() {
+  const pricing = await getPublicPricing();
+  const priceAnswer = pricing
+    ? `Current ${pricing.currency} plans: ${pricing.plans.starter.label} ${pricing.plans.starter.priceLabel}, ${pricing.plans.standard.label} ${pricing.plans.standard.priceLabel}, and ${pricing.plans.group.label} ${pricing.plans.group.priceLabel}. Prices may change; confirm the amount shown at checkout before payment.`
+    : 'Current plan prices and billing periods are shown on the SchoolBase homepage and subscription page. Pricing can vary by country and may change; confirm the amount shown before payment.';
+  const visibleFaqs = faqs.map((category) => category.category === 'Pricing'
+    ? { ...category, questions: category.questions.map((item) => item.q === 'How much does SchoolBase cost?' ? { ...item, a: priceAnswer } : item) }
+    : category);
+
   return (
     <PublicContentShell
       eyebrow="SchoolBase help"
@@ -140,7 +149,7 @@ export default function FAQPage() {
           __html: JSON.stringify({
             '@context': 'https://schema.org',
             '@type': 'FAQPage',
-            mainEntity: faqs.flatMap((category) => category.questions).map((item) => ({
+            mainEntity: visibleFaqs.flatMap((category) => category.questions).map((item) => ({
               '@type': 'Question',
               name: item.q,
               acceptedAnswer: { '@type': 'Answer', text: item.a },
@@ -150,7 +159,7 @@ export default function FAQPage() {
       />
       <ContentSection title="Frequently asked questions" intro="Open a category to find the answer you need.">
         <div className="grid gap-10 lg:grid-cols-2">
-          {faqs.map((category) => (
+          {visibleFaqs.map((category) => (
             <section key={category.category}>
               <h2 className="text-xl font-semibold text-foreground">{category.category}</h2>
               <div className="mt-4 space-y-3">
