@@ -1,8 +1,7 @@
-import { Camera, CheckCircle2, LockKeyhole, ShieldCheck } from "lucide-react";
+import { CheckCircle2, LockKeyhole, ShieldCheck } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { LoginForm } from "@/components/auth/login-form";
 import { LoginPageAdSlot } from "@/components/login-page-ad-slot";
-import Link from "next/link";
 
 export const metadata = {
   title: "School Login | SchoolBase",
@@ -78,11 +77,6 @@ export default async function LoginPage({
               <p className="mt-2 text-sm text-muted">Sign in to manage your school.</p>
 
               <LoginForm redirectTo={teacherLoginRequested ? "/teacher" : "/admin"} teacherLoginRequested={teacherLoginRequested} attendanceLoginRequested={attendanceLoginRequested} />
-
-              <Link href="/login?next=%2Fstaff%2Fattendance" className="mt-5 flex items-center gap-3 border border-border bg-background px-4 py-3 text-sm text-foreground transition hover:border-brand hover:bg-brand-light/40">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center border border-brand/20 bg-brand/5 text-brand"><Camera className="h-4 w-4" /></span>
-                <span className="min-w-0 flex-1"><span className="block font-semibold">Staff attendance</span><span className="mt-0.5 block text-xs text-muted">Sign in with your staff account to scan the school QR code.</span></span>
-              </Link>
             </div>
           </div>
         </section>

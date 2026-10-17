@@ -72,7 +72,7 @@ export async function getStaffSession(): Promise<StaffSession | null> {
 
   const backendSession = await getBackendSession(token);
   if (backendSession) {
-    return ['SCHOOL_ADMIN', 'BURSAR', 'TEACHER', 'PLATFORM_ADMIN'].includes(backendSession.role)
+    return ['SCHOOL_ADMIN', 'BURSAR', 'TEACHER', 'STAFF', 'PLATFORM_ADMIN'].includes(backendSession.role)
       ? backendSession
       : null;
   }
@@ -80,7 +80,7 @@ export async function getStaffSession(): Promise<StaffSession | null> {
   try {
     const { payload } = await jwtVerify(token, secret());
     const session = payload as unknown as StaffSession;
-    return ['SCHOOL_ADMIN', 'BURSAR', 'TEACHER', 'PLATFORM_ADMIN'].includes(session.role) ? session : null;
+    return ['SCHOOL_ADMIN', 'BURSAR', 'TEACHER', 'STAFF', 'PLATFORM_ADMIN'].includes(session.role) ? session : null;
   } catch {
     return null;
   }

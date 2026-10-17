@@ -10,7 +10,6 @@ interface BeforeInstallPromptEvent extends Event {
 
 declare global {
   interface Window {
-    deferredInstallPrompt?: BeforeInstallPromptEvent;
     MSStream?: unknown;
   }
 }
@@ -23,11 +22,31 @@ function isInstalled() {
   );
 }
 
+function getInstallInstructions() {
+  const userAgent = navigator.userAgent;
+  const isIOS = /iPhone|iPad|iPod/i.test(userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  if (isIOS) {
+    return "In Safari, tap Share, then Add to Home Screen. Open SchoolBase from its new Home Screen icon to use it as an app.";
+  }
+  if (/Android/i.test(userAgent)) {
+    return "Open the browser menu and tap Install app or Add to Home screen. If it is missing, update Chrome and open this page directly in Chrome.";
+  }
+  if (/Chrome|Edg/i.test(userAgent)) {
+    return "Use the install icon in the address bar, or open the browser menu and choose Install SchoolBase.";
+  }
+  if (/Safari/i.test(userAgent)) {
+    return "Use Safari's Share menu and choose Add to Dock. For the full install prompt, open SchoolBase in Chrome or Edge.";
+  }
+  return "Open this page in Chrome or Edge, then use the browser menu to install SchoolBase as an app.";
+}
+
 export default function PwaInstallPrompt() {
   const [mounted, setMounted] = useState(false);
   const [installed, setInstalled] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [installUnavailable, setInstallUnavailable] = useState(false);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -38,19 +57,23 @@ export default function PwaInstallPrompt() {
 
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
-      const prompt = event as BeforeInstallPromptEvent;
-      window.deferredInstallPrompt = prompt;
-      setInstallPrompt(prompt);
+      setInstallPrompt(event as BeforeInstallPromptEvent);
     };
 
     const handleAppInstalled = () => {
-      window.deferredInstallPrompt = undefined;
       setInstallPrompt(null);
       setInstalled(true);
     };
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && isInstalled()) {
+        setInstalled(true);
+      }
+    };
+
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     window.addEventListener("appinstalled", handleAppInstalled);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => undefined);
@@ -59,19 +82,28 @@ export default function PwaInstallPrompt() {
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
       window.removeEventListener("appinstalled", handleAppInstalled);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
   const handleInstall = async () => {
     if (!installPrompt) {
-      setInstallUnavailable(true);
+      setShowInstallHelp((visible) => !visible);
       return;
     }
 
-    await installPrompt.prompt();
-    const choice = await installPrompt.userChoice;
-    if (choice.outcome === "accepted") {
-      setInstallPrompt(null);
+    const prompt = installPrompt;
+    setInstallPrompt(null);
+    setShowInstallHelp(false);
+
+    try {
+      await prompt.prompt();
+      const choice = await prompt.userChoice;
+      if (choice.outcome === "dismissed") {
+        setShowInstallHelp(true);
+      }
+    } catch {
+      setShowInstallHelp(true);
     }
   };
 
@@ -79,33 +111,40 @@ export default function PwaInstallPrompt() {
 
   return (
     <div className="fixed bottom-4 right-4 z-[60] print:hidden">
-      {installUnavailable && (
-        <p
-          className="absolute bottom-full right-0 mb-2 w-64 rounded-lg border border-border bg-white px-3 py-2 text-xs leading-5 text-muted shadow-md"
+      {showInstallHelp && (
+        <section
+          id="schoolbase-install-help"
+          aria-label="Install SchoolBase"
           role="status"
+          className="absolute bottom-full right-0 mb-3 w-[min(21rem,calc(100vw-2rem))] rounded-xl border border-border bg-white p-4 shadow-xl"
         >
-          Native installation is unavailable in this browser. Open SchoolBase in Chrome or Edge to install it from this button.
-        </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">Install SchoolBase</h2>
+              <p className="mt-1 text-sm leading-5 text-muted">{getInstallInstructions()}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowInstallHelp(false)}
+              aria-label="Close installation instructions"
+              className="rounded-md p-1 text-muted transition hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        </section>
       )}
-      <div className="flex items-center gap-1 rounded-lg border border-brand/20 bg-white/95 p-1 shadow-md backdrop-blur">
       <button
         type="button"
         onClick={handleInstall}
         aria-label="Install SchoolBase"
-        className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-brand-hover"
+        aria-expanded={showInstallHelp}
+        aria-controls={showInstallHelp ? "schoolbase-install-help" : undefined}
+        title="Install SchoolBase"
+        className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-brand bg-brand text-white shadow-md transition hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
       >
-        <Download className="h-3.5 w-3.5" aria-hidden="true" />
-        Install SchoolBase
+        <Download className="h-5 w-5" aria-hidden="true" />
       </button>
-      <button
-        type="button"
-        onClick={() => setInstallPrompt(null)}
-        aria-label="Dismiss install prompt"
-        className="rounded-md p-1.5 text-muted transition-colors hover:bg-brand-light hover:text-foreground"
-      >
-        <X className="h-3.5 w-3.5" aria-hidden="true" />
-      </button>
-      </div>
     </div>
   );
 }

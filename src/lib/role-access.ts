@@ -42,7 +42,7 @@ export function roleRequirementForPath(pathname: string, method = 'GET'): RoleRe
     return ACCOUNTING_ROLES;
   }
   if (isWithin(pathname, '/teacher') || isWithin(pathname, '/api/teacher')) return ['TEACHER'];
-  if (isWithin(pathname, '/api/staff/attendance')) return ['STAFF'];
+  if (isWithin(pathname, '/api/staff/attendance') || isWithin(pathname, '/staff/attendance')) return ['STAFF', 'TEACHER'];
   if (isWithin(pathname, '/staff') || isWithin(pathname, '/api/staff')) return ['STAFF'];
   if (isWithin(pathname, '/parent') || isWithin(pathname, '/api/parent')) return ['PARENT'];
 

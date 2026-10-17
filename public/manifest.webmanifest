@@ -1,9 +1,12 @@
 {
   "name": "SchoolBase",
   "short_name": "SchoolBase",
+  "id": "/",
   "description": "Everything your school needs in one simple platform",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#ffffff",
   "theme_color": "#0052cc",
   "icons": [

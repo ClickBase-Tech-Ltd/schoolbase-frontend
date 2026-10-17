@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Eye, EyeOff, Mail, Lock } from "lucide-react";
+import { Eye, EyeOff, Mail, Lock, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { playLoginSuccessTone } from "@/lib/sounds";
 
@@ -19,6 +19,7 @@ export function LoginForm({ redirectTo, teacherLoginRequested = false, attendanc
   const [notice, setNotice] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
+  const [attendanceMode, setAttendanceMode] = useState(attendanceLoginRequested);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -89,16 +90,16 @@ export function LoginForm({ redirectTo, teacherLoginRequested = false, attendanc
         return;
       }
 
-      if (attendanceLoginRequested && sessionRole !== "STAFF") {
-        setError("Staff attendance scanning requires an active STAFF account provided by your school administrator.");
+      if (attendanceMode && sessionRole !== "STAFF" && sessionRole !== "TEACHER") {
+        setError("Staff attendance scanning requires an active employee account provided by your school administrator.");
         setNotice(null);
         setPending(false);
         return;
       }
 
       if (sessionRole === "TEACHER") {
-        redirectUrl = "/teacher";
-        console.log('Teacher login detected, redirecting to /teacher');
+        redirectUrl = attendanceMode ? "/staff/attendance" : "/teacher";
+        console.log(`Teacher login detected, redirecting to ${redirectUrl}`);
       } else if (sessionRole === "PLATFORM_ADMIN") {
         redirectUrl = "/schoolbase-admin";
         console.log('Platform admin login detected, redirecting to /schoolbase-admin');
@@ -109,7 +110,7 @@ export function LoginForm({ redirectTo, teacherLoginRequested = false, attendanc
         redirectUrl = "/accounting";
         console.log('Bursar login detected, redirecting to /accounting');
       } else if (sessionRole === "STAFF") {
-        redirectUrl = attendanceLoginRequested ? "/staff/attendance" : "/staff";
+        redirectUrl = attendanceMode ? "/staff/attendance" : "/staff";
         console.log(`Staff login detected, redirecting to ${redirectUrl}`);
       }
 
@@ -207,6 +208,32 @@ export function LoginForm({ redirectTo, teacherLoginRequested = false, attendanc
       >
         {pending ? "Signing in…" : "Sign in"}
       </Button>
+
+      <button
+        type="button"
+        aria-pressed={attendanceMode}
+        disabled={pending}
+        onClick={() => {
+          const nextAttendanceMode = !attendanceMode;
+          setAttendanceMode(nextAttendanceMode);
+          const url = new URL(window.location.href);
+          if (nextAttendanceMode) url.searchParams.set("next", "/staff/attendance");
+          else if (url.searchParams.get("next") === "/staff/attendance") url.searchParams.delete("next");
+          window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+          setError(null);
+          setNotice(null);
+        }}
+        className={`mt-1 flex w-full items-center gap-3 border px-4 py-3 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${attendanceMode ? "border-brand bg-brand-light/60 ring-2 ring-brand/20" : "border-border bg-background text-foreground hover:border-brand hover:bg-brand-light/40"}`}
+      >
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center border ${attendanceMode ? "border-brand bg-brand text-white" : "border-brand/20 bg-brand/5 text-brand"}`}>
+          <QrCode className="h-4 w-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">Staff attendance</span>
+          <span className="mt-0.5 block text-xs text-muted">{attendanceMode ? "Selected · click to use normal sign in" : "Click to sign in for staff attendance"}</span>
+        </span>
+        <span aria-hidden="true" className={`flex h-5 w-5 shrink-0 items-center justify-center border text-[11px] font-bold ${attendanceMode ? "border-brand bg-brand text-white" : "border-border bg-surface text-transparent"}`}>✓</span>
+      </button>
     </form>
   );
 }
