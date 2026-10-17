@@ -21,6 +21,8 @@ for (const [path, allowedRole] of portalCases) {
 
 assert.equal(roleCanAccess(roleRequirementForPath('/api/bursar/overview'), 'BURSAR'), true);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/bursar/overview'), 'SCHOOL_ADMIN'), false);
+assert.equal(roleCanAccess(roleRequirementForPath('/accounting/profile'), 'BURSAR'), true);
+assert.equal(roleCanAccess(roleRequirementForPath('/accounting/profile'), 'TEACHER'), false);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/teacher/school'), 'TEACHER'), true);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/teacher/school'), 'SCHOOL_ADMIN'), false);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/students/data'), 'SCHOOL_ADMIN'), true);
@@ -31,6 +33,11 @@ assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/verify', 'POST'), 
 assert.equal(roleCanAccess(roleRequirementForPath('/api/parent/login', 'POST'), null), true);
 assert.equal(roleCanAccess(roleRequirementForPath('/staff'), 'STAFF'), true);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/staff/me'), 'STAFF'), true);
+for (const role of ['STAFF', 'TEACHER', 'BURSAR']) {
+  assert.equal(roleCanAccess(roleRequirementForPath('/employee/profile'), role), true, `${role} should update their own employee profile`);
+  assert.equal(roleCanAccess(roleRequirementForPath('/api/staff/me', 'PUT'), role), true, `${role} should update their own profile API`);
+}
+assert.equal(roleCanAccess(roleRequirementForPath('/employee/profile'), 'SCHOOL_ADMIN'), false);
 assert.equal(roleCanAccess(roleRequirementForPath('/staff/attendance'), 'STAFF'), true);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/staff/attendance/scan', 'POST'), 'STAFF'), true);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/staff/attendance/scan', 'POST'), 'SCHOOL_ADMIN'), false);

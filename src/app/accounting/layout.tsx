@@ -69,6 +69,12 @@ export default async function AccountingLayout({
       icon: "Settings",
       section: "Accounting",
     },
+    {
+      label: "Profile",
+      href: "/accounting/profile",
+      icon: "UserCircle",
+      section: "Accounting",
+    },
   ];
 
   return (

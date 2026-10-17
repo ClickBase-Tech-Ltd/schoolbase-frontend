@@ -12,6 +12,7 @@ const PRINT_STATION_PREFIX = 'SCHOOLBASE-ATTENDANCE-STATION:';
 export default function StaffAttendanceScanPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const scannerRef = useRef<QrScanner | null>(null);
+  const processingRef = useRef(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -46,11 +47,12 @@ export default function StaffAttendanceScanPage() {
   }
 
   async function submitCode(stationToken: string) {
-    if (processing) return;
+    if (processingRef.current) return;
+    processingRef.current = true;
     setProcessing(true);
     setFeedback(null);
-    await scannerRef.current?.stop();
     try {
+      await scannerRef.current?.stop();
       const isPrintedLocator = stationToken.startsWith(PRINT_STATION_PREFIX);
       const body = isPrintedLocator
         ? { stationCode: stationToken.slice(PRINT_STATION_PREFIX.length), scanRequestId: crypto.randomUUID() }
@@ -76,6 +78,7 @@ export default function StaffAttendanceScanPage() {
     } catch {
       setFeedback({ kind: 'error', message: 'You appear to be offline. No scan was queued; use the school’s supervised manual fallback.' });
     } finally {
+      processingRef.current = false;
       setProcessing(false);
     }
   }
@@ -110,7 +113,7 @@ export default function StaffAttendanceScanPage() {
               {!cameraReady && !cameraError && !feedback ? <div className="absolute inset-0 flex items-center justify-center bg-background text-sm text-muted"><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Starting camera…</div> : null}
               {processing ? <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-sm font-medium text-white"><Loader2 className="mr-2 h-4 w-4 animate-spin"/>Checking code…</div> : null}
             </div>
-            <div className="mt-4 flex justify-end"><Button type="button" variant="secondary" disabled={processing || !cameraReady} onClick={() => void restartScanner()} className="h-10 gap-2"><RotateCcw className="h-4 w-4"/>Scan again</Button></div>
+            <div className="mt-4 flex justify-end"><Button type="button" variant="secondary" disabled={processing} onClick={() => void restartScanner()} className="h-10 gap-2"><RotateCcw className="h-4 w-4"/>{cameraReady ? 'Scan again' : 'Retry camera'}</Button></div>
           </div>
           <aside className="space-y-4 border border-border bg-surface p-4 sm:p-5">
             <div><h2 className="text-base font-semibold text-foreground">Scan status</h2><p className="mt-1 text-sm text-muted">The server records the time and matches this scan to your active employee account.</p></div>

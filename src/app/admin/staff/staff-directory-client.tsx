@@ -136,7 +136,6 @@ export default function StaffDirectoryClient() {
                 <input type="search" aria-label="Search staff" value={search} onChange={(event) => { setLoading(true); setPagination((current) => ({ ...current, page: 1 })); setSearch(event.target.value); }} placeholder="Search name, ID, title or email" className="h-10 w-full border border-border bg-background px-3 text-sm outline-none focus:border-brand" />
               </div>
               <Button type="button" variant="secondary" onClick={() => setSearchOpen((open) => !open)} className="h-10 gap-2"><Search className="h-4 w-4" />{searchOpen ? <X className="h-4 w-4" /> : null}{searchOpen ? 'Close' : 'Search'}</Button>
-              <Link href="/admin/teachers" className="inline-flex h-10 items-center justify-center border border-border bg-background px-3 text-sm font-medium text-foreground hover:bg-surface">Teacher & bursar tools</Link>
               <Button onClick={() => router.push('/admin/staff/new')} className="h-10 gap-2"><UserPlus className="h-4 w-4" /> Add staff</Button>
             </div>
           </div>

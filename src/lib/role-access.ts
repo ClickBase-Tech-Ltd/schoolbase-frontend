@@ -41,6 +41,7 @@ export function roleRequirementForPath(pathname: string, method = 'GET'): RoleRe
   if (isWithin(pathname, '/accounting') || isWithin(pathname, '/api/bursar')) {
     return ACCOUNTING_ROLES;
   }
+  if (pathname === '/employee/profile' || pathname === '/api/staff/me') return ['STAFF', 'TEACHER', 'BURSAR'];
   if (isWithin(pathname, '/teacher') || isWithin(pathname, '/api/teacher')) return ['TEACHER'];
   if (isWithin(pathname, '/api/staff/attendance') || isWithin(pathname, '/staff/attendance')) return ['STAFF', 'TEACHER'];
   if (isWithin(pathname, '/staff') || isWithin(pathname, '/api/staff')) return ['STAFF'];

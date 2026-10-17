@@ -38,7 +38,6 @@ export default async function TeacherLayout({
     ...item,
     section: "Teacher Workspace",
   }));
-
   return (
     <SharedLayout
       navItems={navItems}

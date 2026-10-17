@@ -37,7 +37,7 @@ type Employee = {
   startDate: string;
   emergencyContactName?: string | null;
   emergencyContactPhone?: string | null;
-  user: { id: string; email: string; role: string; isActive: boolean };
+  user: { id: string; email: string; role: string; isActive: boolean; teacherClasses: Array<{ classId: string }>; teacherSubjects: Array<{ subjectId: string }> };
   employmentEvents: EmploymentEvent[];
 };
 
@@ -58,6 +58,10 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState('');
   const [reason, setReason] = useState('');
+  const [classes, setClasses] = useState<Array<{ id: string; name: string; arm?: string | null }>>([]);
+  const [subjects, setSubjects] = useState<Array<{ id: string; name: string }>>([]);
+  const [classIds, setClassIds] = useState<string[]>([]);
+  const [subjectIds, setSubjectIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,11 +99,29 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
         setStartDate(new Date(profile.startDate).toISOString().slice(0, 10));
         setEmergencyContactName(profile.emergencyContactName || '');
         setEmergencyContactPhone(profile.emergencyContactPhone || '');
+        setClassIds(profile.user.teacherClasses?.map((assignment) => assignment.classId) || []);
+        setSubjectIds(profile.user.teacherSubjects?.map((assignment) => assignment.subjectId) || []);
       })
       .catch((loadError: unknown) => { if (active) setError(loadError instanceof Error ? loadError.message : 'Unable to load this staff profile.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [employeeId, notice]);
+
+  useEffect(() => {
+    if (employee?.user.role !== 'TEACHER') return;
+    let active = true;
+    fetch(`${getBackendUrl()}/api/admin/staff?mode=registration-options`, { credentials: 'include', cache: 'no-store' })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.error || 'Unable to load teacher assignments.');
+        if (active) {
+          setClasses(data.classes || []);
+          setSubjects(data.subjects || []);
+        }
+      })
+      .catch((loadError: unknown) => { if (active) setError(loadError instanceof Error ? loadError.message : 'Unable to load teacher assignments.'); });
+    return () => { active = false; };
+  }, [employee?.user.role]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -112,7 +134,12 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
         credentials: 'include',
         body: (() => {
           const formData = new FormData();
-          for (const [key, value] of Object.entries({ firstName, middleName, lastName, phone, jobTitle, department, classification, employmentType, startDate, emergencyContactName, emergencyContactPhone, reason })) formData.append(key, value);
+          const values: Record<string, string> = { firstName, middleName, lastName, phone, jobTitle, department, classification, employmentType, startDate, emergencyContactName, emergencyContactPhone, reason };
+          if (employee?.user.role === 'TEACHER') {
+            values.classIds = JSON.stringify(classIds);
+            values.subjectIds = JSON.stringify(subjectIds);
+          }
+          for (const [key, value] of Object.entries(values)) formData.append(key, value);
           if (photoFile) formData.append('photo', photoFile);
           return formData;
         })(),
@@ -189,6 +216,8 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
               <label className={labelClass}>Emergency contact phone<input type="tel" maxLength={40} value={emergencyContactPhone} onChange={(event) => setEmergencyContactPhone(event.target.value)} className={fieldClass} /></label>
             </div>
           </section>
+
+          {employee.user.role === 'TEACHER' ? <section className="space-y-4 border border-border bg-surface p-4 sm:p-6"><div><h2 className="text-lg font-semibold text-foreground">Teaching assignments</h2><p className="mt-1 text-sm text-muted">Assignments are school-scoped and saved with this profile update.</p></div><div className="grid gap-4 sm:grid-cols-2"><fieldset className="border border-border bg-background p-3"><legend className="px-1 text-sm font-semibold text-foreground">Classes</legend><div className="max-h-48 space-y-2 overflow-y-auto">{classes.map((item) => <label key={item.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={classIds.includes(item.id)} onChange={(event) => setClassIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} /><span>{item.name}{item.arm ? ` ${item.arm}` : ''}</span></label>)}</div></fieldset><fieldset className="border border-border bg-background p-3"><legend className="px-1 text-sm font-semibold text-foreground">Subjects</legend><div className="max-h-48 space-y-2 overflow-y-auto">{subjects.map((item) => <label key={item.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={subjectIds.includes(item.id)} onChange={(event) => setSubjectIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} /><span>{item.name}</span></label>)}</div></fieldset></div></section> : null}
 
           <section className="space-y-4 border border-border bg-surface p-4 sm:p-6">
             <div><h2 className="text-lg font-semibold text-foreground">Employment details</h2><p className="mt-1 text-sm text-muted">Current status: {employee.employmentStatus}. Change account access from the directory.</p></div>

@@ -234,7 +234,6 @@ export function getTeacherNavigation(phase: SchoolPhase) {
     PRIMARY: [
       { href: '/teacher/class', label: 'My Class', icon: 'BookOpen' },
       { href: '/teacher/results', label: 'Results', icon: 'FileText' },
-      { href: '/teacher/comments', label: 'Comments', icon: 'PenTool' },
     ],
     SECONDARY: [
       { href: '/teacher/results', label: 'Results', icon: 'FileText' },

@@ -8,11 +8,13 @@ import { Button } from '@/components/ui/button';
 import { getBackendUrl } from '@/lib/backend-url';
 
 type LinkableUser = { id: string; name: string; email: string; role: string };
+type RegistrationOptions = { classes: Array<{ id: string; name: string; arm?: string | null }>; subjects: Array<{ id: string; name: string }> };
 
 export default function StaffRegistrationClient({ requestedUserId = '' }: { requestedUserId?: string }) {
   const router = useRouter();
   const [accountMode, setAccountMode] = useState<'create' | 'link'>(requestedUserId ? 'link' : 'create');
   const [linkableUsers, setLinkableUsers] = useState<LinkableUser[]>([]);
+  const [registrationOptions, setRegistrationOptions] = useState<RegistrationOptions>({ classes: [], subjects: [] });
   const [linkSearch, setLinkSearch] = useState('');
   const [userId, setUserId] = useState(requestedUserId);
   const [confirmedAccount, setConfirmedAccount] = useState(false);
@@ -21,18 +23,37 @@ export default function StaffRegistrationClient({ requestedUserId = '' }: { requ
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [jobTitle, setJobTitle] = useState('');
+  const [jobTitle, setJobTitle] = useState('Staff member');
   const [department, setDepartment] = useState('');
   const [classification, setClassification] = useState<'NON_ACADEMIC' | 'ACADEMIC'>('NON_ACADEMIC');
   const [employmentType, setEmploymentType] = useState('FULL_TIME');
-  const [startDate, setStartDate] = useState('');
+  const [startDate, setStartDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  });
   const [phone, setPhone] = useState('');
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState<'STAFF' | 'TEACHER' | 'BURSAR'>('STAFF');
+  const [classIds, setClassIds] = useState<string[]>([]);
+  const [subjectIds, setSubjectIds] = useState<string[]>([]);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState('');
+  const selectedAccountRole = accountMode === 'create' ? role : linkableUsers.find((user) => user.id === userId)?.role;
+
+  useEffect(() => {
+    let active = true;
+    fetch(`${getBackendUrl()}/api/admin/staff?mode=registration-options`, { credentials: 'include', cache: 'no-store' })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.error || 'Unable to load school classes and subjects.');
+        if (active) setRegistrationOptions(data as RegistrationOptions);
+      })
+      .catch((loadError: unknown) => { if (active) setError(loadError instanceof Error ? loadError.message : 'Unable to load registration options.'); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (!photoFile) {
@@ -66,7 +87,7 @@ export default function StaffRegistrationClient({ requestedUserId = '' }: { requ
     setSubmitting(true);
     setError(null);
     try {
-      const values = { accountMode, ...(accountMode === 'link' ? { userId } : { email, password }), firstName, middleName, lastName, jobTitle, department, classification, employmentType, startDate, phone, emergencyContactName, emergencyContactPhone };
+      const values = { accountMode, ...(accountMode === 'link' ? { userId } : { email, password, role }), firstName, middleName, lastName, jobTitle, department, classification, employmentType, startDate, phone, emergencyContactName, emergencyContactPhone, classIds: selectedAccountRole === 'TEACHER' ? JSON.stringify(classIds) : '[]', subjectIds: selectedAccountRole === 'TEACHER' ? JSON.stringify(subjectIds) : '[]' };
       const formData = new FormData();
       for (const [key, value] of Object.entries(values)) formData.append(key, String(value ?? ''));
       if (photoFile) formData.append('photo', photoFile);
@@ -115,10 +136,10 @@ export default function StaffRegistrationClient({ requestedUserId = '' }: { requ
           <section className="space-y-4 border border-border bg-surface p-4 sm:p-6">
             <div><h2 className="text-lg font-semibold text-foreground">Personal details</h2><p className="mt-1 text-sm text-muted">Employee identity and contact information.</p></div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <label className={labelClass}>First name<input required maxLength={100} value={firstName} onChange={(event) => setFirstName(event.target.value)} className={fieldClass} autoComplete="given-name" /></label>
-              <label className={labelClass}>Middle name <span className="font-normal text-muted">Optional</span><input maxLength={100} value={middleName} onChange={(event) => setMiddleName(event.target.value)} className={fieldClass} autoComplete="additional-name" /></label>
-              <label className={labelClass}>Last name<input required maxLength={100} value={lastName} onChange={(event) => setLastName(event.target.value)} className={fieldClass} autoComplete="family-name" /></label>
-              <label className={labelClass}>Phone <span className="font-normal text-muted">Optional</span><input type="tel" maxLength={40} value={phone} onChange={(event) => setPhone(event.target.value)} className={fieldClass} autoComplete="tel" /></label>
+              <label className={labelClass}>First name<input required maxLength={100} placeholder="e.g. Aisha" value={firstName} onChange={(event) => setFirstName(event.target.value)} className={fieldClass} autoComplete="given-name" /></label>
+              <label className={labelClass}>Middle name <span className="font-normal text-muted">Optional</span><input maxLength={100} placeholder="e.g. Ngozi" value={middleName} onChange={(event) => setMiddleName(event.target.value)} className={fieldClass} autoComplete="additional-name" /></label>
+              <label className={labelClass}>Last name<input required maxLength={100} placeholder="e.g. Bello" value={lastName} onChange={(event) => setLastName(event.target.value)} className={fieldClass} autoComplete="family-name" /></label>
+              <label className={labelClass}>Phone <span className="font-normal text-muted">Optional</span><input type="tel" maxLength={40} placeholder="e.g. +234 800 000 0000" value={phone} onChange={(event) => setPhone(event.target.value)} className={fieldClass} autoComplete="tel" /></label>
               <div className="sm:col-span-2 lg:col-span-3">
                 <label className={labelClass}>Staff photo <span className="font-normal text-muted">Optional · used on the staff ID card</span><input type="file" accept="image/jpeg,image/png" onChange={handlePhotoChange} className="sr-only" id="staff-photo" /></label>
                 <div className="mt-2 flex items-center gap-4">
@@ -131,7 +152,7 @@ export default function StaffRegistrationClient({ requestedUserId = '' }: { requ
             </div>
             <details className="border-t border-border pt-4">
               <summary className="cursor-pointer text-sm font-semibold text-foreground">Emergency contact <span className="font-normal text-muted">Optional, restricted information</span></summary>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2"><label className={labelClass}>Contact name<input maxLength={120} value={emergencyContactName} onChange={(event) => setEmergencyContactName(event.target.value)} className={fieldClass} /></label><label className={labelClass}>Contact phone<input type="tel" maxLength={40} value={emergencyContactPhone} onChange={(event) => setEmergencyContactPhone(event.target.value)} className={fieldClass} /></label></div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2"><label className={labelClass}>Contact name<input maxLength={120} placeholder="e.g. Mariam Bello" value={emergencyContactName} onChange={(event) => setEmergencyContactName(event.target.value)} className={fieldClass} /></label><label className={labelClass}>Contact phone<input type="tel" maxLength={40} placeholder="e.g. +234 800 000 0000" value={emergencyContactPhone} onChange={(event) => setEmergencyContactPhone(event.target.value)} className={fieldClass} /></label></div>
             </details>
           </section>
 
@@ -139,8 +160,8 @@ export default function StaffRegistrationClient({ requestedUserId = '' }: { requ
             <div><h2 className="text-lg font-semibold text-foreground">Employment details</h2><p className="mt-1 text-sm text-muted">Job information does not grant platform permissions.</p></div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <div className="border border-border bg-background px-3 py-3"><p className="text-xs font-medium text-muted">Staff number</p><p className="mt-1 font-mono text-sm font-semibold text-foreground">Assigned automatically on save</p><p className="mt-1 text-xs text-muted">Uses the school initials, ST, issue year, and a unique sequence.</p></div>
-              <label className={labelClass}>Job title<input required maxLength={120} value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} className={fieldClass} placeholder="For example, Librarian" /></label>
-              <label className={labelClass}>Department <span className="font-normal text-muted">Optional</span><input maxLength={120} value={department} onChange={(event) => setDepartment(event.target.value)} className={fieldClass} /></label>
+              <label className={labelClass}>Job title<input required maxLength={120} value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} className={fieldClass} placeholder="e.g. Librarian" /></label>
+              <label className={labelClass}>Department <span className="font-normal text-muted">Optional</span><input maxLength={120} placeholder="e.g. Administration" value={department} onChange={(event) => setDepartment(event.target.value)} className={fieldClass} /></label>
               <label className={labelClass}>Classification<select value={classification} onChange={(event) => setClassification(event.target.value as typeof classification)} className={fieldClass}><option value="NON_ACADEMIC">Non-academic</option><option value="ACADEMIC">Academic</option></select></label>
               <label className={labelClass}>Employment type<select value={employmentType} onChange={(event) => setEmploymentType(event.target.value)} className={fieldClass}><option value="FULL_TIME">Full-time</option><option value="PART_TIME">Part-time</option><option value="CONTRACT">Contract</option><option value="TEMPORARY">Temporary</option></select></label>
               <label className={labelClass}>Start date<input required type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className={fieldClass} /></label>
@@ -148,14 +169,16 @@ export default function StaffRegistrationClient({ requestedUserId = '' }: { requ
           </section>
 
           <section className="space-y-4 border border-border bg-surface p-4 sm:p-6">
-            <div><h2 className="text-lg font-semibold text-foreground">SchoolBase account</h2><p className="mt-1 text-sm text-muted">School administrators register new accounts. Existing same-school accounts can be linked without changing their role or password.</p></div>
+            <div><h2 className="text-lg font-semibold text-foreground">SchoolBase account</h2><p className="mt-1 text-sm text-muted">Choose the access role for new accounts. Linking an old account preserves its current role and password.</p></div>
             <div className="flex flex-wrap gap-5 border-b border-border pb-4 text-sm">
-              <label className="inline-flex items-center gap-2"><input type="radio" name="accountMode" checked={accountMode === 'create'} onChange={() => { setAccountMode('create'); setUserId(''); setConfirmedAccount(false); }} /> Create restricted staff account</label>
+              <label className="inline-flex items-center gap-2"><input type="radio" name="accountMode" checked={accountMode === 'create'} onChange={() => { setAccountMode('create'); setUserId(''); setConfirmedAccount(false); }} /> Create new account</label>
               <label className="inline-flex items-center gap-2"><input type="radio" name="accountMode" checked={accountMode === 'link'} onChange={() => { setAccountMode('link'); setConfirmedAccount(false); }} /> Link existing school account</label>
             </div>
-            {accountMode === 'create' ? <div className="grid gap-4 sm:grid-cols-2"><label className={labelClass}>Login email<input required type="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className={fieldClass} autoComplete="email" /></label><label className={labelClass}>Initial password<input required type="password" minLength={8} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} className={fieldClass} autoComplete="new-password" /><span className="mt-1 block text-xs font-normal text-muted">At least 8 characters. This account receives restricted staff access.</span></label></div> : (
-              <div className="space-y-4"><label className={labelClass}>Search unlinked school accounts<input value={linkSearch} onChange={(event) => setLinkSearch(event.target.value)} className={fieldClass} placeholder="Name or email" /></label><label className={labelClass}>Unlinked account<select required value={userId} onChange={(event) => { setUserId(event.target.value); setConfirmedAccount(false); }} className={fieldClass}><option value="">Choose an account</option>{linkableUsers.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.email} · {user.role.replace('_', ' ')}</option>)}</select></label><label className="inline-flex items-start gap-2 text-sm text-foreground"><input type="checkbox" checked={confirmedAccount} onChange={(event) => setConfirmedAccount(event.target.checked)} className="mt-0.5" /><span>I confirm this account belongs to this employee.</span></label></div>
+            {accountMode === 'create' ? <div className="space-y-4"><div className="grid gap-4 sm:grid-cols-3"><label className={labelClass}>Account role<select value={role} onChange={(event) => { const nextRole = event.target.value as typeof role; setRole(nextRole); setClassification(nextRole === 'TEACHER' ? 'ACADEMIC' : 'NON_ACADEMIC'); if (nextRole !== 'TEACHER') { setClassIds([]); setSubjectIds([]); } }} className={fieldClass}><option value="STAFF">Staff</option><option value="TEACHER">Teacher</option><option value="BURSAR">Bursar</option></select></label><label className={labelClass}>Login email<input required type="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} className={fieldClass} autoComplete="email" /></label><label className={labelClass}>Initial password<input required type="password" minLength={8} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} className={fieldClass} autoComplete="new-password" /><span className="mt-1 block text-xs font-normal text-muted">At least 8 characters.</span></label></div></div> : (
+              <div className="space-y-4"><label className={labelClass}>Search unlinked school accounts<input value={linkSearch} onChange={(event) => setLinkSearch(event.target.value)} className={fieldClass} placeholder="Search by name or email" /></label><label className={labelClass}>Unlinked account<select required value={userId} onChange={(event) => { const selected = linkableUsers.find((user) => user.id === event.target.value); setUserId(event.target.value); setConfirmedAccount(false); if (selected) { const linkedRole = selected.role === 'TEACHER' ? 'TEACHER' : selected.role === 'BURSAR' ? 'BURSAR' : 'STAFF'; setJobTitle((value) => !value || value === 'Staff member' ? linkedRole === 'TEACHER' ? 'Teacher' : linkedRole === 'BURSAR' ? 'Bursar' : value : value); setClassification(linkedRole === 'TEACHER' ? 'ACADEMIC' : 'NON_ACADEMIC'); } }} className={fieldClass}><option value="">Choose an account</option>{linkableUsers.map((user) => <option key={user.id} value={user.id}>{user.name} · {user.email} · {user.role.replace('_', ' ')}</option>)}</select></label><label className="inline-flex items-start gap-2 text-sm text-foreground"><input type="checkbox" checked={confirmedAccount} onChange={(event) => setConfirmedAccount(event.target.checked)} className="mt-0.5" /><span>I confirm this account belongs to this employee.</span></label></div>
             )}
+            {accountMode === 'link' && selectedAccountRole === 'TEACHER' ? <p className="border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-950">This existing Teacher account will keep its current role, password, and email.</p> : null}
+            {selectedAccountRole === 'TEACHER' ? <div className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2"><fieldset className="border border-border bg-background p-3"><legend className="px-1 text-sm font-semibold text-foreground">Classes</legend><div className="max-h-40 space-y-2 overflow-y-auto">{registrationOptions.classes.map((item) => <label key={item.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={classIds.includes(item.id)} onChange={(event) => setClassIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} /><span>{item.name}{item.arm ? ` ${item.arm}` : ''}</span></label>)}</div></fieldset><fieldset className="border border-border bg-background p-3"><legend className="px-1 text-sm font-semibold text-foreground">Subjects</legend><div className="max-h-40 space-y-2 overflow-y-auto">{registrationOptions.subjects.map((item) => <label key={item.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={subjectIds.includes(item.id)} onChange={(event) => setSubjectIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} /><span>{item.name}</span></label>)}</div></fieldset></div> : null}
           </section>
 
           <div className="flex flex-col-reverse justify-end gap-3 sm:flex-row"><Link href="/admin/staff" className="inline-flex h-11 items-center justify-center border border-border px-4 text-sm font-semibold text-foreground">Cancel</Link><Button type="submit" disabled={submitting || (accountMode === 'link' && (!userId || !confirmedAccount))} className="h-11 min-w-44 gap-2">{submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Registering…</> : 'Register staff member'}</Button></div>

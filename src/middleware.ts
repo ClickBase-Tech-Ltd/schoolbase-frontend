@@ -127,6 +127,7 @@ export const config = {
     "/schoolbase-admin/:path*",
     "/teacher/:path*",
     "/staff/:path*",
+    "/employee/:path*",
     "/parent/:path*",
     "/api/admin/:path*",
     "/api/bursar/:path*",

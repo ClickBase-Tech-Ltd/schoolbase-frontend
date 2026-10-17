@@ -12,8 +12,10 @@ import {
   KeyRound,
   ChevronRight,
   CheckCircle2,
+  Camera,
 } from 'lucide-react';
 import { getBackendUrl } from '@/lib/backend-url';
+import { resolveFileUrl } from '@/lib/api-client';
 import { playCloseTone, playOpenTone } from '@/lib/sounds';
 import TeacherPageHeader from '@/components/teacher-page-header';
 import AdminSkeleton from '@/components/ui/skeleton';
@@ -30,8 +32,32 @@ interface TeacherProfile {
   createdAt: string;
 }
 
+interface EmployeeProfile {
+  id: string;
+  staffNumber: string;
+  firstName: string;
+  middleName?: string | null;
+  lastName: string;
+  phone?: string | null;
+  photoUrl?: string | null;
+  jobTitle: string;
+  department?: string | null;
+  employmentStatus: string;
+  startDate: string;
+  school: { name: string };
+}
+
 export default function ProfilePage() {
   const [profile, setProfile] = useState<TeacherProfile | null>(null);
+  const [employee, setEmployee] = useState<EmployeeProfile | null>(null);
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [savingEmployee, setSavingEmployee] = useState(false);
+  const [employeeError, setEmployeeError] = useState<string | null>(null);
+  const [employeeNotice, setEmployeeNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,6 +96,52 @@ export default function ProfilePage() {
 
     loadProfile();
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`${getBackendUrl()}/api/staff/me`, { credentials: 'include', cache: 'no-store' })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (response.status === 404) return null;
+        if (!response.ok) throw new Error(data?.error || 'Unable to load employee details.');
+        return data as { employee: EmployeeProfile };
+      })
+      .then((data) => {
+        if (!active || !data) return;
+        setEmployee(data.employee);
+        setFirstName(data.employee.firstName);
+        setMiddleName(data.employee.middleName || '');
+        setLastName(data.employee.lastName);
+        setPhone(data.employee.phone || '');
+      })
+      .catch((loadError: unknown) => { if (active) setEmployeeError(loadError instanceof Error ? loadError.message : 'Unable to load employee details.'); });
+    return () => { active = false; };
+  }, []);
+
+  const handleEmployeeUpdate = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSavingEmployee(true);
+    setEmployeeError(null);
+    setEmployeeNotice(null);
+    try {
+      const formData = new FormData();
+      formData.set('firstName', firstName);
+      formData.set('middleName', middleName);
+      formData.set('lastName', lastName);
+      formData.set('phone', phone);
+      if (photoFile) formData.set('photo', photoFile);
+      const response = await fetch(`${getBackendUrl()}/api/staff/me`, { method: 'PUT', credentials: 'include', body: formData });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error || 'Unable to save employee details.');
+      setEmployee(data.employee as EmployeeProfile);
+      setPhotoFile(null);
+      setEmployeeNotice('Your details have been saved.');
+    } catch (updateError: unknown) {
+      setEmployeeError(updateError instanceof Error ? updateError.message : 'Unable to save employee details.');
+    } finally {
+      setSavingEmployee(false);
+    }
+  };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,7 +287,30 @@ export default function ProfilePage() {
 <main className="min-h-screen pb-12">
   <div className="mx-auto max-w-7xl space-y-6 px-2 py-8 sm:px-8 lg:px-12">
 
-        <TeacherPageHeader icon={User} title="Profile" description="Manage your teacher account, contact details, and security." />
+        <TeacherPageHeader icon={User} title="Profile" description="Manage your personal details, employee photo, account, and security." />
+
+        {employeeError ? <div role="alert" className="border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">{employeeError}</div> : null}
+        {employeeNotice ? <div role="status" className="border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{employeeNotice}</div> : null}
+
+        <section className="space-y-5 border border-border bg-surface p-5 sm:p-6">
+          <div><h2 className="text-lg font-semibold text-foreground">Employment profile</h2><p className="mt-1 text-sm text-muted">Update your personal details and photo. Your school manages your role and access.</p></div>
+          {employee ? <div className="flex flex-wrap items-center gap-4 border border-border bg-background p-4">
+            {employee.photoUrl ? <img src={resolveFileUrl(employee.photoUrl, employee.id) || ''} alt="Your employee photo" className="h-16 w-16 rounded-full border border-border object-cover" /> : <div className="flex h-16 w-16 items-center justify-center rounded-full border border-brand/20 bg-brand/10 text-lg font-semibold text-brand">{`${employee.firstName[0] || ''}${employee.lastName[0] || ''}`.toUpperCase()}</div>}
+            <div className="min-w-0"><p className="font-semibold text-foreground">{employee.jobTitle}{employee.department ? ` · ${employee.department}` : ''}</p><p className="mt-1 font-mono text-xs text-muted">{employee.staffNumber} · {employee.employmentStatus}</p></div>
+          </div> : <p className="border border-sky-200 bg-sky-50 px-4 py-3 text-sm leading-6 text-sky-950">Your account is active but your employee profile has not been completed. Save your personal details here to create it for your school.</p>}
+          <form onSubmit={handleEmployeeUpdate} className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm font-medium text-foreground">First name<input required maxLength={100} placeholder="e.g. Aisha" autoComplete="given-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} className="mt-1.5 h-11 w-full border border-border bg-background px-3 text-sm outline-none focus:border-brand" /></label>
+              <label className="block text-sm font-medium text-foreground">Middle name <span className="font-normal text-muted">Optional</span><input maxLength={100} placeholder="e.g. Ngozi" autoComplete="additional-name" value={middleName} onChange={(event) => setMiddleName(event.target.value)} className="mt-1.5 h-11 w-full border border-border bg-background px-3 text-sm outline-none focus:border-brand" /></label>
+              <label className="block text-sm font-medium text-foreground">Last name<input required maxLength={100} placeholder="e.g. Bello" autoComplete="family-name" value={lastName} onChange={(event) => setLastName(event.target.value)} className="mt-1.5 h-11 w-full border border-border bg-background px-3 text-sm outline-none focus:border-brand" /></label>
+              <label className="block text-sm font-medium text-foreground">Phone number<input type="tel" maxLength={40} placeholder="e.g. +234 800 000 0000" autoComplete="tel" value={phone} onChange={(event) => setPhone(event.target.value)} className="mt-1.5 h-11 w-full border border-border bg-background px-3 text-sm outline-none focus:border-brand" /></label>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+              <div className="flex flex-wrap items-center gap-3"><label className="inline-flex h-10 cursor-pointer items-center gap-2 border border-border bg-background px-3 text-sm font-medium text-foreground hover:bg-surface"><Camera className="h-4 w-4" />{photoFile ? 'Change photo' : employee?.photoUrl ? 'Replace photo' : 'Add photo'}<input type="file" accept="image/jpeg,image/png" className="sr-only" onChange={(event) => { const file = event.target.files?.[0] || null; if (file && (!['image/jpeg', 'image/png'].includes(file.type) || file.size > 4 * 1024 * 1024)) { setEmployeeError('Choose a JPEG or PNG photo no larger than 4 MB.'); event.target.value = ''; return; } setEmployeeError(null); setPhotoFile(file); }} /></label>{photoFile ? <span className="text-xs text-muted">{photoFile.name}</span> : <span className="text-xs text-muted">JPEG or PNG, up to 4 MB</span>}{photoFile ? <button type="button" onClick={() => setPhotoFile(null)} className="text-xs text-muted underline">Remove</button> : null}</div>
+              <button type="submit" disabled={savingEmployee} className="inline-flex h-10 items-center gap-2 rounded-md bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60">{savingEmployee ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}{savingEmployee ? 'Saving…' : employee ? 'Save details' : 'Complete profile'}</button>
+            </div>
+          </form>
+        </section>
 
         {/* Main profile header */}
         <section className="border border-border bg-surface">
@@ -462,6 +557,7 @@ export default function ProfilePage() {
 
                 <input
                   type="password"
+                  placeholder="Enter your current password"
                   value={passwordForm.currentPassword}
                   onChange={(e) =>
                     setPasswordForm({
@@ -482,6 +578,7 @@ export default function ProfilePage() {
 
                 <input
                   type="password"
+                  placeholder="At least 8 characters"
                   value={passwordForm.newPassword}
                   onChange={(e) =>
                     setPasswordForm({
@@ -506,6 +603,7 @@ export default function ProfilePage() {
 
                 <input
                   type="password"
+                  placeholder="Re-enter your new password"
                   value={passwordForm.confirmPassword}
                   onChange={(e) =>
                     setPasswordForm({
