@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBackendUrl } from '@/lib/backend-url';
+import { createClientIpAssertion } from '@/lib/client-ip-assertion';
 
 /**
  * POST /api/signup/verify-otp
@@ -10,11 +11,12 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const BACKEND_URL = getBackendUrl();
+    const ipAssertion = createClientIpAssertion(request);
     
     // Call backend verify-otp endpoint
     const response = await fetch(`${BACKEND_URL}/api/trial/verify-otp`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(ipAssertion ? { 'X-SchoolBase-Client-IP-Assertion': ipAssertion } : {}) },
       body: JSON.stringify(body),
     });
 

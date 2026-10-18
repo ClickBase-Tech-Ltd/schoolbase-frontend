@@ -28,6 +28,9 @@ export default function SignupPage() {
     adminEmail: "",
     password: "",
   });
+  const passwordStrength = formData.password.length === 0
+    ? 0
+    : Math.min(4, Number(formData.password.length >= 8) + Number(formData.password.length >= 12) + Number(/[A-Z]/.test(formData.password) && /[a-z]/.test(formData.password)) + Number(/[0-9]/.test(formData.password) && /[^A-Za-z0-9]/.test(formData.password)));
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -87,6 +90,12 @@ export default function SignupPage() {
     const validationError = validateStep(step);
     if (validationError) {
       setStepError(validationError);
+      const firstFieldByStep: Record<1 | 2 | 3, string> = {
+        1: "schoolName",
+        2: "adminEmail",
+        3: "password",
+      };
+      document.querySelector<HTMLInputElement>(`[name="${firstFieldByStep[step]}"]`)?.focus();
       return;
     }
     setStepError(null);
@@ -157,11 +166,11 @@ export default function SignupPage() {
           Register your school and create its first administrator account. We will email a one-time verification code before the account is created.
         </p>
 
-        <div className="mt-8 grid grid-cols-3 border-y border-border">
+        <div className="mt-8 grid grid-cols-3 border-y border-border" role="list" aria-label="Signup progress">
           {["School profile", "Administrator", "Security"].map((label, index) => {
             const itemStep = index + 1;
             return (
-              <div key={label} className={`border-b-2 px-2 py-3 text-center text-xs font-semibold ${step === itemStep ? "border-brand text-brand" : step > itemStep ? "border-emerald-500 text-emerald-700" : "border-transparent text-muted"}`}>
+              <div key={label} role="listitem" aria-current={step === itemStep ? "step" : undefined} className={`border-b-2 px-2 py-3 text-center text-xs font-semibold ${step === itemStep ? "border-brand text-brand" : step > itemStep ? "border-emerald-500 text-emerald-700" : "border-transparent text-muted"}`}>
                 <span className={`mr-1.5 inline-flex h-5 w-5 items-center justify-center text-[10px] ${step > itemStep ? "bg-emerald-100" : step === itemStep ? "bg-brand text-white" : "bg-background"}`}>{step > itemStep ? <Check className="h-3 w-3" /> : itemStep}</span>
                 <span className="hidden sm:inline">{label}</span>
               </div>
@@ -176,6 +185,7 @@ export default function SignupPage() {
               <input
                 name="schoolName"
                 type="text"
+                autoComplete="organization"
                 required
                 placeholder="Greenfield School"
                 value={formData.schoolName}
@@ -247,6 +257,7 @@ export default function SignupPage() {
               <input
                 name="phone"
                 type="tel"
+                autoComplete="tel"
                 placeholder="+234 800 000 0000"
                 required
                 value={formData.phone}
@@ -260,6 +271,7 @@ export default function SignupPage() {
               <input
                 name="adminName"
                 type="text"
+                autoComplete="name"
                 required
                 placeholder="Aisha Bello"
                 value={formData.adminName}
@@ -273,6 +285,7 @@ export default function SignupPage() {
               <input
                 name="adminEmail"
                 type="email"
+                autoComplete="email"
                 required
                 placeholder="admin@example.com"
                 value={formData.adminEmail}
@@ -297,6 +310,7 @@ export default function SignupPage() {
                 <input
                   name="password"
                   type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
                   required
                   minLength={8}
                   placeholder="Choose a secure password"
@@ -318,10 +332,24 @@ export default function SignupPage() {
                   )}
                 </button>
               </div>
+              <div className="mt-3" aria-live="polite">
+                <div className="grid grid-cols-4 gap-1" aria-hidden="true">
+                  {Array.from({ length: 4 }, (_, index) => (
+                    <span key={index} className={`h-1.5 ${index < passwordStrength ? passwordStrength < 2 ? "bg-rose-500" : passwordStrength < 4 ? "bg-amber-500" : "bg-emerald-600" : "bg-border"}`} />
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-muted">
+                  {formData.password.length < 8
+                    ? "Use at least 8 characters. Longer passwords are stronger."
+                    : passwordStrength < 4
+                    ? "Good start. Consider 12+ characters with mixed case, numbers, and symbols."
+                    : "Strong password pattern."}
+                </p>
+              </div>
             </label>
           </div>}
 
-          {stepError ? <p className="mt-5 border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800">{stepError}</p> : null}
+          {stepError ? <p className="mt-5 border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800" role="alert" aria-live="assertive">{stepError}</p> : null}
           <div className="mt-8 flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:justify-between">
             {step > 1 ? <Button type="button" variant="outline" onClick={previousStep} disabled={isLoading} className="gap-2"><ArrowLeft className="h-4 w-4" /> Back</Button> : <span />}
             {step < 3 ? <Button type="button" onClick={nextStep} disabled={isLoading} className="gap-2 bg-brand font-semibold hover:bg-brand-hover">Continue <ArrowRight className="h-4 w-4" /></Button> : <Button type="submit" className="gap-2 bg-brand font-semibold hover:bg-brand-hover" disabled={isLoading}>{isLoading ? "Creating school..." : "Create my school"}<ArrowRight className="h-4 w-4" /></Button>}

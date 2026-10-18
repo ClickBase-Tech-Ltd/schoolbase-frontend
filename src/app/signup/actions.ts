@@ -2,6 +2,7 @@
 
 import { cookies } from "next/headers";
 import { headers } from "next/headers";
+import { randomBytes } from "node:crypto";
 
 type SignupActionResult = { success: true; redirectTo: string } | { success: false; error: string };
 
@@ -72,10 +73,15 @@ export async function verifySignupOtpAction(formData: FormData): Promise<SignupA
   try {
     const adminEmail = formData.get("adminEmail");
     const otp = formData.get("otp");
+    const cookieStore = await cookies();
+    const recoveryCookieName = "schoolbase_signup_recovery";
+    const existingRecoveryKey = cookieStore.get(recoveryCookieName)?.value;
 
-    if (!adminEmail || !otp) {
-      throw new Error("Email and verification code are required");
+    if (!adminEmail || (!otp && !existingRecoveryKey)) {
+      throw new Error("Enter your verification code, or resume a verification already started in this browser.");
     }
+
+    if (!existingRecoveryKey) throw new Error("Prepare browser recovery before submitting the verification code.");
 
     const apiUrl = getSignupBackendUrl("/api/trial/verify-otp");
     const response = await fetch(apiUrl, {
@@ -83,7 +89,8 @@ export async function verifySignupOtpAction(formData: FormData): Promise<SignupA
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         adminEmail,
-        otp,
+        otp: otp || "",
+        recoveryKey: existingRecoveryKey,
       }),
     });
 
@@ -95,7 +102,7 @@ export async function verifySignupOtpAction(formData: FormData): Promise<SignupA
 
     if (!data.token) throw new Error("Account was created but a session could not be established. Please sign in.");
 
-    const [cookieStore, requestHeaders] = await Promise.all([cookies(), headers()]);
+    const requestHeaders = await headers();
     const host = requestHeaders.get("host") || "";
     const schoolbaseHost = host.includes("schoolbase.live");
     cookieStore.set("schoolbase_session", data.token, {
@@ -106,9 +113,36 @@ export async function verifySignupOtpAction(formData: FormData): Promise<SignupA
       path: "/",
       ...(schoolbaseHost ? { domain: ".schoolbase.live" } : {}),
     });
+    cookieStore.delete(recoveryCookieName);
 
     return { success: true, redirectTo: "/admin" };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+export async function prepareSignupRecoveryAction(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const [cookieStore, requestHeaders] = await Promise.all([cookies(), headers()]);
+    const recoveryCookieName = "schoolbase_signup_recovery";
+    if (cookieStore.get(recoveryCookieName)?.value) return { success: true };
+
+    const host = requestHeaders.get("host") || "";
+    const schoolbaseHost = host.includes("schoolbase.live");
+    cookieStore.set(recoveryCookieName, randomBytes(32).toString("hex"), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production" && !host.includes("localhost"),
+      sameSite: "lax",
+      maxAge: 15 * 60,
+      path: "/",
+      ...(schoolbaseHost ? { domain: ".schoolbase.live" } : {}),
+    });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+export async function resumeSignupAfterTimeoutAction(formData: FormData): Promise<SignupActionResult> {
+  return verifySignupOtpAction(formData);
 }

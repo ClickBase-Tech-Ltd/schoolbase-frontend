@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
 import { ErrorModal } from "@/components/ui/error-modal";
-import { verifySignupOtpAction } from "@/app/signup/actions";
+import { prepareSignupRecoveryAction, resumeSignupAfterTimeoutAction, verifySignupOtpAction } from "@/app/signup/actions";
 import Link from "next/link";
 
 export function VerifySignupClient() {
@@ -75,6 +75,8 @@ export function VerifySignupClient() {
       formDataObj.append("adminEmail", adminEmail);
       formDataObj.append("otp", otp);
 
+      const recovery = await prepareSignupRecoveryAction();
+      if (!recovery.success) throw new Error(recovery.error || "Could not prepare safe signup recovery.");
       const result = await verifySignupOtpAction(formDataObj);
       if (!result.success) throw new Error(result.error);
       router.push(result.redirectTo);
@@ -86,8 +88,26 @@ export function VerifySignupClient() {
           ? "Please check the verification code and try again."
           : errorMessage.includes("expired")
           ? "Your verification code has expired. Please go back and request a new one."
-          : errorMessage,
+          : "If the request timed out, retry with the same code. A completed signup can be safely resumed for 15 minutes.",
       });
+      setIsLoading(false);
+    }
+  }
+
+  async function handleResumeSignup() {
+    if (!adminEmail || isLoading) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const formDataObj = new FormData();
+      formDataObj.append("adminEmail", adminEmail);
+      const result = await resumeSignupAfterTimeoutAction(formDataObj);
+      if (!result.success) throw new Error(result.error);
+      router.push(result.redirectTo);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError({ message: errorMessage, details: "If this browser already completed verification, you can safely retry. Otherwise enter the code from your email." });
+    } finally {
       setIsLoading(false);
     }
   }
@@ -171,6 +191,10 @@ export function VerifySignupClient() {
             {isLoading ? "Verifying..." : "Confirm and create account"}
           </Button>
         </form>
+
+        <button type="button" onClick={handleResumeSignup} disabled={isLoading} className="mt-3 w-full border border-border px-4 py-2.5 text-sm font-medium text-muted hover:bg-background disabled:opacity-50">
+          {isLoading ? "Checking previous attempt..." : "Resume previous verification"}
+        </button>
 
         <div className="mt-6 space-y-3 border-t border-border pt-6">
           <button
