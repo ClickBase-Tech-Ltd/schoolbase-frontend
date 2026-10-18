@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 
 const hiddenPublicShellPaths = [
   "/admin",
+  "/employee",
+  "/staff",
   "/teacher",
   "/parent",
   "/admissions",
