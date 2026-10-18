@@ -1,6 +1,9 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { headers } from "next/headers";
+
+type SignupActionResult = { success: true; redirectTo: string } | { success: false; error: string };
 
 const BACKEND_URL =
   process.env.BACKEND_URL ||
@@ -16,7 +19,7 @@ function getSignupBackendUrl(path: string) {
  * Request OTP for signup verification
  * This is a server action that calls the backend directly.
  */
-export async function requestSignupOtpAction(formData: FormData) {
+export async function requestSignupOtpAction(formData: FormData): Promise<SignupActionResult> {
   try {
     const schoolName = formData.get("schoolName");
     const slug = formData.get("slug");
@@ -55,46 +58,23 @@ export async function requestSignupOtpAction(formData: FormData) {
       throw new Error(data.error || data.message || "Failed to request OTP");
     }
 
-    // Redirect to OTP verification page with all form data
-    const params = new URLSearchParams({
-      email: String(adminEmail),
-      schoolName: String(schoolName),
-      slug: String(slug),
-      tagline: String(tagline ?? ""),
-      address: String(address ?? ""),
-      phone: String(phone ?? ""),
-      country: String(country),
-      adminName: String(adminName),
-      password: String(password),
-    });
-    redirect(`/signup/verify?${params.toString()}`);
+    const params = new URLSearchParams({ email: String(adminEmail) });
+    return { success: true, redirectTo: `/signup/verify?${params.toString()}` };
   } catch (error) {
-    // Re-throw Next.js redirect errors
-    if (error instanceof Error && (error.message === 'NEXT_REDIRECT' || (error as any).digest?.includes('NEXT_REDIRECT'))) {
-      throw error;
-    }
-    throw new Error(error instanceof Error ? error.message : String(error));
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
 /**
  * Verify OTP and create school account
  */
-export async function verifySignupOtpAction(formData: FormData) {
+export async function verifySignupOtpAction(formData: FormData): Promise<SignupActionResult> {
   try {
-    const schoolName = formData.get("schoolName");
-    const slug = formData.get("slug");
-    const tagline = formData.get("tagline");
-    const address = formData.get("address");
-    const phone = formData.get("phone");
-    const country = formData.get("country");
-    const adminName = formData.get("adminName");
     const adminEmail = formData.get("adminEmail");
-    const password = formData.get("password");
     const otp = formData.get("otp");
 
-    if (!otp) {
-      throw new Error("OTP is required");
+    if (!adminEmail || !otp) {
+      throw new Error("Email and verification code are required");
     }
 
     const apiUrl = getSignupBackendUrl("/api/trial/verify-otp");
@@ -102,15 +82,7 @@ export async function verifySignupOtpAction(formData: FormData) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        schoolName,
-        slug,
-        tagline,
-        address,
-        phone,
-        country,
-        adminName,
         adminEmail,
-        password,
         otp,
       }),
     });
@@ -121,13 +93,22 @@ export async function verifySignupOtpAction(formData: FormData) {
       throw new Error(data.error || data.message || "Failed to verify OTP");
     }
 
-    // Redirect to success page which shows the success modal
-    redirect("/signup/success");
+    if (!data.token) throw new Error("Account was created but a session could not be established. Please sign in.");
+
+    const [cookieStore, requestHeaders] = await Promise.all([cookies(), headers()]);
+    const host = requestHeaders.get("host") || "";
+    const schoolbaseHost = host.includes("schoolbase.live");
+    cookieStore.set("schoolbase_session", data.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production" && !host.includes("localhost"),
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60,
+      path: "/",
+      ...(schoolbaseHost ? { domain: ".schoolbase.live" } : {}),
+    });
+
+    return { success: true, redirectTo: "/admin" };
   } catch (error) {
-    // Re-throw Next.js redirect errors
-    if (error instanceof Error && (error.message === 'NEXT_REDIRECT' || (error as any).digest?.includes('NEXT_REDIRECT'))) {
-      throw error;
-    }
-    throw new Error(error instanceof Error ? error.message : String(error));
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 }

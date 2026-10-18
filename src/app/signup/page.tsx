@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
 import { ErrorModal } from "@/components/ui/error-modal";
@@ -10,6 +11,7 @@ import { ArrowLeft, ArrowRight, Building2, Check, Eye, EyeOff, ShieldCheck } fro
 import { ContextualAdSlot } from "@/components/login-page-ad-slot";
 
 export default function SignupPage() {
+  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -50,22 +52,18 @@ export default function SignupPage() {
       formDataObj.append("adminEmail", formData.adminEmail);
       formDataObj.append("password", formData.password);
 
-      await requestSignupOtpAction(formDataObj);
+      const result = await requestSignupOtpAction(formDataObj);
+      if (!result.success) throw new Error(result.error);
+      router.push(result.redirectTo);
     } catch (err) {
-      // Don't show error for redirect - let Next.js handle the navigation
-      if (err instanceof Error && (err.message === 'NEXT_REDIRECT' || (err as any).digest?.includes('NEXT_REDIRECT'))) {
-        return; // Let the redirect happen silently
-      }
-
       const errorMessage = err instanceof Error ? err.message : String(err);
-      const isServerRenderError =
-        errorMessage.includes("Server Components render") ||
-        errorMessage.includes("digest") ||
-        errorMessage.includes("NEXT_REDIRECT");
+      const isServerRenderError = errorMessage.includes("Server Components render") || errorMessage.includes("digest") || errorMessage.includes("NEXT_REDIRECT");
 
       setError({
         message: isServerRenderError
           ? "We couldn’t complete your signup right now"
+          : errorMessage.includes("NEXT_REDIRECT")
+          ? "Your request was received. Continue to email verification."
           : errorMessage.includes("Email already registered")
           ? "This admin email is already in use."
           : errorMessage.includes("Invalid email")
@@ -73,6 +71,8 @@ export default function SignupPage() {
           : errorMessage,
         details: isServerRenderError
           ? "Please review the form and try again. If the problem continues, contact SchoolBase support."
+          : errorMessage.includes("NEXT_REDIRECT")
+          ? undefined
           : errorMessage.includes("Email already registered")
           ? "Use another email or recover the existing account."
           : errorMessage.includes("Invalid email")
@@ -154,7 +154,7 @@ export default function SignupPage() {
           </div>
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">Create a new school</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-          Register a school account and get a starter admin user for the first campus. We will email a one-time verification code to the admin address before the account is created.
+          Register your school and create its first administrator account. We will email a one-time verification code before the account is created.
         </p>
 
         <div className="mt-8 grid grid-cols-3 border-y border-border">
@@ -329,7 +329,7 @@ export default function SignupPage() {
         </form>
 
         <p className="mt-6 border-t border-border pt-5 text-center text-sm text-muted">
-          After signup, sign in as staff at the normal login page.
+          Your first administrator account will be ready after email verification.
         </p>
         </section>
       </div>

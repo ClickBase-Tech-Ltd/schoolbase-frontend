@@ -11,6 +11,7 @@ import { Bell, CalendarPlus, CheckSquare, Download, MoreVertical, Pause, Play, X
 export type SchoolRow = {
   id: string;
   name: string;
+  slug: string;
   logoUrl: string | null;
   country: string;
   email: string | null;
@@ -25,6 +26,8 @@ export type SchoolRow = {
   pupilCount?: number;
   classCount?: number;
   planLimit?: number | null;
+  archivedAt?: string | null;
+  archiveReason?: string | null;
 };
 
 // Helper function to get the next plan tier
@@ -41,6 +44,7 @@ function getNextPlan(currentPlan: string): string {
 export function ActionMenu({
   school,
   performAction,
+  restoreSchool,
   impersonate,
   sendReminder,
   busy,
@@ -48,6 +52,7 @@ export function ActionMenu({
 }: {
   school: SchoolRow;
   performAction: (schoolId: string, action: string, payload?: Record<string, unknown>) => Promise<void>;
+  restoreSchool: (schoolId: string) => Promise<void>;
   impersonate: (schoolId: string) => Promise<void>;
   sendReminder: (schoolId: string) => Promise<void>;
   busy: boolean;
@@ -101,48 +106,67 @@ export function ActionMenu({
               className="z-50 origin-top-right rounded-md border border-border bg-background shadow-lg"
             >
               <div className="py-1">
-                <button
-                  className="cursor-pointer flex w-full items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-surface"
-                  onClick={() => { setOpen(false); performAction(school.id, school.status === "SUSPENDED" ? "activate" : "suspend"); }}
-                  disabled={busy}
-                >
-                  {school.status === "SUSPENDED" ? "Activate" : "Suspend"}
-                </button>
-                <button
-                  className="cursor-pointer flex w-full items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-surface"
-                  onClick={() => { setOpen(false); performAction(school.id, "upgrade"); }}
-                  disabled={busy || school.plan === "ENTERPRISE"}
-                >
-                  Upgrade to {getNextPlan(school.plan)}
-                </button>
-                <button
-                  className="cursor-pointer flex w-full items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-surface"
-                  onClick={() => { setOpen(false); performAction(school.id, "extendTrial", { days: 30 }); }}
-                  disabled={busy}
-                >
-                  +30d trial
-                </button>
-                <button
-                  className="cursor-pointer flex w-full items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-surface"
-                  onClick={() => { setOpen(false); performAction(school.id, "cancel"); }}
-                  disabled={busy}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="cursor-pointer flex w-full items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-surface"
-                  onClick={() => { setOpen(false); sendReminder(school.id); }}
-                  disabled={busy}
-                >
-                  Send reminder
-                </button>
+                {!school.archivedAt ? <>
+                  <button
+                    className="cursor-pointer flex w-full items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-surface"
+                    onClick={() => { setOpen(false); performAction(school.id, school.status === "SUSPENDED" ? "activate" : "suspend"); }}
+                    disabled={busy}
+                  >
+                    {school.status === "SUSPENDED" ? "Activate" : "Suspend"}
+                  </button>
+                  <button
+                    className="cursor-pointer flex w-full items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-surface"
+                    onClick={() => { setOpen(false); performAction(school.id, "upgrade"); }}
+                    disabled={busy || school.plan === "ENTERPRISE"}
+                  >
+                    Upgrade to {getNextPlan(school.plan)}
+                  </button>
+                  <button
+                    className="cursor-pointer flex w-full items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-surface"
+                    onClick={() => { setOpen(false); performAction(school.id, "extendTrial", { days: 30 }); }}
+                    disabled={busy}
+                  >
+                    +30d trial
+                  </button>
+                  <button
+                    className="cursor-pointer flex w-full items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-surface"
+                    onClick={() => { setOpen(false); performAction(school.id, "cancel"); }}
+                    disabled={busy}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="cursor-pointer flex w-full items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-surface"
+                    onClick={() => { setOpen(false); sendReminder(school.id); }}
+                    disabled={busy}
+                  >
+                    Send reminder
+                  </button>
+                </> : null}
                 <button
                   className="cursor-pointer flex w-full items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-surface"
                   onClick={() => { setOpen(false); impersonate(school.id); }}
-                  disabled={busy}
+                  disabled={busy || Boolean(school.archivedAt)}
                 >
                   Impersonate
                 </button>
+                {school.archivedAt ? (
+                  <button
+                    className="cursor-pointer flex w-full items-center gap-2 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
+                    onClick={() => { setOpen(false); restoreSchool(school.id); }}
+                    disabled={busy}
+                  >
+                    Restore school
+                  </button>
+                ) : (
+                  <button
+                    className="cursor-pointer flex w-full items-center gap-2 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50"
+                    onClick={() => { setOpen(false); window.dispatchEvent(new CustomEvent("schoolbase:archive-school", { detail: school })); }}
+                    disabled={busy}
+                  >
+                    Delete school
+                  </button>
+                )}
               </div>
             </div>,
             document.body,
@@ -156,10 +180,12 @@ export function SchoolTable({
   schools,
   filterControls,
   onOpenDetails,
+  onRestoreSchool,
 }: {
   schools: SchoolRow[];
   filterControls?: ReactNode;
   onOpenDetails?: (school: SchoolRow) => void;
+  onRestoreSchool: (schoolId: string) => Promise<void>;
 }) {
   const [schoolOverrides, setSchoolOverrides] = useState<Record<string, Partial<SchoolRow>>>({});
   const displaySchools = useMemo(
@@ -730,6 +756,7 @@ export function SchoolTable({
                   <ActionMenu
                     school={school}
                     performAction={performAction}
+                    restoreSchool={onRestoreSchool}
                     sendReminder={sendReminder}
                     impersonate={impersonate}
                     busy={busy}

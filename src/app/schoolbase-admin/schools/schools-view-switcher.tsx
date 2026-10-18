@@ -67,6 +67,10 @@ export default function SchoolsViewSwitcher({
   const [selectedSchool, setSelectedSchool] = useState<SchoolRow | null>(null);
   const [schoolDetails, setSchoolDetails] = useState<SchoolDetailsRow | null>(null);
   const [schoolDetailsLoading, setSchoolDetailsLoading] = useState(false);
+  const [archiveTarget, setArchiveTarget] = useState<SchoolRow | null>(null);
+  const [archiveSlug, setArchiveSlug] = useState("");
+  const [archiveReason, setArchiveReason] = useState("");
+  const [archiveError, setArchiveError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -79,7 +83,8 @@ export default function SchoolsViewSwitcher({
         let page = 1;
 
         while (true) {
-          const res = await fetch(`/schoolbase-admin/api/schools?page=${page}&limit=100`, {
+          const statusQuery = statusFilter === "ALL" ? "" : `&status=${encodeURIComponent(statusFilter)}`;
+          const res = await fetch(`/schoolbase-admin/api/schools?page=${page}&limit=100${statusQuery}`, {
             credentials: "include",
             headers: { "Content-Type": "application/json" },
           });
@@ -114,7 +119,20 @@ export default function SchoolsViewSwitcher({
 
     void loadSchools();
     return () => { active = false; };
-  }, [reloadToken]);
+  }, [reloadToken, statusFilter]);
+
+  useEffect(() => {
+    const handleArchiveRequest = (event: Event) => {
+      const school = (event as CustomEvent<SchoolRow>).detail;
+      if (!school?.id) return;
+      setArchiveTarget(school);
+      setArchiveSlug("");
+      setArchiveReason("");
+      setArchiveError(null);
+    };
+    window.addEventListener("schoolbase:archive-school", handleArchiveRequest);
+    return () => window.removeEventListener("schoolbase:archive-school", handleArchiveRequest);
+  }, []);
 
   const countries = useMemo(() => {
     return Array.from(new Set(schools.map((school) => school.country).filter(Boolean))).sort();
@@ -163,6 +181,8 @@ export default function SchoolsViewSwitcher({
       const matchesStatus =
         statusFilter === "ALL"
           ? true
+          : statusFilter === "ARCHIVED"
+          ? Boolean(school.archivedAt)
           : statusFilter === "VERIFIED_ONLY"
           ? Boolean(school.isVerified)
           : statusFilter === "UNVERIFIED_ONLY"
@@ -211,10 +231,11 @@ export default function SchoolsViewSwitcher({
       });
       const result = await response.json();
       if (!response.ok) {
-        console.error(result.message || "Action failed.");
+        setArchiveError(result.message || "Action failed.");
         return;
       }
       setSchools((current) => current.map((s) => (s.id === schoolId ? { ...s, ...(result.school || {}) } : s)));
+      setReloadToken((value) => value + 1);
     } catch (err) {
       console.error("Action failed", err);
     } finally {
@@ -263,6 +284,55 @@ export default function SchoolsViewSwitcher({
       window.location.assign(result.redirectUrl);
     } catch (err) {
       console.error("Impersonation failed", err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const archiveSchool = async () => {
+    if (!archiveTarget) return;
+    setBusy(true);
+    setArchiveError(null);
+    try {
+      const response = await fetch("/schoolbase-admin/api/schools", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          schoolId: archiveTarget.id,
+          action: "archive",
+          confirmationSlug: archiveSlug,
+          reason: archiveReason,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Could not archive school.");
+      setArchiveTarget(null);
+      setStatusFilter("ARCHIVED");
+      setReloadToken((value) => value + 1);
+    } catch (error) {
+      setArchiveError(error instanceof Error ? error.message : "Could not archive school.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restoreSchool = async (schoolId: string) => {
+    setBusy(true);
+    try {
+      const response = await fetch("/schoolbase-admin/api/schools", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ schoolId, action: "restore" }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || "Could not restore school.");
+      setStatusFilter("ALL");
+      setLoadError(result.message || "School restored.");
+      setReloadToken((value) => value + 1);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Could not restore school.");
     } finally {
       setBusy(false);
     }
@@ -347,6 +417,7 @@ export default function SchoolsViewSwitcher({
         <option value="ACTIVE">Active</option>
         <option value="SUSPENDED">Suspended</option>
         <option value="CANCELLED">Cancelled</option>
+        <option value="ARCHIVED">Archived</option>
         <option value="VERIFIED_ONLY">Verified</option>
         <option value="UNVERIFIED_ONLY">Unverified</option>
       </select>
@@ -383,6 +454,32 @@ export default function SchoolsViewSwitcher({
           <button type="button" onClick={() => setReloadToken((value) => value + 1)} className="font-semibold underline underline-offset-2">
             Retry loading schools
           </button>
+        </div>
+      ) : null}
+      {archiveTarget ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 px-4 py-8" role="dialog" aria-modal="true" aria-labelledby="archive-school-title">
+          <section className="w-full max-w-lg border border-border bg-background shadow-2xl">
+            <div className="border-b border-border px-6 py-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-rose-700">School lifecycle</p>
+              <h2 id="archive-school-title" className="mt-2 text-xl font-semibold text-foreground">Delete {archiveTarget.name}?</h2>
+              <p className="mt-2 text-sm leading-6 text-muted">This safely archives the school and disables access. School, student, financial, and audit records are retained; a platform administrator can restore it later.</p>
+            </div>
+            <div className="space-y-4 px-6 py-5">
+              <label className="block text-sm font-medium text-foreground">
+                Type the school slug to confirm: <span className="font-mono">{archiveTarget.slug}</span>
+                <input value={archiveSlug} onChange={(event) => setArchiveSlug(event.target.value)} autoComplete="off" className="mt-2 h-11 w-full border border-border bg-surface px-3 font-mono text-sm" />
+              </label>
+              <label className="block text-sm font-medium text-foreground">
+                Reason for archival
+                <textarea value={archiveReason} onChange={(event) => setArchiveReason(event.target.value)} minLength={10} maxLength={500} rows={3} className="mt-2 w-full border border-border bg-surface px-3 py-2 text-sm" />
+              </label>
+              {archiveError ? <p role="alert" className="text-sm text-rose-700">{archiveError}</p> : null}
+            </div>
+            <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
+              <button type="button" onClick={() => setArchiveTarget(null)} disabled={busy} className="h-10 border border-border px-4 text-sm font-medium text-foreground">Keep school</button>
+              <button type="button" onClick={archiveSchool} disabled={busy || archiveSlug !== archiveTarget.slug || archiveReason.trim().length < 10} className="h-10 bg-rose-700 px-4 text-sm font-semibold text-white disabled:opacity-50">{busy ? "Deleting..." : "Delete school"}</button>
+            </div>
+          </section>
         </div>
       ) : null}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -471,7 +568,7 @@ export default function SchoolsViewSwitcher({
       </div>
 
       {viewMode === "list" ? (
-        <SchoolTable schools={filteredSchools} filterControls={filterControls} onOpenDetails={openSchoolDetails} />
+        <SchoolTable schools={filteredSchools} filterControls={filterControls} onOpenDetails={openSchoolDetails} onRestoreSchool={restoreSchool} />
       ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {filteredSchools.length === 0 ? (
@@ -553,6 +650,7 @@ export default function SchoolsViewSwitcher({
                       <ActionMenu
                         school={school}
                         performAction={performAction}
+                        restoreSchool={restoreSchool}
                         sendReminder={sendReminder}
                         impersonate={impersonate}
                         busy={busy}

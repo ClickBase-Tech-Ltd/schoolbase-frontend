@@ -4,16 +4,12 @@ import { getBackendUrl } from '@/lib/backend-url';
 /**
  * POST /api/signup/verify-otp
  * Verify OTP and create school account
- * Body: { schoolName, slug, country, adminName, adminEmail, password, otp }
+ * Body: { adminEmail, otp }
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const BACKEND_URL = getBackendUrl();
-    
-    console.log('=== SIGNUP VERIFY OTP ===');
-    console.log('School:', body.schoolName);
-    console.log('Email:', body.adminEmail);
     
     // Call backend verify-otp endpoint
     const response = await fetch(`${BACKEND_URL}/api/trial/verify-otp`, {
@@ -30,6 +26,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Set session cookie with the returned token
+    const host = request.headers.get('host') || '';
+    const productionHost = host.includes('schoolbase.live');
     const res = NextResponse.json({
       success: true,
       message: 'Account created successfully',
@@ -38,16 +36,15 @@ export async function POST(request: NextRequest) {
     });
     
     if (data.token) {
-      res.cookies.set('schoolbase_staff', data.token, {
+      res.cookies.set('schoolbase_session', data.token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         maxAge: 7 * 24 * 60 * 60,
         path: '/',
+        ...(productionHost ? { domain: '.schoolbase.live' } : {}),
       });
     }
-
-    console.log('=== ACCOUNT CREATED ===');
     return res;
   } catch (error) {
     console.error('=== SIGNUP VERIFICATION ERROR ===');

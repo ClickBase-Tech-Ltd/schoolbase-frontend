@@ -6,10 +6,12 @@ export async function GET(req: NextRequest) {
     const searchParams = req.nextUrl.searchParams;
     const page = searchParams.get("page") || "1";
     const limit = searchParams.get("limit") || "10";
+    const status = searchParams.get("status");
     const backendUrl = getBackendUrl();
+    const statusQuery = status ? `&status=${encodeURIComponent(status)}` : "";
     
     const response = await fetch(
-      `${backendUrl}/schoolbase-admin/api/schools?page=${page}&limit=${limit}`,
+      `${backendUrl}/schoolbase-admin/api/schools?page=${page}&limit=${limit}${statusQuery}`,
       {
         method: "GET",
         headers: {

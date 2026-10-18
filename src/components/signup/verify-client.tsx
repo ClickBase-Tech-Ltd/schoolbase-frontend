@@ -6,7 +6,6 @@ import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
 import { ErrorModal } from "@/components/ui/error-modal";
 import { verifySignupOtpAction } from "@/app/signup/actions";
-import { getBackendUrl } from "@/lib/backend-url";
 import Link from "next/link";
 
 export function VerifySignupClient() {
@@ -15,78 +14,16 @@ export function VerifySignupClient() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<{ message: string; details?: string } | null>(null);
   const [otp, setOtp] = useState("");
-  const [resendCooldown, setResendCooldown] = useState(0);
-  const [pendingLoaded, setPendingLoaded] = useState(false);
-  const [signupData, setSignupData] = useState({
-    schoolName: searchParams.get("schoolName") || "",
-    slug: searchParams.get("slug") || "",
-    tagline: searchParams.get("tagline") || "",
-    address: searchParams.get("address") || "",
-    phone: searchParams.get("phone") || "",
-    country: searchParams.get("country") || "",
-    adminName: searchParams.get("adminName") || "",
-    password: searchParams.get("password") || "",
-  });
+  const [resendCooldown, setResendCooldown] = useState(60);
 
   const adminEmail = searchParams.get("email") || "";
   const needsVerification = searchParams.get("needsVerification") === "true";
-  const {
-    schoolName,
-    slug,
-    tagline,
-    address,
-    phone,
-    country,
-    adminName,
-    password,
-  } = signupData;
-
+  const maskedEmail = adminEmail.replace(/^(.).+(@.+)$/, "$1•••$2");
   useEffect(() => {
-    async function loadPendingSignup() {
-      if (!adminEmail) {
-        setPendingLoaded(true);
-        return;
-      }
-
-      if (signupData.schoolName && signupData.slug && signupData.country && signupData.adminName) {
-        setPendingLoaded(true);
-        return;
-      }
-
-      try {
-        const backendUrl = getBackendUrl();
-        const response = await fetch(`${backendUrl}/api/trial/get-pending?email=${encodeURIComponent(adminEmail)}`);
-        if (!response.ok) {
-          setPendingLoaded(true);
-          return;
-        }
-
-        const data = await response.json();
-        if (data?.email) {
-          setSignupData((current) => ({
-            schoolName: current.schoolName || data.schoolName || "",
-            slug: current.slug || data.slug || "",
-            tagline: current.tagline || data.tagline || "",
-            address: current.address || data.address || "",
-            phone: current.phone || data.phone || "",
-            country: current.country || data.country || "",
-            adminName: current.adminName || data.adminName || "",
-            password: current.password || "",
-          }));
-        }
-      } catch (err) {
-        console.error('Failed to load pending signup data', err);
-      } finally {
-        setPendingLoaded(true);
-      }
-    }
-
-    loadPendingSignup();
-
     // Auto-focus the OTP input
     const input = document.querySelector('input[name="otp"]') as HTMLInputElement;
     if (input) input.focus();
-  }, [adminEmail, signupData.schoolName, signupData.slug, signupData.country, signupData.adminName]);
+  }, [adminEmail]);
 
   // Handle resend cooldown
   useEffect(() => {
@@ -97,15 +34,13 @@ export function VerifySignupClient() {
   }, [resendCooldown]);
 
   async function handleResendOtp() {
-    if (!adminEmail) return;
+    if (!adminEmail || isLoading || resendCooldown > 0) return;
     
     setIsLoading(true);
     setError(null);
-    setResendCooldown(60);
 
     try {
-      const backendUrl = getBackendUrl();
-      const response = await fetch(`${backendUrl}/api/trial/resend-otp`, {
+      const response = await fetch("/api/signup/resend-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ adminEmail }),
@@ -117,8 +52,9 @@ export function VerifySignupClient() {
       }
 
       setError({
-        message: `✓ Verification code resent to ${adminEmail}`,
+        message: "✓ New verification code accepted for delivery.",
       });
+      setResendCooldown(60);
     } catch (err) {
       setError({
         message: "Failed to resend verification code",
@@ -136,24 +72,13 @@ export function VerifySignupClient() {
 
     try {
       const formDataObj = new FormData();
-      formDataObj.append("schoolName", schoolName);
-      formDataObj.append("slug", slug);
-      formDataObj.append("tagline", tagline);
-      formDataObj.append("address", address);
-      formDataObj.append("phone", phone);
-      formDataObj.append("country", country);
-      formDataObj.append("adminName", adminName);
       formDataObj.append("adminEmail", adminEmail);
-      formDataObj.append("password", password);
       formDataObj.append("otp", otp);
 
-      await verifySignupOtpAction(formDataObj);
+      const result = await verifySignupOtpAction(formDataObj);
+      if (!result.success) throw new Error(result.error);
+      router.push(result.redirectTo);
     } catch (err) {
-      // Don't show error for redirect - let Next.js handle the navigation
-      if (err instanceof Error && (err.message === 'NEXT_REDIRECT' || (err as any).digest?.includes('NEXT_REDIRECT'))) {
-        return; // Let the redirect happen silently
-      }
-
       const errorMessage = err instanceof Error ? err.message : String(err);
       setError({
         message: errorMessage,
@@ -186,19 +111,6 @@ export function VerifySignupClient() {
     );
   }
 
-  if (!pendingLoaded) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
-        <div className="w-full max-w-xl border border-border bg-surface p-8">
-          <div className="mb-6 flex justify-center">
-            <AppLogo href="/" size="lg" />
-          </div>
-          <div className="h-8 w-32 animate-pulse rounded bg-border" />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
       <div className="w-full max-w-xl border border-border bg-surface p-8">
@@ -211,7 +123,7 @@ export function VerifySignupClient() {
             <p className="text-center text-xs font-bold uppercase tracking-[.16em] text-brand">SchoolBase onboarding</p>
             <h1 className="mt-3 text-center text-3xl font-semibold tracking-tight">Verify your email</h1>
             <p className="mt-2 text-center text-sm text-muted">
-              We sent a verification code to <strong>{adminEmail}</strong>. Enter it below to complete your signup.
+              We sent a verification code to <strong>{maskedEmail}</strong>. Enter it below to complete your signup.
             </p>
           </>
         ) : (
@@ -219,13 +131,13 @@ export function VerifySignupClient() {
             <p className="text-center text-xs font-bold uppercase tracking-[.16em] text-brand">SchoolBase onboarding</p>
             <h1 className="mt-3 text-center text-3xl font-semibold tracking-tight">Verify your signup</h1>
             <p className="mt-2 text-center text-sm text-muted">
-              Enter the 6-digit code we sent to <strong>{adminEmail}</strong>.
+              Enter the 6-digit code we sent to <strong>{maskedEmail}</strong>.
             </p>
           </>
         )}
 
         {error && (
-          <div className={`mt-4 border px-4 py-3 text-sm ${
+          <div role="alert" className={`mt-4 border px-4 py-3 text-sm ${
             error.message.startsWith('✓')
               ? 'border border-green-300 bg-green-50 text-green-900'
               : 'border border-red-300 bg-red-50 text-red-900'
@@ -235,15 +147,7 @@ export function VerifySignupClient() {
         )}
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
-          <input name="schoolName" type="hidden" value={schoolName} />
-          <input name="slug" type="hidden" value={slug} />
-          <input name="tagline" type="hidden" value={tagline} />
-          <input name="address" type="hidden" value={address} />
-          <input name="phone" type="hidden" value={phone} />
-          <input name="country" type="hidden" value={country} />
-          <input name="adminName" type="hidden" value={adminName} />
           <input name="adminEmail" type="hidden" value={adminEmail} />
-          <input name="password" type="hidden" value={password} />
 
           <label className="block text-sm font-medium">
             Verification code
