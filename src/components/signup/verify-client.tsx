@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
-import { ErrorModal } from "@/components/ui/error-modal";
+import { SignupNoticeModal } from "@/components/signup/signup-notice-modal";
 import { prepareSignupRecoveryAction, resumeSignupAfterTimeoutAction, verifySignupOtpAction } from "@/app/signup/actions";
 import Link from "next/link";
 
@@ -219,13 +219,19 @@ export function VerifySignupClient() {
         </div>
       </div>
 
-      <ErrorModal
+      <SignupNoticeModal
         isOpen={!!(error && error.message && error.message.startsWith('Failed'))}
         onClose={() => setError(null)}
         title="Verification Error"
         message={error?.message || ""}
         details={error?.details}
         type="error"
+        confirmLabel="Return to code"
+        onConfirm={() => {
+          window.requestAnimationFrame(() => {
+            document.querySelector<HTMLInputElement>('input[name="otp"]')?.focus();
+          });
+        }}
       />
     </div>
   );

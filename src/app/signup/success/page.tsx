@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AppLogo } from "@/components/app-logo";
-import { ErrorModal } from "@/components/ui/error-modal";
+import { SignupNoticeModal } from "@/components/signup/signup-notice-modal";
 import { CheckCircle2 } from "lucide-react";
 
 export default function SignupSuccessPage() {
@@ -42,14 +42,15 @@ export default function SignupSuccessPage() {
         </div>
       </div>
 
-      <ErrorModal
+      <SignupNoticeModal
         isOpen={showModal}
-        onClose={() => {}} // Don't close on backdrop click
+        onClose={() => setShowModal(false)}
         title="School Created Successfully!"
         message="Your school account has been created and is ready to use. Please log in with your email and password to get started."
         type="success"
-        onSuccessAction={handleLoginNow}
-        action={{
+        confirmLabel="Log in now"
+        onConfirm={handleLoginNow}
+        secondaryAction={{
           label: "Back to Signup",
           onClick: () => router.push("/signup"),
         }}

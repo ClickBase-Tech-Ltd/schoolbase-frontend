@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
-import { ErrorModal } from "@/components/ui/error-modal";
+import { SignupNoticeModal } from "@/components/signup/signup-notice-modal";
 import countriesData from "../../../config/countries.json";
 import { requestSignupOtpAction } from "@/app/signup/actions";
 import { ArrowLeft, ArrowRight, Building2, Check, Eye, EyeOff, ShieldCheck } from "lucide-react";
@@ -28,6 +28,10 @@ export default function SignupPage() {
     adminEmail: "",
     password: "",
   });
+  const slugConflict = error?.message.toLowerCase().includes("slug already exists")
+    || error?.message.toLowerCase().includes("school slug");
+  const emailConflict = error?.message.toLowerCase().includes("email already registered")
+    || error?.message.toLowerCase().includes("admin email is already in use");
   const passwordStrength = formData.password.length === 0
     ? 0
     : Math.min(4, Number(formData.password.length >= 8) + Number(formData.password.length >= 12) + Number(/[A-Z]/.test(formData.password) && /[a-z]/.test(formData.password)) + Number(/[0-9]/.test(formData.password) && /[^A-Za-z0-9]/.test(formData.password)));
@@ -362,14 +366,26 @@ export default function SignupPage() {
         </section>
       </div>
 
-      <ErrorModal
+      <SignupNoticeModal
         isOpen={!!error}
         onClose={() => setError(null)}
         title="Unable to Create School"
         message={error?.message || ""}
         details={error?.details}
         type="error"
-        action={error?.message === "This admin email is already in use." ? {
+        confirmLabel={slugConflict ? "Change school slug" : emailConflict ? "Change email" : "Close"}
+        onConfirm={slugConflict || emailConflict ? () => {
+          const fieldName = slugConflict ? "slug" : "adminEmail";
+          const targetStep = slugConflict ? 1 : 2;
+          setStepError(null);
+          setStep(targetStep);
+          window.requestAnimationFrame(() => {
+            const field = document.querySelector<HTMLInputElement>(`[name="${fieldName}"]`);
+            field?.focus();
+            field?.select();
+          });
+        } : undefined}
+        secondaryAction={error?.message === "This admin email is already in use." ? {
           label: "Recover account",
           onClick: () => { window.location.href = "/forgot-password"; },
         } : undefined}
