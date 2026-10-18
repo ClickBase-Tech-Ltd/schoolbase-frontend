@@ -28,8 +28,9 @@ const baseNav = [
   { href: "/admin/analytics", label: "Analytics", icon: "BarChart3" },
   {
     href: "/admin/attendance",
-    label: "Attendance",
+    label: "Attendance Hub",
     icon: "ClipboardList",
+    badge: "New",
     children: [
       { href: "/admin/attendance/students", label: "Student attendance", icon: "Users" },
       { href: "/admin/staff-attendance", label: "Staff attendance", icon: "Users" },
