@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Linkedin, Facebook, Mail, MessageCircle } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
+import { PublicMobileMenu } from "@/components/public-mobile-menu";
 import { getStaffSession, getParentSession } from "@/lib/auth";
 
 export default async function Header() {
@@ -95,62 +96,7 @@ export default async function Header() {
 
             {/* CTA Buttons */}
             <div className="flex items-center gap-2">
-              <details className="relative lg:hidden">
-                <summary className="list-none cursor-pointer rounded-lg border border-border px-3 py-2 text-sm font-semibold text-foreground marker:hidden">
-                  Menu
-                </summary>
-                <nav className="absolute right-0 top-12 z-10 grid min-w-56 gap-1 border border-border bg-white p-2 text-sm font-medium text-foreground shadow-xl">
-                  <Link
-                    href="/platform"
-                    className="px-3 py-2 hover:bg-brand-light hover:text-brand"
-                  >
-                    Platform
-                  </Link>
-                  <Link
-                    href="/solutions"
-                    className="px-3 py-2 hover:bg-brand-light hover:text-brand"
-                  >
-                    Solutions
-                  </Link>
-                  <Link
-                    href="/for-principals"
-                    className="px-3 py-2 hover:bg-brand-light hover:text-brand"
-                  >
-                    For Your Role
-                  </Link>
-                  <Link
-                    href="/compare"
-                    className="px-3 py-2 hover:bg-brand-light hover:text-brand"
-                  >
-                    Compare
-                  </Link>
-                  <Link
-                    href="/how-to-use-schoolbase"
-                    className="px-3 py-2 hover:bg-brand-light hover:text-brand"
-                  >
-                    How to use SchoolBase
-                  </Link>
-                  <Link
-                    href="/blog"
-                    className="px-3 py-2 hover:bg-brand-light hover:text-brand"
-                  >
-                    Blog
-                  </Link>
-                  <div className="my-1 border-t border-border" />
-                  <Link
-                    href="/login"
-                    className="px-3 py-2 font-semibold text-brand hover:bg-brand-light"
-                  >
-                    School login
-                  </Link>
-                  <Link
-                    href="/parent/login"
-                    className="px-3 py-2 font-semibold text-brand hover:bg-brand-light"
-                  >
-                    Parent login
-                  </Link>
-                </nav>
-              </details>
+              <PublicMobileMenu />
               <div className="hidden items-center gap-3 lg:flex">
                 <Link
                   href="/login"
