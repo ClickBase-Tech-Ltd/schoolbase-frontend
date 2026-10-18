@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
 import { SignupNoticeModal } from "@/components/signup/signup-notice-modal";
-import { prepareSignupRecoveryAction, resumeSignupAfterTimeoutAction, verifySignupOtpAction } from "@/app/signup/actions";
+import { prepareSignupRecoveryAction, restartSignupWithDifferentEmailAction, resumeSignupAfterTimeoutAction, verifySignupOtpAction } from "@/app/signup/actions";
 import Link from "next/link";
 
 export function VerifySignupClient() {
@@ -78,8 +78,19 @@ export function VerifySignupClient() {
       const recovery = await prepareSignupRecoveryAction();
       if (!recovery.success) throw new Error(recovery.error || "Could not prepare safe signup recovery.");
       const result = await verifySignupOtpAction(formDataObj);
-      if (!result.success) throw new Error(result.error);
-      router.push(result.redirectTo);
+      if (result.success) {
+        router.push(result.redirectTo);
+        return;
+      }
+
+      const recoveryForm = new FormData();
+      recoveryForm.append("adminEmail", adminEmail);
+      const recovered = await resumeSignupAfterTimeoutAction(recoveryForm);
+      if (recovered.success) {
+        router.push(recovered.redirectTo);
+        return;
+      }
+      throw new Error(result.error);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       setError({
@@ -110,6 +121,21 @@ export function VerifySignupClient() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  async function handleChangeEmail() {
+    if (isLoading) return;
+    setIsLoading(true);
+    const result = await restartSignupWithDifferentEmailAction();
+    if (!result.success) {
+      setError({
+        message: "Could not restart email verification",
+        details: result.error || "Please try again.",
+      });
+      setIsLoading(false);
+      return;
+    }
+    window.location.assign(`/signup?email=${encodeURIComponent(adminEmail)}`);
   }
 
   if (!adminEmail) {
@@ -197,6 +223,19 @@ export function VerifySignupClient() {
         </button>
 
         <div className="mt-6 space-y-3 border-t border-border pt-6">
+          <div>
+            <button
+              type="button"
+              onClick={() => void handleChangeEmail()}
+              disabled={isLoading}
+              className="w-full border border-border bg-surface px-4 py-2.5 text-sm font-medium text-muted hover:border-brand hover:text-brand disabled:opacity-50"
+            >
+              Use a different email address
+            </button>
+            <p className="mt-2 text-center text-xs leading-5 text-muted">
+              Your current unverified request will expire automatically.
+            </p>
+          </div>
           <button
             type="button"
             onClick={handleResendOtp}

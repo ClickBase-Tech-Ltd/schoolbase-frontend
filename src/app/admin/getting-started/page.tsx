@@ -393,6 +393,7 @@ export default function GettingStartedPage() {
   const remainingCount = Math.max(requiredTotalCount - requiredCompletedCount, 0);
   const nextStep = useMemo(() => steps.find((step) => !step.complete) || steps[0], [steps]);
   const isOnboarding = searchParams.get("onboarding") === "1";
+  const signupCompleted = searchParams.get("signup") === "success";
   const requiredStepsComplete = isRequiredSetupComplete(setupStatus?.setupItems ?? null);
   const isSetupComplete = setupStatus?.isComplete === true || requiredStepsComplete || (requiredTotalCount > 0 && requiredCompletedCount === requiredTotalCount);
   const showFullExperience = !isSetupComplete;
@@ -400,6 +401,15 @@ export default function GettingStartedPage() {
   if (!loading && !showFullExperience) {
     return (
       <div className="mx-auto max-w-7xl space-y-6 px-0 py-4 sm:px-8 sm:py-8 lg:px-12">
+        {signupCompleted ? (
+          <div role="status" className="flex items-start gap-3 border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
+            <CheckCircle2 aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
+            <div>
+              <p className="font-semibold">Your school account is ready</p>
+              <p className="mt-1 text-sm text-emerald-900/80">You’re signed in. Your school setup is complete and the workspace is ready to use.</p>
+            </div>
+          </div>
+        ) : null}
         <div className="relative overflow-hidden border border-border bg-surface px-6 pb-7 pt-8 sm:px-8 sm:pb-8 sm:pt-10">
           <div className="absolute right-0 top-0 h-full w-1/3 bg-brand-light/40 [clip-path:polygon(35%_0,100%_0,100%_100%,0_100%)]" />
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -497,6 +507,15 @@ export default function GettingStartedPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-0 py-4 sm:px-8 sm:py-8 lg:px-12">
+    {signupCompleted ? (
+      <div role="status" className="flex items-start gap-3 border border-emerald-200 bg-emerald-50 p-4 text-emerald-950">
+        <CheckCircle2 aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
+        <div>
+          <p className="font-semibold">Your school account is ready</p>
+          <p className="mt-1 text-sm text-emerald-900/80">You’re signed in. Start with the next setup task to prepare your workspace.</p>
+        </div>
+      </div>
+    ) : null}
     <div className="overflow-hidden border border-border bg-surface">
         <div className="grid gap-0 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="border-b border-border/70 bg-brand-light/20 p-6 sm:p-8 xl:border-b-0 xl:border-r">

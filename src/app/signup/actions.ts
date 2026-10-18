@@ -115,7 +115,7 @@ export async function verifySignupOtpAction(formData: FormData): Promise<SignupA
     });
     cookieStore.delete(recoveryCookieName);
 
-    return { success: true, redirectTo: "/admin" };
+    return { success: true, redirectTo: "/admin/getting-started?onboarding=1&signup=success" };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };
   }
@@ -134,6 +134,25 @@ export async function prepareSignupRecoveryAction(): Promise<{ success: boolean;
       secure: process.env.NODE_ENV === "production" && !host.includes("localhost"),
       sameSite: "lax",
       maxAge: 15 * 60,
+      path: "/",
+      ...(schoolbaseHost ? { domain: ".schoolbase.live" } : {}),
+    });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+export async function restartSignupWithDifferentEmailAction(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const [cookieStore, requestHeaders] = await Promise.all([cookies(), headers()]);
+    const host = requestHeaders.get("host") || "";
+    const schoolbaseHost = host.includes("schoolbase.live");
+    cookieStore.set("schoolbase_signup_recovery", "", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production" && !host.includes("localhost"),
+      sameSite: "lax",
+      maxAge: 0,
       path: "/",
       ...(schoolbaseHost ? { domain: ".schoolbase.live" } : {}),
     });

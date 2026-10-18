@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppLogo } from "@/components/app-logo";
 import { Button } from "@/components/ui/button";
 import { SignupNoticeModal } from "@/components/signup/signup-notice-modal";
@@ -12,6 +12,8 @@ import { ContextualAdSlot } from "@/components/login-page-ad-slot";
 
 export default function SignupPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const prefilledEmail = searchParams.get("email") || "";
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -25,7 +27,7 @@ export default function SignupPage() {
     phone: "",
     country: countriesData.default,
     adminName: "",
-    adminEmail: "",
+    adminEmail: prefilledEmail,
     password: "",
   });
   const slugConflict = error?.message.toLowerCase().includes("slug already exists")
@@ -169,6 +171,11 @@ export default function SignupPage() {
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
           Register your school and create its first administrator account. We will email a one-time verification code before the account is created.
         </p>
+        {prefilledEmail ? (
+          <p role="status" className="mt-4 border border-brand/20 bg-brand/5 px-4 py-3 text-sm text-foreground">
+            Restarting signup. Review the school profile, then update the administrator email in the next step.
+          </p>
+        ) : null}
 
         <div className="mt-8 grid grid-cols-3 border-y border-border" role="list" aria-label="Signup progress">
           {["School profile", "Administrator", "Security"].map((label, index) => {
