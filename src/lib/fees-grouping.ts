@@ -1,4 +1,4 @@
-export type InvoiceStatus = "DRAFT" | "SENT" | "PART_PAID" | "PAID" | "OVERDUE";
+export type InvoiceStatus = "DRAFT" | "SENT" | "PART_PAID" | "PAID" | "OVERDUE" | "VOIDED";
 export type SchoolPhase = "NURSERY" | "PRIMARY" | "SECONDARY" | "TERTIARY";
 
 export type ClassItem = {
@@ -124,13 +124,16 @@ function calculateStats(invoices: Invoice[]): Stats {
       PART_PAID: 0,
       PAID: 0,
       OVERDUE: 0,
+      VOIDED: 0,
     },
   };
 
   invoices.forEach((inv) => {
-    stats.totalDue += inv.amountDue;
-    stats.totalPaid += inv.amountPaid;
-    stats.outstanding += Math.max(0, inv.amountDue - inv.amountPaid);
+    if (inv.status !== "VOIDED") {
+      stats.totalDue += inv.amountDue;
+      stats.totalPaid += inv.amountPaid;
+      stats.outstanding += Math.max(0, inv.amountDue - inv.amountPaid);
+    }
     stats.byStatus[inv.status]++;
   });
 

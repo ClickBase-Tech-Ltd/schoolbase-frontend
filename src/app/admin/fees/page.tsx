@@ -7,6 +7,7 @@ import { WhatsAppIcon } from "@/components/ui/icons";
 import FeesPageClient from "./fees-client";
 import AdminSkeleton from "@/components/ui/skeleton";
 import SubscriptionModal from "@/components/subscription-modal";
+import StudentInvoiceRecovery from "@/app/accounting/fees/student-invoice-recovery";
 
 export default function FeesPage() {
   const router = useRouter();
@@ -132,7 +133,19 @@ export default function FeesPage() {
 
       const result = await response.json();
       console.log("Bills issued:", result);
-      router.push(`/admin/fees?success=1&created=${result.created}&whatsappSent=${result.whatsappSent ?? 0}&whatsappFailed=${result.whatsappFailed ?? 0}&queued=${result.queued ?? 0}`);
+      const params = new URLSearchParams({
+        success: '1',
+        created: String(result.created ?? 0),
+        eligible: String(result.eligible ?? 0),
+        alreadyIssued: String(result.alreadyIssued ?? 0),
+        failed: String(result.failed ?? 0),
+        whatsappSent: String(result.whatsappSent ?? 0),
+        whatsappFailed: String(result.whatsappFailed ?? 0),
+        whatsappSkipped: String(result.whatsappSkipped ?? 0),
+        queued: String(result.queued ?? 0),
+      });
+      if (result.whatsappBlockedReason) params.set('whatsappBlockedReason', result.whatsappBlockedReason);
+      router.push(`/admin/fees?${params.toString()}`);
     } catch (err) {
       console.error("Error issuing bills:", err);
       router.push(`/admin/fees?error=1&errorMessage=${encodeURIComponent(err instanceof Error ? err.message : 'Failed to issue bills')}`);
@@ -209,6 +222,7 @@ export default function FeesPage() {
       onSendReminders={handleSendReminders}
       whatsAppConnected={whatsAppConnected}
       whatsAppStatusMessage={whatsAppStatusMessage}
+      studentInvoiceRecovery={<StudentInvoiceRecovery currency={data.currency} />}
     />
   );
 }

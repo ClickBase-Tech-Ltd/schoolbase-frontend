@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { useMemo, useState, useRef, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
@@ -52,10 +53,11 @@ const STATUS_CONFIG = {
   PART_PAID: { label: "Part Paid", color: "bg-yellow-100 text-yellow-800" },
   PAID: { label: "Paid", color: "bg-green-100 text-green-800" },
   OVERDUE: { label: "Overdue", color: "bg-red-100 text-red-800" },
+  VOIDED: { label: "Voided", color: "bg-gray-100 text-gray-600" },
   ALL: { label: "All Statuses", color: "bg-gray-100 text-gray-800" },
 };
 
-const STATUS_ORDER = ["ALL", "OVERDUE", "PART_PAID", "SENT", "DRAFT", "PAID"];
+const STATUS_ORDER = ["ALL", "OVERDUE", "PART_PAID", "SENT", "DRAFT", "PAID", "VOIDED"];
 const PAYMENT_METHODS = ["CASH", "BANK_TRANSFER", "CARD", "ONLINE", "OTHER"] as const;
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 500] as const;
 const DEFAULT_ITEMS_PER_PAGE = 20;
@@ -125,6 +127,7 @@ export default function FeesPageClient({
   onSendReminders = async () => {},
   whatsAppConnected = null,
   whatsAppStatusMessage = null,
+  studentInvoiceRecovery,
 }: {
   invoices?: any[];
   outstanding?: number;
@@ -135,6 +138,7 @@ export default function FeesPageClient({
   onSendReminders?: (invoiceId?: string) => Promise<void>;
   whatsAppConnected?: boolean | null;
   whatsAppStatusMessage?: string | null;
+  studentInvoiceRecovery?: ReactNode;
 }) {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -186,10 +190,15 @@ export default function FeesPageClient({
 
     const success = searchParams.get("success") === "1";
     const created = Number(searchParams.get("created") ?? 0);
+    const eligible = Number(searchParams.get("eligible") ?? 0);
+    const alreadyIssued = Number(searchParams.get("alreadyIssued") ?? 0);
+    const failed = Number(searchParams.get("failed") ?? 0);
     const reminders = searchParams.get("reminders") === "1";
     const remindersSent = Number(searchParams.get("sent") ?? 0);
     const whatsappSent = Number(searchParams.get("whatsappSent") ?? 0);
     const whatsappFailed = Number(searchParams.get("whatsappFailed") ?? 0);
+    const whatsappSkipped = Number(searchParams.get("whatsappSkipped") ?? 0);
+    const whatsappBlockedReason = searchParams.get("whatsappBlockedReason");
     const queued = Number(searchParams.get("queued") ?? 0);
     const paymentRecorded = searchParams.get("paymentRecorded") === "1";
     const error = searchParams.get("error") === "1";
@@ -203,15 +212,23 @@ export default function FeesPageClient({
       setModalType('success');
       setModalTitle('Invoices issued');
       setModalSubtitle(
-        whatsappFailed > 0
-          ? 'Invoices were created, but some WhatsApp notifications failed to send.'
-          : 'Your request was completed successfully.'
+        whatsappSkipped > 0
+          ? 'Invoices were created. WhatsApp delivery was skipped by the school’s bulk-send policy.'
+          : whatsappFailed > 0
+            ? 'Invoices were created, but some WhatsApp notifications failed to send.'
+            : 'Invoice issuance finished.'
       );
-      const outcome = [`${created ?? 0} invoice${(created ?? 0) !== 1 ? 's' : ''} were created`];
+      const outcome = [`${created} invoice${created !== 1 ? 's' : ''} created`];
+      if (eligible > 0) outcome.push(`${eligible} eligible schedule places checked`);
+      if (alreadyIssued > 0) outcome.push(`${alreadyIssued} already issued`);
+      if (failed > 0) outcome.push(`${failed} failed; retrying is safe`);
+      if (eligible === 0) outcome.push('No active students matched the selected term’s fee schedules');
       if (whatsappSent > 0) outcome.push(`${whatsappSent} WhatsApp sent`);
       if (whatsappFailed > 0) outcome.push(`${whatsappFailed} WhatsApp failed`);
+      if (whatsappSkipped > 0) outcome.push(`${whatsappSkipped} WhatsApp delivery${whatsappSkipped !== 1 ? 'ies' : ''} skipped`);
       if (queued > 0) outcome.push(`${queued} still queued`);
-      setModalMessage(`${outcome.join('. ')}.`);
+      setModalMessage(`${outcome.join('. ')}.${whatsappBlockedReason ? ` ${whatsappBlockedReason}` : ''}`);
+      if (failed > 0) setModalDetails('Some invoice records could not be created. Check the server logs; you can safely issue bills again because existing invoices are skipped.');
     } else if (reminders) {
       setModalType('success');
       setModalTitle('Reminders sent');
@@ -455,13 +472,16 @@ export default function FeesPageClient({
         PART_PAID: 0,
         PAID: 0,
         OVERDUE: 0,
+        VOIDED: 0,
       },
     } as Stats;
 
     filteredInvoices.forEach((inv) => {
-      stats.totalDue += inv.amountDue;
-      stats.totalPaid += inv.amountPaid;
-      stats.outstanding += Math.max(0, inv.amountDue - inv.amountPaid);
+      if (inv.status !== "VOIDED") {
+        stats.totalDue += inv.amountDue;
+        stats.totalPaid += inv.amountPaid;
+        stats.outstanding += Math.max(0, inv.amountDue - inv.amountPaid);
+      }
       if (inv.status in stats.byStatus) {
         stats.byStatus[inv.status as InvoiceStatus]++;
       }
@@ -998,6 +1018,8 @@ export default function FeesPageClient({
                 <span className="hidden sm:inline">{sendingReminders ? "Sending..." : "Send Reminders"}</span>
               </Button>
             </form>
+
+            {studentInvoiceRecovery}
 
             <Button
               href={feeSchedulesHref}

@@ -6,7 +6,7 @@ import { getBackendUrl } from "@/lib/backend-url";
 import { formatMoney, pupilName as formatPupilName, invoiceStatusLabel } from "@/lib/format";
 import { playOpenTone, playCloseTone } from "@/lib/sounds";
 import { ErrorModal } from "@/components/ui/error-modal";
-import { Download, Printer, ChevronLeft, Check, AlertCircle, BadgePercent, Plus, X, CreditCard, LoaderCircle } from "lucide-react";
+import { Download, Printer, ChevronLeft, Check, AlertCircle, BadgePercent, Plus, X, CreditCard, LoaderCircle, Ban } from "lucide-react";
 
 const BRAND_BLUE = "#0A66C2";
 const LIGHT_BLUE = "#E7F1F8";
@@ -33,6 +33,10 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [paymentReference, setPaymentReference] = useState("");
   const [isRecordingPayment, setIsRecordingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [isDeletingInvoice, setIsDeletingInvoice] = useState(false);
+  const [voidDialogOpen, setVoidDialogOpen] = useState(false);
+  const [voidReason, setVoidReason] = useState("");
+  const [voidError, setVoidError] = useState<string | null>(null);
 
   const openPaymentModal = () => {
     const balance = invoice ? Math.max(0, Number(invoice.amountDue || 0) - Number(invoice.amountPaid || 0)) : 0;
@@ -181,6 +185,39 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     } catch (err) {
       alert("Failed to download invoice");
       console.error(err);
+    }
+  };
+
+  const handleVoidInvoice = async () => {
+    if (!invoice || isDeletingInvoice || invoice.status === "VOIDED") return;
+    setVoidReason("");
+    setVoidError(null);
+    setVoidDialogOpen(true);
+    playOpenTone();
+  };
+
+  const confirmVoidInvoice = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!invoice || isDeletingInvoice) return;
+    const reason = voidReason.trim();
+    if (reason.length < 5 || reason.length > 500) return;
+
+    setIsDeletingInvoice(true);
+    try {
+      const backendUrl = getBackendUrl();
+      const response = await fetch(`${backendUrl}/api/admin/invoices/${encodeURIComponent(invoice.id)}/void`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Unable to void invoice.");
+      setVoidDialogOpen(false);
+      window.location.assign(basePath);
+    } catch (deleteError) {
+      setVoidError(deleteError instanceof Error ? deleteError.message : "Unable to void invoice.");
+      setIsDeletingInvoice(false);
     }
   };
 
@@ -372,7 +409,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     );
   }
 
-  const outstanding = Math.max(0, invoice.amountDue - invoice.amountPaid);
+  const outstanding = invoice.status === "VOIDED" ? 0 : Math.max(0, invoice.amountDue - invoice.amountPaid);
   const isPaid = outstanding === 0;
   const isPartPaid = invoice.amountPaid > 0 && outstanding > 0;
   const pupilFullName = formatPupilName(invoice.pupil.firstName, invoice.pupil.lastName);
@@ -423,7 +460,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
             Back to Fees
           </Link>
           <div className="flex flex-wrap justify-end gap-2">
-            {outstanding > 0 ? <button type="button" onClick={openPaymentModal} className="inline-flex h-9 items-center justify-center gap-2 bg-brand px-3 text-sm font-semibold text-white transition hover:bg-brand-hover sm:h-10 sm:px-4"><CreditCard size={16} />Record payment</button> : null}
+            {outstanding > 0 && invoice.status !== "VOIDED" ? <button type="button" onClick={openPaymentModal} className="inline-flex h-9 items-center justify-center gap-2 bg-brand px-3 text-sm font-semibold text-white transition hover:bg-brand-hover sm:h-10 sm:px-4"><CreditCard size={16} />Record payment</button> : null}
+            {Number(invoice.amountPaid || 0) === 0 && invoice.status !== "VOIDED" ? <button type="button" onClick={handleVoidInvoice} disabled={isDeletingInvoice} className="inline-flex h-9 items-center justify-center gap-2 border border-red-300 bg-white px-3 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50 sm:h-10 sm:px-4"><Ban size={16} />{isDeletingInvoice ? "Voiding..." : "Void unpaid invoice"}</button> : null}
             <button
               onClick={handleDownloadPDF}
               aria-label="Download invoice"
@@ -444,6 +482,26 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
             </button>
           </div>
         </div>
+
+        {voidDialogOpen ? <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/55 px-4 py-6 print:hidden" onMouseDown={(event) => { if (event.target === event.currentTarget && !isDeletingInvoice) setVoidDialogOpen(false); }}>
+          <form onSubmit={confirmVoidInvoice} className="w-full max-w-lg border border-border bg-surface shadow-2xl">
+            <div className="border-b border-border px-5 py-4 sm:px-6">
+              <p className="text-[10px] font-bold uppercase tracking-[.14em] text-red-700">Invoice correction</p>
+              <h2 className="mt-1 text-lg font-semibold text-foreground">Void invoice {invoice.invoiceNo}?</h2>
+              <p className="mt-2 text-sm leading-5 text-muted">The invoice will remain in the audit history but stop counting toward the family’s balance. A voided invoice cannot receive payments.</p>
+            </div>
+            <div className="space-y-2 px-5 py-5 sm:px-6">
+              <label htmlFor="void-reason" className="block text-sm font-semibold text-foreground">Reason for voiding</label>
+              <textarea id="void-reason" required minLength={5} maxLength={500} rows={3} autoFocus value={voidReason} onChange={(event) => setVoidReason(event.target.value)} placeholder="For example: duplicate invoice issued for the same fee schedule" className="w-full resize-y border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/15" />
+              <p className="text-xs text-muted">{voidReason.trim().length}/500</p>
+              {voidError ? <p role="alert" className="text-sm text-red-700">{voidError}</p> : null}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-border px-5 py-4 sm:px-6">
+              <button type="button" disabled={isDeletingInvoice} onClick={() => setVoidDialogOpen(false)} className="h-10 border border-border px-4 text-sm font-semibold text-foreground hover:bg-background disabled:opacity-50">Cancel</button>
+              <button type="submit" disabled={isDeletingInvoice || voidReason.trim().length < 5} className="inline-flex h-10 items-center gap-2 bg-red-700 px-4 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50"><Ban size={16} />{isDeletingInvoice ? "Voiding..." : "Void invoice"}</button>
+            </div>
+          </form>
+        </div> : null}
 
         {/* Invoice Content */}
         <div className="invoice-sheet border border-border bg-surface p-5 sm:p-8 print:border-0 print:p-5 print:bg-white">
@@ -472,10 +530,11 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
             <div className="lg:text-right">
               <div className="text-[11px] font-bold uppercase tracking-[.16em] text-muted">Invoice No.</div>
               <div className="mt-2 text-xl font-semibold text-foreground">{invoice.invoiceNo}</div>
-              <div className={`mt-4 inline-flex items-center gap-2 border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${isPaid ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
-                {isPaid ? <Check size={14} /> : <AlertCircle size={14} />}
-                {isPaid ? "Paid" : isPartPaid ? "Part Paid" : "Outstanding"}
+              <div className={`mt-4 inline-flex items-center gap-2 border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${invoice.status === "VOIDED" ? "border-gray-300 bg-gray-100 text-gray-600" : isPaid ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+                {invoice.status === "VOIDED" ? <X size={14} /> : isPaid ? <Check size={14} /> : <AlertCircle size={14} />}
+                {invoice.status === "VOIDED" ? "Voided" : isPaid ? "Paid" : isPartPaid ? "Part Paid" : "Outstanding"}
               </div>
+              {invoice.status === "VOIDED" ? <p className="mt-2 max-w-sm text-xs text-muted">Voided {invoice.voidedAt ? new Date(invoice.voidedAt).toLocaleString() : ""}. Reason: {invoice.voidReason || "Not recorded"}</p> : null}
             </div>
           </div>
 

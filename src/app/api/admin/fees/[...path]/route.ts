@@ -3,7 +3,7 @@ import { buildApiUrl } from '@/lib/api-client';
 
 const forwardRequest = async (request: NextRequest, pathSegments: string[]) => {
   try {
-    const backendUrl = buildApiUrl(`/admin/fees/${pathSegments.join('/')}`);
+    const backendUrl = buildApiUrl(`/admin/fees/${pathSegments.join('/')}${request.nextUrl.search}`);
 
     const headers = new Headers();
     request.headers.forEach((value, key) => {

@@ -4,7 +4,8 @@ import { getBackendUrl } from "@/lib/backend-url";
 export async function GET(req: NextRequest) {
   try {
     const backendUrl = getBackendUrl();
-    const response = await fetch(`${backendUrl}/schoolbase-admin/api/signups/pending`, {
+    const query = new URL(req.url).searchParams.toString();
+    const response = await fetch(`${backendUrl}/schoolbase-admin/api/signups/pending${query ? `?${query}` : ''}`, {
       method: 'GET',
       headers: {
         'Cookie': req.headers.get('cookie') || '',
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
     try {
       const data = JSON.parse(text);
       return NextResponse.json(data);
-    } catch (err) {
+    } catch {
       return NextResponse.json({ error: 'Invalid JSON from backend' }, { status: 500 });
     }
   } catch (error) {

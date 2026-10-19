@@ -1,5 +1,5 @@
 export type InvoiceStatus = "PENDING" | "PAID" | "PARTIAL" | "OVERDUE" | "CANCELLED";
-export type InvoiceStatusLike = InvoiceStatus | "SENT" | "PART_PAID" | "DRAFT";
+export type InvoiceStatusLike = InvoiceStatus | "SENT" | "PART_PAID" | "DRAFT" | "VOIDED";
 export type ResultStatus = "DRAFT" | "APPROVED" | "PUBLISHED";
 
 export function formatMoney(amountMinor: number, currency = "NGN") {
@@ -26,6 +26,7 @@ export function invoiceStatusLabel(status: InvoiceStatusLike): string {
     SENT: "Sent",
     PART_PAID: "Part Paid",
     DRAFT: "Draft",
+    VOIDED: "Voided",
   };
   return map[status] ?? status;
 }
@@ -40,6 +41,7 @@ export function invoiceStatusClass(status: InvoiceStatusLike): string {
     SENT: "text-brand",
     PART_PAID: "text-warning",
     DRAFT: "text-muted",
+    VOIDED: "text-muted",
   };
   return map[status] ?? "text-muted";
 }

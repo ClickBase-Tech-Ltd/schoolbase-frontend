@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Bell, CheckCircle, ClipboardCheck, Clock3, Mail, Search, Send, ShieldCheck, UserCheck, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Bell, CheckCircle, ClipboardCheck, Clock3, Mail, RefreshCw, Search, Send, ShieldCheck, UserCheck, X } from "lucide-react";
 import { playCloseTone, playOpenTone } from "@/lib/sounds";
 import { ErrorModal } from "@/components/ui/error-modal";
 
 type Signup = { id: string; email: string; schoolName: string; slug: string; adminName: string; phone: string | null; country: string; attempts: number; expiresAt: string; createdAt: string; isExpired: boolean };
 type Filter = "all" | "active" | "expired";
+type SignupSummary = { pendingCount: number; activeCount: number; expiredCount: number; failedOtpAttempts: number };
+const PAGE_SIZE = 25;
 
 const btnBase = "inline-flex items-center justify-center gap-2 border transition-colors focus:outline-none focus:ring-2 focus:ring-brand/30 focus:ring-offset-0";
 const btnPrimary = `${btnBase} rounded-[8px] border-brand bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover`;
@@ -22,56 +24,41 @@ export default function PendingSignupsPage() {
   const [previewTarget, setPreviewTarget] = useState<Signup | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [summary, setSummary] = useState<SignupSummary>({ pendingCount: 0, activeCount: 0, expiredCount: 0, failedOtpAttempts: 0 });
+  const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [statusModal, setStatusModal] = useState<{ open: boolean; type: "success" | "error"; title: string; message: string }>({ open: false, type: "success", title: "", message: "" });
 
-  const loadSignups = async () => {
-    setLoading(true);
+  const loadSignups = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
-      const response = await fetch("/schoolbase-admin/api/signups/pending", { credentials: "include" });
+      const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE), status: filter });
+      if (query.trim()) params.set("q", query.trim());
+      const response = await fetch(`/schoolbase-admin/api/signups/pending?${params}`, { credentials: "include", cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data?.message || data?.error || "Failed to load pending signups");
       setSignups(data.signups || []);
+      setTotal(data.pagination?.total ?? 0);
+      setTotalPages(data.pagination?.totalPages ?? 1);
+      setSummary(data.summary ?? { pendingCount: 0, activeCount: 0, expiredCount: 0, failedOtpAttempts: 0 });
+      setRefreshedAt(data.refreshedAt ?? new Date().toISOString());
       setError("");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Failed to load pending signups");
-    } finally { setLoading(false); }
-  };
+    } finally { if (showLoading) setLoading(false); }
+  }, [filter, page, query]);
 
   useEffect(() => {
-    let active = true;
+    const timer = window.setTimeout(() => { void loadSignups(); }, query.trim() ? 250 : 0);
+    return () => window.clearTimeout(timer);
+  }, [loadSignups, query]);
 
-    const fetchPendingSignups = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch("/schoolbase-admin/api/signups/pending", { credentials: "include" });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data?.message || data?.error || "Failed to load pending signups");
-        if (active) {
-          setSignups(data.signups || []);
-          setError("");
-        }
-      } catch (requestError) {
-        if (active) {
-          setError(requestError instanceof Error ? requestError.message : "Failed to load pending signups");
-        }
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-
-    void fetchPendingSignups();
-    return () => { active = false; };
-  }, []);
-
-  const visibleSignups = useMemo(() => {
-    const text = query.trim().toLowerCase();
-    return signups.filter((signup) => {
-      const statusMatches = filter === "all" || (filter === "expired" ? signup.isExpired : !signup.isExpired);
-      const searchable = `${signup.schoolName} ${signup.adminName} ${signup.email} ${signup.phone || ""} ${signup.country}`.toLowerCase();
-      return statusMatches && (!text || searchable.includes(text));
-    });
-  }, [filter, query, signups]);
+  const visibleSignups = signups;
+  const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * PAGE_SIZE, total);
 
   async function sendReminder(email?: string) {
     if (email) setBusyId(email); else setSendingAll(true);
@@ -79,7 +66,25 @@ export default function PendingSignupsPage() {
       const response = await fetch("/schoolbase-admin/api/signups/remind", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(email ? { email } : {}) });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.message || "Failed to send reminder");
-      setStatusModal({ open: true, type: "success", title: email ? "Reminder Sent" : "Reminders Sent", message: email ? "The signup reminder was sent successfully." : `Sent ${data.sentCount} reminders. Skipped ${data.skippedCount}.` });
+      const failures = Array.isArray(data.results)
+        ? data.results.filter((result: { status?: string }) => result.status !== "sent")
+        : [];
+      const outcomeDetails = failures.slice(0, 5).map((result: { email: string; status: string }) => `${result.email}: ${result.status.replaceAll("-", " ")}`);
+      const hasFailures = Number(data.failedCount ?? 0) > 0;
+      const singleResult = Array.isArray(data.results) ? data.results[0] as { status?: string } | undefined : undefined;
+      const resultMessage = email
+        ? singleResult?.status === "conflict"
+          ? "The reminder email was accepted, but the signup changed before the new code could be activated. Ask the user to use the most recently received code or request another reminder."
+          : hasFailures
+            ? `${email}: ${singleResult?.status === "cooldown" ? "a reminder was already attempted recently" : singleResult?.status?.replaceAll("-", " ") || "reminder not sent"}. The existing verification code remains valid.`
+            : "The mail provider accepted the reminder and its verification code was activated."
+        : `Mail provider accepted ${data.sentCount} of ${data.total} reminders.${hasFailures ? ` ${data.failedCount} need follow-up.\n${outcomeDetails.join("\n")}${failures.length > 5 ? `\nAnd ${failures.length - 5} more.` : ""}` : ""}`;
+      setStatusModal({
+        open: true,
+        type: hasFailures ? "error" : "success",
+        title: email ? (hasFailures ? "Reminder Not Sent" : "Reminder Sent") : (hasFailures ? "Some Reminders Need Attention" : "Reminders Sent"),
+        message: resultMessage,
+      });
       await loadSignups();
     } catch (requestError) {
       setStatusModal({ open: true, type: "error", title: "Reminder Failed", message: requestError instanceof Error ? requestError.message : "Failed to send reminder" });
@@ -119,16 +124,22 @@ export default function PendingSignupsPage() {
               <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Follow up with schools that started registration but have not verified their email.</p>
             </div>
             <div className="flex flex-wrap gap-3">
+              <button type="button" onClick={() => void loadSignups()} disabled={loading} className={`${btnSecondary} disabled:cursor-not-allowed disabled:opacity-50`}><RefreshCw size={16} className={loading ? "animate-spin" : ""} /> Refresh</button>
               <button onClick={() => { setPreviewTarget(previewTarget || signups[0] || null); playOpenTone(); }} disabled={!signups.length} className={`${btnSecondary} disabled:cursor-not-allowed disabled:opacity-50`}><Mail size={16} /> Email preview</button>
               <button onClick={() => sendReminder()} disabled={sendingAll || !signups.length} className={`${btnPrimary} disabled:cursor-not-allowed disabled:opacity-50`}><Send size={16} /> {sendingAll ? "Sending..." : "Remind all"}</button>
             </div>
           </div>
         </header>
 
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+          <span>{refreshedAt ? `Updated ${new Date(refreshedAt).toLocaleTimeString()}` : "Waiting for first refresh"}</span>
+          <span>Refresh to check for new requests</span>
+        </div>
+
         {error && <div className="rounded-none border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-        <Stats signups={signups} />
-        <Toolbar query={query} setQuery={setQuery} filter={filter} setFilter={setFilter} count={visibleSignups.length} total={signups.length} />
+        <Stats summary={summary} />
+        <Toolbar query={query} setQuery={(value) => { setQuery(value); setPage(1); }} filter={filter} setFilter={(value) => { setFilter(value); setPage(1); }} count={visibleSignups.length} total={total} page={page} totalPages={totalPages} rangeStart={rangeStart} rangeEnd={rangeEnd} onPageChange={setPage} />
 
         {loading ? (
           <div className="rounded-none border border-border bg-surface p-16 text-center text-muted">Loading your signup workspace...</div>
@@ -145,22 +156,19 @@ export default function PendingSignupsPage() {
         title={statusModal.title}
         message={statusModal.message}
         type={statusModal.type}
-        confirmLabel={statusModal.type === "success" ? "Okay" : "Try again"}
+        confirmLabel="Okay"
       />
       {previewTarget && <EmailPreview signup={previewTarget} onClose={() => { setPreviewTarget(null); playCloseTone(); }} />}
-      {approveTarget && <ApproveModal signup={approveTarget} busy={busyId === approveTarget.id} onClose={() => setApproveTarget(null)} onConfirm={approveSignup} />}
     </main>
   );
 }
 
-function Stats({ signups }: { signups: Signup[] }) {
-  const totalAttempts = useMemo(() => signups.reduce((total, signup) => total + signup.attempts, 0), [signups]);
-
+function Stats({ summary }: { summary: SignupSummary }) {
   const stats = [
-    { label: "Pending signups", value: String(signups.length), detail: "Awaiting verification", icon: ClipboardCheck },
-    { label: "Still active", value: String(signups.filter((item) => !item.isExpired).length), detail: "Code can be refreshed", icon: ShieldCheck },
-    { label: "Expired codes", value: String(signups.filter((item) => item.isExpired).length), detail: "Need a new code", icon: Clock3 },
-    { label: "Total attempts", value: String(totalAttempts), detail: "Reminders and follow-ups sent", icon: UserCheck },
+    { label: "Pending signups", value: String(summary.pendingCount), detail: "Awaiting verification", icon: ClipboardCheck },
+    { label: "Still active", value: String(summary.activeCount), detail: "Code can be refreshed", icon: ShieldCheck },
+    { label: "Expired codes", value: String(summary.expiredCount), detail: "Need a new code", icon: Clock3 },
+    { label: "Failed code attempts", value: String(summary.failedOtpAttempts), detail: "OTP verification attempts", icon: UserCheck },
   ];
 
   return (
@@ -181,7 +189,7 @@ function Stats({ signups }: { signups: Signup[] }) {
   );
 }
 
-function Toolbar({ query, setQuery, filter, setFilter, count, total }: { query: string; setQuery: (value: string) => void; filter: Filter; setFilter: (value: Filter) => void; count: number; total: number }) {
+function Toolbar({ query, setQuery, filter, setFilter, count, total, page, totalPages, rangeStart, rangeEnd, onPageChange }: { query: string; setQuery: (value: string) => void; filter: Filter; setFilter: (value: Filter) => void; count: number; total: number; page: number; totalPages: number; rangeStart: number; rangeEnd: number; onPageChange: (page: number) => void }) {
   return (
     <section className="rounded-none border border-border bg-surface p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -213,7 +221,14 @@ function Toolbar({ query, setQuery, filter, setFilter, count, total }: { query: 
             ))}
           </div>
 
-          <span className="text-sm text-muted">Showing {count} of {total}</span>
+          <span className="text-sm text-muted">Showing {rangeStart}–{rangeEnd} of {total} · {count} on page</span>
+        </div>
+      </div>
+      <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
+        <span className="text-xs text-muted">Page {page} of {totalPages}</span>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page <= 1} className={`${btnSubtle} disabled:cursor-not-allowed disabled:opacity-40`}>Previous</button>
+          <button type="button" onClick={() => onPageChange(Math.min(totalPages, page + 1))} disabled={page >= totalPages} className={`${btnSubtle} disabled:cursor-not-allowed disabled:opacity-40`}>Next</button>
         </div>
       </div>
     </section>
@@ -256,7 +271,7 @@ function Actions({ busy, sending, onPreview, onRemind, onApprove }: { busy: bool
     <div className="flex flex-wrap gap-2">
       <button onClick={onPreview} className={btnSubtle}><Mail size={14} /> Preview</button>
       <button onClick={onRemind} disabled={busy || sending} className={`${btnSubtle} disabled:cursor-not-allowed disabled:opacity-50`}><Bell size={14} /> Remind</button>
-      <button onClick={onApprove} className={`${btnPrimary} px-3 py-2 text-xs`}><CheckCircle size={14} /> Approve</button>
+      <button disabled className={`${btnSubtle} cursor-not-allowed border-dashed px-3 py-2 text-xs opacity-60`} title="Manual approval is disabled until product and security approve the email-ownership policy."><CheckCircle size={14} /> Approval locked</button>
     </div>
   );
 }

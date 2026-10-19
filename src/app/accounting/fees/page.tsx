@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import FeesPageClient from "@/app/admin/fees/fees-client";
 import AdminSkeleton from "@/components/ui/skeleton";
 import SubscriptionModal from "@/components/subscription-modal";
+import StudentInvoiceRecovery from "./student-invoice-recovery";
 
 export default function AccountingFeesPage() {
   const router = useRouter();
@@ -206,6 +207,7 @@ export default function AccountingFeesPage() {
       onSendReminders={handleSendReminders}
       whatsAppConnected={whatsAppConnected}
       whatsAppStatusMessage={whatsAppStatusMessage}
+      studentInvoiceRecovery={<StudentInvoiceRecovery currency={data.currency} />}
     />
   );
 }
