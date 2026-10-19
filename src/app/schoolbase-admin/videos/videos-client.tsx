@@ -5,17 +5,14 @@ import { Button } from "@/components/ui/button";
 import { ErrorModal } from "@/components/ui/error-modal";
 import { Plus, Copy, Trash2, Edit2, Filter, PlayCircle, Star, Tags, Upload } from "lucide-react";
 import { getBackendUrl } from "@/lib/backend-url";
-import {
-  createVideoAction,
-  updateVideoAction,
-  deleteVideoAction,
-} from "../actions";
+import { updateVideoAction, deleteVideoAction } from "../actions";
 
 interface Video {
   id: string;
   title: string;
   description: string;
   videoUrl: string;
+  isSelfHosted?: boolean;
   category: string;
   featured: boolean;
   createdAt: Date;
@@ -36,6 +33,8 @@ export default function VideosClient({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [confirmDeleteVideoId, setConfirmDeleteVideoId] = useState<string | null>(null);
   const [statusModal, setStatusModal] = useState<{ open: boolean; type: "success" | "error"; title?: string; message: string }>({
     open: false,
@@ -47,7 +46,6 @@ export default function VideosClient({
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    videoUrl: "",
     category: "Getting Started",
     featured: false,
   });
@@ -108,11 +106,12 @@ export default function VideosClient({
     setFormData({
       title: "",
       description: "",
-      videoUrl: "",
       category: "Getting Started",
       featured: false,
     });
     setEditingId(null);
+    setSelectedFile(null);
+    setUploadProgress(0);
     setStatusModal((prev) => ({ ...prev, open: false }));
   };
 
@@ -120,10 +119,10 @@ export default function VideosClient({
     setFormData({
       title: video.title,
       description: video.description,
-      videoUrl: video.videoUrl,
       category: video.category,
       featured: video.featured,
     });
+    setSelectedFile(null);
     setEditingId(video.id);
     onShowForm();
     setStatusModal((prev) => ({ ...prev, open: false }));
@@ -134,17 +133,16 @@ export default function VideosClient({
     setLoading(true);
 
     const trimmedTitle = formData.title.trim();
-    const trimmedUrl = formData.videoUrl.trim();
     const trimmedDescription = formData.description.trim();
 
-    if (!trimmedTitle || !trimmedUrl) {
-      setStatusModal({ open: true, type: "error", title: "Missing details", message: "Title and video URL are required." });
+    if (!trimmedTitle) {
+      setStatusModal({ open: true, type: "error", title: "Missing details", message: "A video title is required." });
       setLoading(false);
       return;
     }
 
-    if (!isValidVideoUrl(trimmedUrl)) {
-      setStatusModal({ open: true, type: "error", title: "Invalid video URL", message: "Please enter a valid video URL (YouTube, Vimeo, or Loom)." });
+    if (!editingId && !selectedFile) {
+      setStatusModal({ open: true, type: "error", title: "Video file required", message: "Choose an MP4 video file to upload to SchoolBase." });
       setLoading(false);
       return;
     }
@@ -153,29 +151,31 @@ export default function VideosClient({
       const dataToSubmit = {
         title: trimmedTitle,
         description: trimmedDescription,
-        videoUrl: trimmedUrl,
         category: formData.category,
         featured: formData.featured,
       };
       const isEditing = Boolean(editingId);
 
-      if (editingId) {
+      if (selectedFile) {
+        const uploadData = new FormData();
+        uploadData.set("video", selectedFile);
+        uploadData.set("title", dataToSubmit.title);
+        uploadData.set("description", dataToSubmit.description);
+        uploadData.set("category", dataToSubmit.category);
+        uploadData.set("featured", String(dataToSubmit.featured));
+        if (editingId) uploadData.set("videoId", editingId);
+        const savedVideo = await uploadVideoFile(uploadData, setUploadProgress);
+        const saved = savedVideo.video as Video;
+        setVideos((previous) => editingId
+          ? previous.map((video) => video.id === editingId ? saved : video)
+          : [saved, ...previous]);
+      } else if (editingId) {
         await updateVideoAction(editingId, dataToSubmit);
-        setVideos((prevVideos) =>
-          prevVideos.map((v) =>
-            v.id === editingId
-              ? { ...v, ...dataToSubmit, updatedAt: new Date() }
-              : v
-          )
-        );
+        setVideos((previous) => previous.map((video) => video.id === editingId
+          ? { ...video, ...dataToSubmit, updatedAt: new Date() }
+          : video));
       } else {
-        const result = await createVideoAction(dataToSubmit);
-        const newVideo: Video = {
-          id: result.videoId,
-          ...dataToSubmit,
-          createdAt: new Date(),
-        };
-        setVideos((prevVideos) => [newVideo, ...prevVideos]);
+        throw new Error("Choose an MP4 video file to upload to SchoolBase.");
       }
 
       handleReset();
@@ -193,19 +193,26 @@ export default function VideosClient({
     }
   };
 
-  const isValidVideoUrl = (url: string): boolean => {
-    try {
-      return (
-        url.includes("youtube.com") ||
-        url.includes("youtu.be") ||
-        url.includes("vimeo.com") ||
-        url.includes("loom.com") ||
-        (url.startsWith("http://") || url.startsWith("https://"))
-      );
-    } catch {
-      return false;
-    }
-  };
+  function uploadVideoFile(data: FormData, onProgress: (progress: number) => void) {
+    return new Promise<{ video: Video }>((resolve, reject) => {
+      const request = new XMLHttpRequest();
+      request.open("POST", "/api/schoolbase-admin/videos/upload");
+      request.withCredentials = true;
+      request.upload.onprogress = (event) => {
+        if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+      };
+      request.onload = () => {
+        const response = (() => {
+          try { return JSON.parse(request.responseText); } catch { return {}; }
+        })();
+        if (request.status >= 200 && request.status < 300 && response.video) resolve(response);
+        else reject(new Error(response.message || `Upload failed (${request.status}).`));
+      };
+      request.onerror = () => reject(new Error("Upload failed. Check your connection and try again."));
+      request.onabort = () => reject(new Error("Upload cancelled."));
+      request.send(data);
+    });
+  }
 
   const handleDelete = (videoId: string) => {
     setConfirmDeleteVideoId(videoId);
@@ -322,16 +329,12 @@ export default function VideosClient({
 
                 <div className="lg:col-span-2">
                   <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-                    Video URL
+                    MP4 video file
                   </label>
-                  <input
-                    type="url"
-                    value={formData.videoUrl}
-                    onChange={(e) => setFormData({ ...formData, videoUrl: e.target.value })}
-                    className="w-full rounded-lg border border-border bg-background px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted outline-none transition focus:border-brand focus:ring-3 focus:ring-brand/10"
-                    placeholder="https://loom.com/share/... or https://youtu.be/..."
-                    disabled={loading}
-                  />
+                  <input type="file" accept="video/mp4,.mp4" onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} disabled={loading} className="w-full border border-border bg-background px-3 py-2 text-sm text-foreground file:mr-3 file:border-0 file:bg-brand file:px-3 file:py-2 file:font-semibold file:text-white" />
+                  <p className="mt-2 text-xs text-muted">Uploads are stored on the SchoolBase server. MP4 only, maximum 500 MB.{editingId ? " Leave empty to keep the current file; choose a file to replace it." : ""}</p>
+                  {editingId && !selectedFile ? <p className="mt-1 text-xs text-muted">{videos.find((video) => video.id === editingId)?.isSelfHosted ? "Current video is hosted by SchoolBase." : "This older external video is not publicly listed. Upload an MP4 to make it available in the tutorial library."}</p> : null}
+                  {loading && selectedFile ? <div className="mt-3" role="status" aria-live="polite"><div className="flex justify-between text-xs text-muted"><span>Uploading to SchoolBase server</span><span>{uploadProgress}%</span></div><progress className="mt-1 h-2 w-full accent-brand" max={100} value={uploadProgress} /></div> : null}
                 </div>
 
                 <div>

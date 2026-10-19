@@ -15,9 +15,9 @@ interface RelatedVideosCardProps {
 
 export function RelatedVideosCard({ videos, category }: RelatedVideosCardProps) {
   return (
-    <div className="sticky top-20 border border-border bg-white p-6">
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand">Continue learning</p>
-      <h3 className="mt-3 text-xl font-semibold text-foreground">
+    <div className="border-t border-border pt-5 lg:sticky lg:top-20">
+      <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand">Continue learning</p>
+      <h3 className="mt-2 text-lg font-semibold text-foreground">
         {category ? `More ${category} Videos` : "Related Videos"}
       </h3>
 
@@ -26,10 +26,10 @@ export function RelatedVideosCard({ videos, category }: RelatedVideosCardProps) 
           <Link
             key={video.id}
             href={`/video-tutorials/${video.id}`}
-            className="group flex items-start gap-3 border-t border-border px-0 py-4 transition-colors first:border-t-0 hover:text-brand"
+            className="group flex items-start gap-3 border-t border-border px-0 py-3 transition-colors hover:text-brand"
           >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center bg-brand-light text-brand">
-              <Play className="h-5 w-5 fill-current" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center bg-brand-light text-brand">
+              <Play className="h-4 w-4 fill-current" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="line-clamp-2 text-sm font-semibold text-foreground group-hover:text-brand">

@@ -6,11 +6,17 @@ import { Maximize2 } from "lucide-react";
 interface VideoPlayerClientProps {
   videoUrl: string;
   title: string;
-  embedUrl: string;
 }
 
-export default function VideoPlayerClient({ videoUrl, title, embedUrl }: VideoPlayerClientProps) {
+export default function VideoPlayerClient({ videoUrl, title }: VideoPlayerClientProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const filename = videoUrl.startsWith('/uploads/video-tutorials/')
+    ? videoUrl.slice('/uploads/video-tutorials/'.length)
+    : '';
+  const source = /^[a-f0-9-]{36}\.mp4$/i.test(filename)
+    ? `/api/uploads/video-tutorials/${encodeURIComponent(filename)}`
+    : '';
 
   const handleFullscreen = async () => {
     try {
@@ -31,14 +37,15 @@ export default function VideoPlayerClient({ videoUrl, title, embedUrl }: VideoPl
 
   return (
     <div ref={containerRef} className="relative w-full bg-transparent flex items-center justify-center" style={{ height: 'min(56vh, 600px)' }}>
-      {videoUrl ? (
-        <iframe
-          src={embedUrl}
+      {source ? (
+        <video
+          ref={videoRef}
+          src={source}
           title={title}
-          frameBorder="0"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          className="absolute inset-0 w-full h-full"
+          controls
+          playsInline
+          preload="metadata"
+          className="absolute inset-0 h-full w-full bg-black object-contain"
         />
       ) : (
         <div className="text-center text-slate-400 flex flex-col items-center gap-3">
@@ -50,7 +57,18 @@ export default function VideoPlayerClient({ videoUrl, title, embedUrl }: VideoPl
       )}
 
       <button
-        onClick={handleFullscreen}
+        onClick={async () => {
+          if (videoRef.current) {
+            try {
+              if (document.fullscreenElement) await document.exitFullscreen();
+              else await videoRef.current.requestFullscreen();
+              return;
+            } catch (err) {
+              console.error('Fullscreen failed', err);
+            }
+          }
+          await handleFullscreen();
+        }}
         aria-label="Toggle fullscreen"
         className="absolute right-3 bottom-3 z-20 inline-flex items-center gap-2 rounded-md bg-white/90 text-slate-900 px-3 py-2 text-sm shadow-sm hover:bg-white"
       >

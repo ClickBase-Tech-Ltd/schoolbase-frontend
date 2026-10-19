@@ -51,26 +51,25 @@ export default function VideoTutorialDetailsClient({ video }: VideoTutorialDetai
   };
 
   return (
-    <div className="space-y-6">
+    <div className="mt-8 space-y-6">
       {/* Share Section */}
-      <div className="border border-border bg-white p-6">
-        <h3 className="flex items-center gap-2 text-lg font-semibold text-foreground">
-          <Share2 className="h-5 w-5 text-brand" />
-          Share this tutorial
+      <div className="border-y border-border py-5">
+        <h3 className="flex items-center gap-2 text-base font-semibold text-foreground">
+          <Share2 className="h-4 w-4 text-brand" /> Share this tutorial
         </h3>
         
         <div className="space-y-3">
           {/* Share Link */}
-          <div className="flex gap-2">
-            <div className="flex-1 truncate border border-border bg-background px-4 py-3 font-mono text-xs text-muted">
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <div className="min-w-0 flex-1 truncate border border-border bg-background px-3 py-2.5 font-mono text-xs text-muted">
               {shareUrl || "Loading link..."}
             </div>
             <button
               onClick={handleCopy}
-              className={`flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition ${
+              className={`flex min-h-10 shrink-0 items-center justify-center gap-2 border px-3 py-2 text-sm font-semibold transition ${
                 copied
                   ? "bg-emerald-600 text-white"
-                  : "border border-border bg-white text-foreground hover:border-brand hover:text-brand"
+                  : "border-border bg-white text-foreground hover:border-brand hover:text-brand"
               }`}
             >
               <Copy className="h-4 w-4" />
@@ -81,7 +80,7 @@ export default function VideoTutorialDetailsClient({ video }: VideoTutorialDetai
           {canShare && (
             <button
               onClick={handleShare}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover"
+              className="flex min-h-10 w-full items-center justify-center gap-2 bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-hover sm:w-auto"
             >
               <Share2 className="h-4 w-4" />
               Share Tutorial
@@ -91,7 +90,7 @@ export default function VideoTutorialDetailsClient({ video }: VideoTutorialDetai
       </div>
 
       {/* Meta Information */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-3">
         <div className="border border-border bg-white p-4">
           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-brand">
             Category

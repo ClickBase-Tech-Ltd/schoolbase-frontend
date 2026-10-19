@@ -10,15 +10,16 @@ export function CategoryFilterBar({
   onSelectCategory,
 }: CategoryFilterBarProps) {
   return (
-    <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
+    <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide" role="group" aria-label="Filter tutorials by category">
       {categories.map((category) => (
         <button
           key={category}
           onClick={() => onSelectCategory(category)}
-          className={`shrink-0 rounded-lg border px-4 py-2 text-sm font-semibold transition ${
+          aria-pressed={selectedCategory === category}
+          className={`shrink-0 border px-3.5 py-2 text-xs font-semibold transition ${
             selectedCategory === category
               ? "border-brand bg-brand text-white"
-              : "border-border bg-white text-foreground hover:border-brand hover:text-brand"
+              : "border-border bg-white text-muted hover:border-brand/50 hover:text-brand"
           }`}
         >
           {category === "all" ? "All Categories" : category}

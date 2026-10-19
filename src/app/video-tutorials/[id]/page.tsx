@@ -1,15 +1,32 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import VideoTutorialDetailsClient from "./video-tutorial-details-client";
 import VideoPlayerClient from "./video-player-client";
 import { getBackendUrl } from "@/lib/backend-url";
-import { getEmbedUrl } from "@/lib/video-embed-url";
 import { VideoBreadcrumb } from "@/components/video-tutorials/video-breadcrumb";
 import { RelatedVideosCard } from "@/components/video-tutorials/related-videos-card";
-import { Calendar, Tag } from "lucide-react";
+import { ArrowRight, Calendar } from "lucide-react";
+
+interface TutorialVideo {
+  id: string;
+  title: string;
+  description: string;
+  videoUrl: string;
+  category: string;
+  featured?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  duration?: string;
+}
+
+interface TutorialVideoResponse {
+  video?: TutorialVideo;
+  videos?: TutorialVideo[];
+}
 
 export async function generateMetadata(props: {
   params: Promise<{ id: string }>;
-}): Promise<any> {
+}): Promise<Metadata> {
   const params = await props.params;
   const backendUrl = getBackendUrl();
 
@@ -20,7 +37,7 @@ export async function generateMetadata(props: {
       `${backendUrl}/api/admin/videos/${params.id}`,
     ];
 
-    let video: any = null;
+    let video: TutorialVideo | null = null;
 
     for (const endpoint of endpoints) {
       try {
@@ -34,8 +51,8 @@ export async function generateMetadata(props: {
           continue;
         }
 
-        const data = await response.json();
-        video = data.video;
+        const data = await response.json() as TutorialVideoResponse;
+        video = data.video ?? null;
         if (video) {
           break;
         }
@@ -69,14 +86,13 @@ export default async function VideoTutorialPage(props: {
   const params = await props.params;
   const backendUrl = getBackendUrl();
 
-  try {
     const videoEndpoints = [
       `${backendUrl}/api/videos/${params.id}`,
       `${backendUrl}/schoolbase-admin/api/videos/${params.id}`,
       `${backendUrl}/api/admin/videos/${params.id}`,
     ];
 
-    let video: any = null;
+    let video: TutorialVideo | null = null;
 
     for (const endpoint of videoEndpoints) {
       try {
@@ -90,8 +106,8 @@ export default async function VideoTutorialPage(props: {
           continue;
         }
 
-        const data = await response.json();
-        video = data.video;
+        const data = await response.json() as TutorialVideoResponse;
+        video = data.video ?? null;
         if (video) {
           break;
         }
@@ -104,7 +120,7 @@ export default async function VideoTutorialPage(props: {
       notFound();
     }
 
-    let relatedVideos = [];
+    let relatedVideos: TutorialVideo[] = [];
     try {
       const relatedEndpoints = [
         `${backendUrl}/api/videos`,
@@ -124,9 +140,9 @@ export default async function VideoTutorialPage(props: {
             continue;
           }
 
-          const allData = await allVideosResponse.json();
+          const allData = await allVideosResponse.json() as TutorialVideoResponse;
           relatedVideos = (allData.videos || [])
-            .filter((v: any) => v.category === video.category && v.id !== video.id)
+            .filter((relatedVideo) => relatedVideo.category === video.category && relatedVideo.id !== video.id)
             .slice(0, 5);
           break;
         } catch (err) {
@@ -146,103 +162,60 @@ export default async function VideoTutorialPage(props: {
       : null;
 
     return (
-      <div className="min-h-screen overflow-hidden bg-background">
-        {/* Header Background */}
-        <div className="border-b border-border bg-[#f6faff]">
-          <div className="mx-auto max-w-6xl px-6 pt-8 pb-1">
-            <VideoBreadcrumb
-              items={[
+      <main className="min-h-screen bg-background text-foreground">
+        <section className="border-b border-border bg-[#f6faff]">
+          <div className="mx-auto grid max-w-6xl gap-6 px-6 py-8 sm:py-10 md:grid-cols-[minmax(0,.9fr)_minmax(0,1.1fr)] md:items-center md:gap-8 lg:gap-12">
+            <div className="min-w-0">
+              <VideoBreadcrumb items={[
                 { label: "Video Tutorials", href: "/video-tutorials" },
-                { label: video.category, href: `/video-tutorials?category=${video.category}` },
+                { label: video.category, href: `/video-tutorials?category=${encodeURIComponent(video.category)}` },
                 { label: video.title },
-              ]}
-            />
+              ]} />
+              <p className="mt-4 text-xs font-bold uppercase tracking-[0.16em] text-brand">{video.category} <span className="px-1.5 text-muted">/</span> Video lesson</p>
+              <h1 className="mt-3 text-3xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-4xl">{video.title}</h1>
+              {video.description ? <p className="mt-4 max-w-2xl text-sm leading-6 text-muted sm:text-base sm:leading-7">{video.description}</p> : null}
+              {formattedDate ? <p className="mt-5 inline-flex items-center gap-2 border-t border-border pt-3 text-xs text-muted"><Calendar className="h-4 w-4 text-brand" /> Added {formattedDate}</p> : null}
+            </div>
+            <div className="relative min-w-0 p-2 sm:p-3">
+              <div className="absolute inset-0 border border-brand/20 bg-white shadow-[12px_12px_0_0_#dcecff]" />
+              <section aria-label="Tutorial video" className="relative overflow-hidden border border-brand/30 bg-[#101820] shadow-xl">
+                <VideoPlayerClient videoUrl={video.videoUrl} title={video.title} />
+              </section>
+            </div>
           </div>
-        </div>
+        </section>
 
-        {/* Main Content */}
-        <div className="mx-auto max-w-6xl px-6 py-12 sm:py-16">
-          <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1.7fr)_minmax(280px,.8fr)]">
-            {/* Main Column */}
-            <div className="space-y-10">
-              {/* Video Player */}
-              <div className="overflow-hidden border border-border bg-white shadow-lg">
-                <div>
-                  <VideoPlayerClient
-                    videoUrl={video.videoUrl}
-                    title={video.title}
-                    embedUrl={getEmbedUrl(video.videoUrl)}
-                  />
-                </div>
-              </div>
-
-              {/* Video Info */}
-              <div className="space-y-6">
-                {/* Title and Category */}
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">Video tutorial</p>
-                  <h1 className="mt-4 text-4xl font-bold leading-tight tracking-tight text-foreground sm:text-5xl">
-                    {video.title}
-                  </h1>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="inline-flex items-center gap-2 border border-brand/20 bg-brand-light px-3 py-2 text-sm font-semibold text-brand">
-                      <Tag className="h-4 w-4" />
-                      {video.category}
-                    </span>
-                    {formattedDate && (
-                      <span className="inline-flex items-center gap-2 border border-border bg-white px-3 py-2 text-sm text-muted">
-                        <Calendar className="h-4 w-4" />
-                        {formattedDate}
-                      </span>
-                    )}
+        <div className="mx-auto max-w-6xl px-6 py-8 sm:py-10">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1.7fr)_minmax(270px,.75fr)]">
+            <div className="min-w-0">
+              <section className="border-t border-border pt-6">
+                <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_220px]">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand">Lesson notes</p>
+                    <h2 className="mt-2 text-xl font-semibold">About this tutorial</h2>
+                    <p className="mt-3 whitespace-pre-line text-sm leading-7 text-muted">{video.description || "Follow the video walkthrough to learn this SchoolBase workflow."}</p>
+                  </div>
+                  <div className="border-l-2 border-brand bg-[#f6faff] p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted">Learning path</p>
+                    <p className="mt-2 text-sm font-semibold text-foreground">One workflow at a time</p>
+                    <p className="mt-2 text-xs leading-5 text-muted">Pause and replay any step while practising in your SchoolBase workspace.</p>
                   </div>
                 </div>
-
-                {/* Description */}
-                <div className="border border-border bg-white p-6 sm:p-8">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand">About this tutorial</p>
-                  <p className="mt-4 leading-8 text-muted">
-                    {video.description}
-                  </p>
-                </div>
-
-                {/* Interaction Component */}
-                <VideoTutorialDetailsClient video={video} />
-              </div>
+              </section>
+              <VideoTutorialDetailsClient video={video} />
             </div>
 
-            {/* Sidebar */}
-            <div>
-              {relatedVideos.length > 0 && (
-                <RelatedVideosCard 
-                  videos={relatedVideos}
-                  category={video.category}
-                />
-              )}
-
-              {/* Call to Action Box */}
-              <div className="mt-6 border border-brand/20 bg-[#f6faff] p-6">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand">Put it into practice</p>
-                <h3 className="mt-3 text-xl font-semibold text-foreground">
-                  Ready to use SchoolBase?
-                </h3>
-                <p className="mb-5 mt-3 text-sm leading-7 text-muted">
-                  Start using SchoolBase now and give your school the controls it needs.
-                </p>
-                <a
-                  href="/signup"
-                  className="inline-flex w-full items-center justify-center rounded-lg bg-brand px-5 py-3 text-sm font-semibold text-white transition hover:bg-brand-hover"
-                >
-                  Get Started
-                </a>
-              </div>
-            </div>
+            <aside className="space-y-5">
+              {relatedVideos.length > 0 ? <RelatedVideosCard videos={relatedVideos} category={video.category} /> : null}
+              <section className="border border-border bg-[#f6faff] p-5">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-brand">Put it into practice</p>
+                <h2 className="mt-2 text-lg font-semibold">Explore the guided learning centre</h2>
+                <p className="mt-2 text-sm leading-6 text-muted">Choose a path for your role and continue through the SchoolBase workflows step by step.</p>
+                <a href="/how-to-use-schoolbase" className="mt-4 inline-flex min-h-10 items-center gap-2 bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover">Open learning paths <ArrowRight className="h-4 w-4" /></a>
+              </section>
+            </aside>
           </div>
         </div>
-      </div>
+      </main>
     );
-  } catch (error) {
-    console.error('Error loading video:', error);
-    notFound();
-  }
 }
