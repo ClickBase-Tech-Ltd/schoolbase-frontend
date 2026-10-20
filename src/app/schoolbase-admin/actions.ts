@@ -288,18 +288,21 @@ export async function updateVideoAction(videoId: string, data: any): Promise<any
 export async function deleteVideoAction(videoId: string): Promise<any> {
   try {
     const backendUrl = getBackendUrl();
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('schoolbase_session')?.value;
     
     const response = await fetch(`${backendUrl}/schoolbase-admin/api/videos/${videoId}`, {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await buildPlatformAdminHeaders(sessionCookie),
       credentials: 'include',
     });
 
+    const result = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(`Failed to delete video (${response.status})`);
+      throw new Error(result.message || `Failed to delete video (${response.status})`);
     }
 
-    return await response.json();
+    return result;
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Failed to delete video');
   }
