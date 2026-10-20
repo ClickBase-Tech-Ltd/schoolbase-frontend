@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import { Maximize2 } from "lucide-react";
+import { getEmbedUrl } from "@/lib/video-embed-url";
 
 interface VideoPlayerClientProps {
   videoUrl: string;
@@ -17,6 +18,7 @@ export default function VideoPlayerClient({ videoUrl, title }: VideoPlayerClient
   const source = /^[a-f0-9-]{36}\.mp4$/i.test(filename)
     ? `/api/uploads/video-tutorials/${encodeURIComponent(filename)}`
     : '';
+  const embedUrl = getEmbedUrl(videoUrl);
 
   const handleFullscreen = async () => {
     try {
@@ -37,7 +39,16 @@ export default function VideoPlayerClient({ videoUrl, title }: VideoPlayerClient
 
   return (
     <div ref={containerRef} className="relative w-full bg-transparent flex items-center justify-center" style={{ height: 'min(56vh, 600px)' }}>
-      {source ? (
+      {embedUrl ? (
+        <iframe
+          src={embedUrl}
+          title={title}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerPolicy="strict-origin-when-cross-origin"
+          allowFullScreen
+          className="absolute inset-0 h-full w-full border-0"
+        />
+      ) : source ? (
         <video
           ref={videoRef}
           src={source}

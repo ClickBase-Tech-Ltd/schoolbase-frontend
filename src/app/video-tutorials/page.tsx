@@ -8,6 +8,7 @@ import { VideoCard } from "@/components/video-tutorials/video-card";
 import { LoadingSkeletonGrid } from "@/components/video-tutorials/loading-skeleton-grid";
 import { EmptyState } from "@/components/video-tutorials/empty-state";
 import { Search } from "lucide-react";
+import { getYouTubeThumbnailUrl } from "@/lib/video-embed-url";
 
 interface Video {
   id: string;
@@ -22,6 +23,8 @@ interface Video {
 }
 
 function getVideoPreviewUrl(videoUrl: string) {
+  const youtubeThumbnail = getYouTubeThumbnailUrl(videoUrl);
+  if (youtubeThumbnail) return youtubeThumbnail;
   const filename = videoUrl.startsWith('/uploads/video-tutorials/')
     ? videoUrl.slice('/uploads/video-tutorials/'.length)
     : '';

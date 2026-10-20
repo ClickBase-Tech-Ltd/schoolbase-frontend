@@ -28,9 +28,10 @@ export function VideoCard({
 }: VideoCardProps) {
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isYouTubeThumbnail = Boolean(videoUrl?.startsWith("https://i.ytimg.com/vi/"));
   useEffect(() => {
     const preview = previewRef.current;
-    if (!preview || !videoUrl || typeof IntersectionObserver === "undefined") return;
+    if (!preview || !videoUrl || isYouTubeThumbnail || typeof IntersectionObserver === "undefined") return;
 
     const observer = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) {
@@ -52,12 +53,12 @@ export function VideoCard({
       if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
       if (activePreview === preview) activePreview = null;
     };
-  }, [videoUrl]);
+  }, [videoUrl, isYouTubeThumbnail]);
 
   return (
     <Link href={`/video-tutorials/${id}`} className={`group block overflow-hidden border border-border bg-white transition hover:-translate-y-0.5 hover:border-brand/50 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 ${featured ? "lg:grid lg:grid-cols-[1.05fr_.95fr]" : ""}`}>
       <div className={`relative aspect-video overflow-hidden bg-[#101820] ${featured ? "lg:aspect-auto lg:min-h-full" : ""}`}>
-        {videoUrl ? <video
+        {isYouTubeThumbnail ? <img src={videoUrl} alt={`Thumbnail for ${title}`} className="absolute inset-0 h-full w-full object-cover" /> : videoUrl ? <video
           ref={previewRef}
           src={videoUrl}
           muted

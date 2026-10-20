@@ -240,19 +240,22 @@ export async function rejectSchoolSubscriptionAction(formData: FormData): Promis
 export async function createVideoAction(data: any): Promise<any> {
   try {
     const backendUrl = getBackendUrl();
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('schoolbase_session')?.value;
     
     const response = await fetch(`${backendUrl}/schoolbase-admin/api/videos`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await buildPlatformAdminHeaders(sessionCookie),
       credentials: 'include',
       body: JSON.stringify(data),
     });
 
+    const result = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(`Failed to create video (${response.status})`);
+      throw new Error(result.message || `Failed to create video (${response.status})`);
     }
 
-    return await response.json();
+    return result;
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Failed to create video');
   }
@@ -261,19 +264,22 @@ export async function createVideoAction(data: any): Promise<any> {
 export async function updateVideoAction(videoId: string, data: any): Promise<any> {
   try {
     const backendUrl = getBackendUrl();
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('schoolbase_session')?.value;
     
     const response = await fetch(`${backendUrl}/schoolbase-admin/api/videos/${videoId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await buildPlatformAdminHeaders(sessionCookie),
       credentials: 'include',
       body: JSON.stringify(data),
     });
 
+    const result = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(`Failed to update video (${response.status})`);
+      throw new Error(result.message || `Failed to update video (${response.status})`);
     }
 
-    return await response.json();
+    return result;
   } catch (error) {
     throw new Error(error instanceof Error ? error.message : 'Failed to update video');
   }
