@@ -1,3 +1,5 @@
+import { schoolbaseSocialLinks } from "@/lib/social-links";
+
 export const structuredData = {
   organization: {
     '@context': 'https://schema.org',
@@ -7,11 +9,7 @@ export const structuredData = {
     logo: 'https://schoolbase.live/logo.png',
     description:
       'SchoolBase is an all-in-one school management platform for fee collection, parent communication, and result publishing.',
-    sameAs: [
-      'https://www.facebook.com/schoolbase',
-      'https://www.twitter.com/schoolbase',
-      'https://www.linkedin.com/company/schoolbase',
-    ],
+    sameAs: schoolbaseSocialLinks.map(({ href }) => href),
     contactPoint: {
       '@type': 'ContactPoint',
       contactType: 'Customer Support',
@@ -45,11 +43,6 @@ export const structuredData = {
       '@type': 'Offer',
       priceCurrency: 'NGN',
       description: 'See the current plan prices and billing period on the SchoolBase subscription page.',
-    },
-    aggregateRating: {
-      '@type': 'AggregateRating',
-      ratingValue: '4.8',
-      reviewCount: '150',
     },
   },
 

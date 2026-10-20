@@ -19,6 +19,7 @@ import countriesJson from "../../config/countries.json";
 import { getCountryFromHeaders } from "@/lib/country";
 import { getParentSession, getStaffSession } from "@/lib/auth";
 import { getPublicPricing } from "@/lib/public-pricing";
+import { PublicSchoolReviews } from "@/components/public-school-reviews";
 
 const features = [
   {
@@ -126,6 +127,8 @@ export default async function HomePage() {
       <section className="border-b border-border bg-white py-16 sm:py-20"><div className="mx-auto max-w-7xl px-6"><div className="grid gap-6 md:grid-cols-3"><div className="border-l-2 border-brand px-5"><Users className="h-5 w-5 text-brand" /><h2 className="mt-4 text-lg font-semibold text-foreground">One school record</h2><p className="mt-2 text-sm leading-7 text-muted">Students, guardians, staff, classes, and subjects stay connected.</p></div><div className="border-l-2 border-brand px-5"><WalletCards className="h-5 w-5 text-brand" /><h2 className="mt-4 text-lg font-semibold text-foreground">Clearer school finance</h2><p className="mt-2 text-sm leading-7 text-muted">Itemized fees, invoices, payments, receipts, and accounting activity in context.</p></div><div className="border-l-2 border-brand px-5"><MessageCircle className="h-5 w-5 text-brand" /><h2 className="mt-4 text-lg font-semibold text-foreground">Better visibility</h2><p className="mt-2 text-sm leading-7 text-muted">The right updates reach teachers, parents, and school teams when they need them.</p></div></div></div></section>
 
       <section id="features" className="py-20 sm:py-24"><div className="mx-auto max-w-7xl px-6"><div className="flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">The SchoolBase system</p><h2 className="mt-4 text-3xl font-bold tracking-tight text-foreground sm:text-5xl">The work behind every school day.</h2></div><Link href="/platform" className="inline-flex items-center gap-2 text-sm font-semibold text-brand">View all platform areas <ArrowRight className="h-4 w-4" /></Link></div><div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{features.map(({ icon: Icon, title, text }) => <article key={title} className="border border-border bg-white p-6 transition hover:-translate-y-1 hover:border-brand/50 hover:shadow-lg"><div className="flex h-11 w-11 items-center justify-center bg-brand-light text-brand"><Icon className="h-5 w-5" /></div><h3 className="mt-5 text-lg font-semibold text-foreground">{title}</h3><p className="mt-2 text-sm leading-7 text-muted">{text}</p></article>)}</div></div></section>
+
+      <PublicSchoolReviews />
 
       <section className="mx-auto max-w-7xl px-6 py-16 sm:py-20">
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">

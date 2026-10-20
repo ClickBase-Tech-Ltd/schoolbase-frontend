@@ -1,8 +1,13 @@
 'use client';
 
+import { schoolbaseSocialLinks } from "@/lib/social-links";
+
 export default function EmailPreviewPage() {
   const adminName = 'John Doe';
   const schoolName = 'Greenfield Academy';
+  const socialFooterLinks = schoolbaseSocialLinks
+    .map(({ label, href }) => `<a href="${href.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}" style="color: #0A66C2; text-decoration: none;">${label}</a>`)
+    .join(' | ');
 
   const htmlContent = `
 <!DOCTYPE html>
@@ -96,9 +101,8 @@ export default function EmailPreviewPage() {
         <strong>Warm regards,</strong><br/>
         Nwokpor Raymond Ikenna<br/>
         Chairman - ClickBase Group<br/><br/>
-        Follow ClickBase Technologies:<br/>
-        <a href="https://www.linkedin.com/company/106371744/" style="color: #0A66C2; text-decoration: none;">LinkedIn</a> | 
-        <a href="https://web.facebook.com/profile.php?id=61577572757498" style="color: #0A66C2; text-decoration: none;">Facebook</a>
+        Follow SchoolBase:<br/>
+        ${socialFooterLinks || 'Official social accounts will be added soon.'}
       </p>
     </div>
   </div>

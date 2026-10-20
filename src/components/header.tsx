@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Linkedin, Facebook, Mail, MessageCircle } from "lucide-react";
+import { Mail, MessageCircle } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { PublicMobileMenu } from "@/components/public-mobile-menu";
+import { SocialLinkList } from "@/components/social-link-list";
 import { getStaffSession, getParentSession } from "@/lib/auth";
 
 export default async function Header() {
@@ -20,25 +21,8 @@ export default async function Header() {
             <div>
               Built for West African schools by ClickBase Technologies Ltd.
             </div>
-            <div className="flex flex-wrap gap-3">
-              <a
-                href="https://www.linkedin.com/company/106371744/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-muted hover:text-brand flex items-center gap-1"
-              >
-                <Linkedin className="h-4 w-4" />
-                LinkedIn
-              </a>
-              <a
-                href="https://web.facebook.com/profile.php?id=61577572757498"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-muted hover:text-brand flex items-center gap-1"
-              >
-                <Facebook className="h-4 w-4" />
-                Facebook
-              </a>
+            <div className="flex flex-wrap items-center gap-3">
+              <SocialLinkList className="flex flex-wrap gap-3" />
               <a
                 href="mailto:support@schoolbase.live"
                 className="text-muted hover:text-brand flex items-center gap-1"
@@ -47,7 +31,7 @@ export default async function Header() {
                 Email
               </a>
               <a
-                href="https://wa.me/234903 225 0338"
+                href="https://wa.me/2349032250338"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-muted hover:text-brand flex items-center gap-1"

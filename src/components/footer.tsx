@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Linkedin, Facebook, Mail, MessageCircle } from "lucide-react";
+import { Mail, MessageCircle } from "lucide-react";
+import { SocialLinkList } from "@/components/social-link-list";
 
 const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://schoolbase.live";
 
@@ -15,23 +16,8 @@ export default function Footer() {
             <p className="text-sm text-white/70 mb-6">
               The school management system built for West African schools. Fees, attendance, results, and parent communication in one platform.
             </p>
-            <div className="flex gap-3">
-              <a
-                href="https://www.linkedin.com/company/106371744/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-white/70 hover:text-white"
-              >
-                <Linkedin className="h-5 w-5" />
-              </a>
-              <a
-                href="https://web.facebook.com/profile.php?id=61577572757498"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-white/70 hover:text-white"
-              >
-                <Facebook className="h-5 w-5" />
-              </a>
+            <div className="flex flex-wrap gap-3">
+              <SocialLinkList className="flex flex-wrap gap-3 text-white/70" />
               <a
                 href="mailto:support@schoolbase.live"
                 className="text-white/70 hover:text-white"
@@ -39,7 +25,7 @@ export default function Footer() {
                 <Mail className="h-5 w-5" />
               </a>
               <a
-                href="https://wa.me/234903 225 0338"
+                href="https://wa.me/2349032250338"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-white/70 hover:text-white"

@@ -9,6 +9,7 @@ import { formatMoney } from "@/lib/format";
 import { getBackendUrl } from "@/lib/backend-url";
 import SubscriptionModal from "@/components/subscription-modal";
 import { useRouter, useSearchParams } from "next/navigation";
+import { DashboardEngagementPrompts } from "@/components/admin/dashboard-engagement-prompts";
 
 type DashboardPayment = {
   amount?: number;
@@ -691,6 +692,7 @@ export default function AdminDashboardPage() {
         </div>
       </section>
       </div>
+      <DashboardEngagementPrompts />
     </main>
   );
 }
