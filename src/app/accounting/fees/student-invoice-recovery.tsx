@@ -148,7 +148,7 @@ export default function StudentInvoiceRecovery({ currency }: { currency: string 
     <>
       <Button type="button" variant="secondary" onClick={() => setIsOpen(true)} className="h-9 gap-2 rounded-md px-3 py-2 text-sm">
         <UserRound size={16} />
-        <span className="hidden lg:inline">Recover student invoice</span>
+        <span className="hidden lg:inline">Recover Invoice</span>
         <span className="lg:hidden">Recover invoice</span>
       </Button>
 

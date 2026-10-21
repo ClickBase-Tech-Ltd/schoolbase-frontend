@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ChevronLeft, Download, Printer, AlertCircle, Check, CheckCircle2, Clock3 } from "lucide-react";
+import { ChevronLeft, Printer, AlertCircle, Check, CheckCircle2, Clock3 } from "lucide-react";
 import { getBackendUrl } from "@/lib/backend-url";
 import { formatMoney, pupilName as formatPupilName, invoiceStatusLabel, type InvoiceStatusLike } from "@/lib/format";
 import { resolveSchoolAssetUrl } from "@/lib/asset-urls";
@@ -140,8 +140,6 @@ export default function InvoiceDetailPage() {
   }, [params.id]);
 
   const handlePrint = () => window.print();
-  const handleDownload = () => window.print();
-
   if (loading) {
     return (
       <div className="min-h-screen p-4 sm:p-8">
@@ -233,12 +231,12 @@ export default function InvoiceDetailPage() {
           </button>
           <div className="flex gap-2">
             <button
-              onClick={handleDownload}
+              onClick={handlePrint}
               className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 hover:opacity-90"
               style={{ backgroundColor: LIGHT_BLUE, color: BRAND_BLUE }}
             >
-              <Download size={16} />
-              Download
+              <Printer size={16} />
+              Print / Save PDF
             </button>
             <button
               onClick={handlePrint}

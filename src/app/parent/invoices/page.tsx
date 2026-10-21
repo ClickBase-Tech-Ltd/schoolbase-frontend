@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { CreditCard, AlertCircle, Eye, Search } from "lucide-react";
 import { formatMoney } from "@/lib/format";
 import { getBackendUrl } from "@/lib/backend-url";
@@ -16,7 +16,7 @@ interface Invoice {
   amountDue: number;
   amountPaid: number;
   status: "SENT" | "PART_PAID" | "PAID" | "OVERDUE" | "DRAFT";
-  dueDate: string;
+  dueDate: string | null;
   description?: string;
   items?: Array<{
     id: string;
@@ -28,41 +28,67 @@ interface Invoice {
   }>;
 }
 
+type InvoiceFilter = "all" | "outstanding" | "paid";
+
+const invoiceFilters: Array<{ value: InvoiceFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "outstanding", label: "Outstanding" },
+  { value: "paid", label: "Paid" },
+];
+
 export default function InvoicesPage() {
   const router = useRouter();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [filter, setFilter] = useState<"all" | "outstanding" | "paid">("all");
+  const [filter, setFilter] = useState<InvoiceFilter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  const loadData = async () => {
+  const requestInvoices = useCallback(async () => {
+    const res = await fetch(`${getBackendUrl()}/api/parent/invoices`, {
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (!res.ok) throw new Error("Failed to load invoices");
+    const data = await res.json();
+    return data.invoices || [];
+  }, []);
+
+  const loadData = useCallback(async () => {
     try {
-      const backendUrl = getBackendUrl();
-      
-      const res = await fetch(`${backendUrl}/api/parent/invoices`, {
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (!res.ok) {
-        throw new Error('Failed to load invoices');
-      }
-
-      const data = await res.json();
-      console.log('Invoices data:', data); // Debug
-      setInvoices(data.invoices || []);
-      setLoading(false);
+      const invoiceList = await requestInvoices();
+      setError(null);
+      setInvoices(invoiceList);
     } catch (err) {
       console.error("Error loading invoices:", err);
-      setError(err instanceof Error ? err.message : 'Failed to load invoices');
+      setError(err instanceof Error ? err.message : "Failed to load invoices");
+    } finally {
       setLoading(false);
     }
-  };
+  }, [requestInvoices]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    let active = true;
+    async function loadInvoices() {
+      try {
+        const invoiceList = await requestInvoices();
+        if (!active) return;
+        setError(null);
+        setInvoices(invoiceList);
+      } catch (err) {
+        if (!active) return;
+        console.error("Error loading invoices:", err);
+        setError(err instanceof Error ? err.message : "Failed to load invoices");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    void loadInvoices();
+    return () => {
+      active = false;
+    };
+  }, [requestInvoices]);
 
   // Filter invoices
   const filtered = invoices.filter((invoice) => {
@@ -83,6 +109,10 @@ export default function InvoicesPage() {
     .reduce((sum, inv) => sum + Math.max(0, (inv.amountDue || 0) - (inv.amountPaid || 0)), 0);
   const totalPaid = invoices
     .reduce((sum, inv) => sum + (inv.amountPaid || 0), 0);
+  const totalBilled = totalOutstanding + totalPaid;
+  const nextOutstandingInvoice = invoices.find(
+    (invoice) => invoice.status !== "PAID" && invoice.amountDue > invoice.amountPaid,
+  );
 
   const { school: parentSchool } = useParentSchool();
   const currency = useEffectiveCurrency(parentSchool);
@@ -144,12 +174,12 @@ export default function InvoicesPage() {
         </div>
         <div className="border border-border bg-surface p-5">
           <p className="text-xs font-bold uppercase tracking-[.12em] text-muted">Total billed</p>
-          <p className="mt-4 text-3xl font-semibold text-foreground">{formatMoney(totalOutstanding + totalPaid, currency)}</p>
+          <p className="mt-4 text-3xl font-semibold text-foreground">{formatMoney(totalBilled, currency)}</p>
           <p className="mt-1 text-xs text-muted">{invoices.length} invoices</p>
         </div>
         <div className="border border-border bg-surface p-5">
           <p className="text-xs font-bold uppercase tracking-[.12em] text-muted">Payment rate</p>
-          <p className="mt-4 text-3xl font-semibold text-foreground">{invoices.length > 0 ? Math.round((totalPaid / (totalPaid + totalOutstanding)) * 100) : 0}%</p>
+          <p className="mt-4 text-3xl font-semibold text-foreground">{totalBilled > 0 ? Math.round((totalPaid / totalBilled) * 100) : 0}%</p>
           <p className="mt-1 text-xs text-muted">of billed total</p>
         </div>
       </div>
@@ -165,14 +195,10 @@ export default function InvoicesPage() {
         </div>
 
         <div className="flex flex-wrap gap-2 border-b border-border px-4 py-3 bg-surface">
-          {[
-            { value: "all", label: "All" },
-            { value: "outstanding", label: "Outstanding" },
-            { value: "paid", label: "Paid" },
-          ].map((btn) => (
+          {invoiceFilters.map((btn) => (
             <button
               key={btn.value}
-              onClick={() => setFilter(btn.value as any)}
+              onClick={() => setFilter(btn.value)}
               className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
                 filter === btn.value
                   ? "bg-brand text-white"
@@ -193,7 +219,9 @@ export default function InvoicesPage() {
         ) : (
           <div className="divide-y divide-border">
             {filtered.map((invoice) => {
-              const isOverdue = new Date(invoice.dueDate) < new Date() && invoice.status !== "PAID";
+              const dueDate = invoice.dueDate ? new Date(invoice.dueDate) : null;
+              const hasValidDueDate = dueDate !== null && !Number.isNaN(dueDate.getTime());
+              const isOverdue = hasValidDueDate && dueDate < new Date() && invoice.status !== "PAID";
 
               const getStatusBadge = (status: string) => {
                 switch (status) {
@@ -240,7 +268,9 @@ export default function InvoicesPage() {
                     <span className={`inline-flex items-center border px-2.5 py-1 text-xs font-semibold ${getStatusBadge(invoice.status)}`}>
                       {invoice.status === "PART_PAID" ? "Partial" : invoice.status === "DRAFT" ? "Draft" : invoice.status}
                     </span>
-                    <span className="text-xs text-muted">Due {new Date(invoice.dueDate).toLocaleDateString()}</span>
+                    <span className="text-xs text-muted">
+                      {hasValidDueDate ? `Due ${dueDate.toLocaleDateString()}` : "No due date"}
+                    </span>
                     <button
                       onClick={() => router.push(`/parent/invoices/${invoice.id}`)}
                       className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white hover:bg-brand-hover transition"
@@ -261,9 +291,14 @@ export default function InvoicesPage() {
       {totalOutstanding > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
           <h3 className="text-sm font-bold text-amber-900">Payment reminder</h3>
-          <p className="text-amber-800 mt-2">You have an outstanding balance of <span className="font-bold">{formatMoney(totalOutstanding, currency)}</span> due. Please make payment as soon as possible to avoid late fees.</p>
-          <button className="mt-4 rounded-lg bg-brand px-4 py-2.5 font-semibold text-white transition-colors hover:bg-brand-hover">
-            Make payment
+          <p className="text-amber-800 mt-2">You have an outstanding balance of <span className="font-bold">{formatMoney(totalOutstanding, currency)}</span>. Open an invoice to view your school&apos;s approved payment instructions.</p>
+          <button
+            type="button"
+            onClick={() => nextOutstandingInvoice && router.push(`/parent/invoices/${nextOutstandingInvoice.id}`)}
+            disabled={!nextOutstandingInvoice}
+            className="mt-4 rounded-lg bg-brand px-4 py-2.5 font-semibold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            View payment instructions
           </button>
         </div>
       )}

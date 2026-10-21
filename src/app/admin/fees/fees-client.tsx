@@ -62,11 +62,18 @@ const PAYMENT_METHODS = ["CASH", "BANK_TRANSFER", "CARD", "ONLINE", "OTHER"] as 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 500] as const;
 const DEFAULT_ITEMS_PER_PAGE = 20;
 
+function normalizeDuplicateKey(value: unknown): string {
+  return typeof value === "string"
+    ? value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, " ").toLowerCase()
+    : "";
+}
+
 const HELP_GUIDE: PageHelpGuide = {
   title: "Managing Fees & Invoices",
   overview: "Track and manage student fee invoices organized by academic year, school phase, term, and class. Record payments, send reminders, and filter by status.",
   steps: [
     "Issue invoices for a term to bill all eligible students.",
+    "Use the Duplicate invoice check to find active invoices that appear to bill the same student for the same fee schedule.",
     "View invoices grouped by Early Years, Primary, Secondary phases.",
     "Each phase shows summary statistics and collapsible term details.",
     "Click 'Record payment' to log cash, bank transfer, or online payments.",
@@ -79,7 +86,18 @@ const HELP_GUIDE: PageHelpGuide = {
       tips: [
         "Select the term from the dropdown at the top",
         "Click 'Issue term bills' to generate invoices",
+        "Existing active invoices for the same student and schedule name in that term are skipped, including duplicate schedule records",
         "Invoices appear automatically grouped by phase and term",
+      ],
+    },
+    {
+      title: "Check for Duplicate Invoices",
+      description: "The duplicate check finds multiple non-voided invoices that appear to bill the same student for the same fee schedule, even if duplicate student or schedule records have different IDs.",
+      tips: [
+        "Click 'Review duplicates' in the action bar to show every flagged invoice",
+        "The check compares student identity and matching schedule name and term; review invoice details before taking action",
+        "Open the invoice to review its history; only void an unpaid duplicate with a clear reason",
+        "If a duplicate has payments or accounting history, contact support instead of voiding it",
       ],
     },
     {
@@ -144,6 +162,7 @@ export default function FeesPageClient({
   const router = useRouter();
   const [activePhase, setActivePhase] = useState("ALL");
   const [activeStatus, setActiveStatus] = useState("ALL");
+  const [duplicatesOnly, setDuplicatesOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_ITEMS_PER_PAGE);
@@ -152,6 +171,7 @@ export default function FeesPageClient({
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentAllocations, setPaymentAllocations] = useState<Record<string, string>>({});
   const [selectedPaymentItems, setSelectedPaymentItems] = useState<Record<string, boolean>>({});
+  const paymentIdempotencyKeyRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [paymentReference, setPaymentReference] = useState("");
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
@@ -310,6 +330,67 @@ export default function FeesPageClient({
 
   const phaseOptions = getPhaseFilterOptions();
 
+  const duplicateInvoiceIds = useMemo(() => {
+    const invoicesByStudentSchedule = new Map<string, Set<string>>();
+    for (const invoice of localInvoices) {
+      if (invoice.status === "VOIDED") continue;
+      const invoiceId = typeof invoice.id === "string" ? invoice.id : "";
+      if (!invoiceId) continue;
+
+      const pupil = invoice.pupil;
+      const pupilId = invoice.pupilId ?? pupil?.id;
+      const admissionNo = normalizeDuplicateKey(pupil?.admissionNo);
+      const pupilName = normalizeDuplicateKey(`${pupil?.firstName ?? ""} ${pupil?.lastName ?? ""}`);
+      const pupilClass = pupil?.class;
+      const classIdentity = normalizeDuplicateKey(
+        `${pupilClass?.name ?? ""} ${pupilClass?.arm ?? ""} ${pupilClass?.phase ?? ""}`,
+      );
+      const studentIdentities = new Set<string>();
+      if (pupilId) studentIdentities.add(`pupil:${pupilId}`);
+      if (admissionNo) studentIdentities.add(`admission:${admissionNo}`);
+      if (pupilName && classIdentity) studentIdentities.add(`name-class:${pupilName}:${classIdentity}`);
+      if (studentIdentities.size === 0) continue;
+
+      const schedule = invoice.feeSchedule;
+      const scheduleId = invoice.feeScheduleId ?? schedule?.id;
+      const scheduleName = normalizeDuplicateKey(schedule?.name);
+      const termId = schedule?.term?.id ?? schedule?.termId ?? invoice.termId;
+      const scheduleClass = schedule?.class;
+      const scheduleClassIdentity = normalizeDuplicateKey(
+        `${scheduleClass?.name ?? ""} ${scheduleClass?.arm ?? ""} ${scheduleClass?.phase ?? ""}`,
+      ) || normalizeDuplicateKey(scheduleClass?.id ?? schedule?.classId);
+      const scheduleScope = schedule?.classId
+        ? `class:${scheduleClassIdentity || schedule.classId}`
+        : schedule?.phase
+          ? `phase:${normalizeDuplicateKey(schedule.phase)}`
+          : "school";
+      const keys = new Set<string>();
+
+      for (const studentIdentity of studentIdentities) {
+        if (scheduleId) keys.add(`${studentIdentity}:schedule:${scheduleId}`);
+        if (scheduleName && termId) {
+          keys.add([
+            studentIdentity,
+            "schedule-details",
+            scheduleName,
+            termId,
+            scheduleScope,
+          ].join(":"));
+        }
+      }
+
+      for (const key of keys) {
+        const ids = invoicesByStudentSchedule.get(key) ?? new Set<string>();
+        ids.add(invoiceId);
+        invoicesByStudentSchedule.set(key, ids);
+      }
+    }
+
+    return new Set(
+      [...invoicesByStudentSchedule.values()].flatMap((ids) => ids.size > 1 ? [...ids] : []),
+    );
+  }, [localInvoices]);
+
   // Memoized filtered terms based on selected academic year
   const filteredTerms = useMemo(() => {
     if (!selectedAcademicYearId) return [] as any[];
@@ -321,13 +402,16 @@ export default function FeesPageClient({
   const filteredInvoices = useMemo(() => {
     let filtered = localInvoices;
 
-    // Filter by academic year if selected
-    if (selectedAcademicYearId) {
+    if (duplicatesOnly) {
+      filtered = filtered.filter((inv) => duplicateInvoiceIds.has(inv.id));
+    }
+
+    // Duplicate review intentionally spans terms and statuses to show every active invoice in a duplicate group.
+    if (!duplicatesOnly && selectedAcademicYearId) {
       filtered = filtered.filter((inv) => (inv.academicYear?.id || inv.feeSchedule?.term?.academicYear?.id) === selectedAcademicYearId);
     }
 
-    // Filter by term if selected
-    if (selectedTermId) {
+    if (!duplicatesOnly && selectedTermId) {
       filtered = filtered.filter((inv) => (inv.feeSchedule?.term?.id || inv.termId || "") === selectedTermId);
     }
     // Filter by phase
@@ -339,7 +423,7 @@ export default function FeesPageClient({
     }
 
     // Filter by status
-    if (activeStatus !== "ALL") {
+    if (!duplicatesOnly && activeStatus !== "ALL") {
       filtered = filtered.filter((inv) => inv.status === activeStatus);
     }
 
@@ -352,12 +436,13 @@ export default function FeesPageClient({
         const className = inv.pupil.class
           ? `${inv.pupil.class.name}${inv.pupil.class.arm ? ` ${inv.pupil.class.arm}` : ""}`.toLowerCase()
           : "";
-        return fullName.includes(query) || invoiceNo.includes(query) || className.includes(query);
+        const scheduleName = (inv.feeSchedule?.name || "").toLowerCase();
+        return fullName.includes(query) || invoiceNo.includes(query) || className.includes(query) || scheduleName.includes(query);
       });
     }
 
     return filtered;
-  }, [localInvoices, activePhase, activeStatus, searchQuery, selectedAcademicYearId, selectedTermId]);
+  }, [localInvoices, activePhase, activeStatus, searchQuery, selectedAcademicYearId, selectedTermId, duplicatesOnly, duplicateInvoiceIds]);
 
   const totalPages = Math.max(1, Math.ceil(filteredInvoices.length / itemsPerPage));
   const paginatedInvoices = filteredInvoices.slice(
@@ -391,23 +476,14 @@ export default function FeesPageClient({
 
   const selectInvoiceForPayment = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
+    paymentIdempotencyKeyRef.current = null;
     playOpenTone();
     const outstanding = Math.max(0, invoice.amountDue - invoice.amountPaid);
-    const hasItems = (invoice.items?.length || 0) > 0;
-    const existingAllocations = (invoice.items || []).reduce<Record<string, string>>((acc, item) => {
-      const paid = getItemPaidAmount(item);
-      acc[item.id] = paid > 0 ? (paid / 100).toFixed(2) : "0.00";
-      return acc;
-    }, {});
-    const existingTotal = Object.values(existingAllocations).reduce((sum, value) => sum + Number(value || 0), 0);
-
-    setPaymentAmount(hasItems ? existingTotal.toFixed(2) : (outstanding / 100).toFixed(2));
-    setPaymentAllocations(hasItems ? existingAllocations : distributePaymentAcrossItems(invoice.items || [], outstanding));
+    const allocations = distributePaymentAcrossItems(invoice.items || [], outstanding);
+    setPaymentAmount((outstanding / 100).toFixed(2));
+    setPaymentAllocations(allocations);
     setSelectedPaymentItems(
-      (invoice.items || []).reduce<Record<string, boolean>>((acc, item) => {
-        acc[item.id] = getItemPaidAmount(item) > 0;
-        return acc;
-      }, {}),
+      Object.fromEntries(Object.entries(allocations).map(([itemId, amount]) => [itemId, Number(amount) > 0])),
     );
     setPaymentMethod("CASH");
     setPaymentReference("");
@@ -519,6 +595,17 @@ export default function FeesPageClient({
                 const allocations = Object.entries(paymentAllocations)
                   .filter(([, allocationAmount]) => Number(allocationAmount) > 0)
                   .map(([invoiceItemId, allocationAmount]) => ({ invoiceItemId, amount: Number(allocationAmount) }));
+                const paymentPayload = {
+                  invoiceId: selectedInvoice.id,
+                  amount: paymentAmount,
+                  method: paymentMethod,
+                  reference: paymentReference || null,
+                  allocations,
+                };
+                const paymentFingerprint = JSON.stringify(paymentPayload);
+                if (paymentIdempotencyKeyRef.current?.fingerprint !== paymentFingerprint) {
+                  paymentIdempotencyKeyRef.current = { fingerprint: paymentFingerprint, key: crypto.randomUUID() };
+                }
 
                 if ((selectedInvoice.items?.length || 0) > 0) {
                   const allocatedTotal = allocations.reduce((sum, allocation) => sum + Math.round(allocation.amount * 100), 0);
@@ -534,12 +621,9 @@ export default function FeesPageClient({
                   credentials: "include",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
-                    invoiceId: selectedInvoice.id,
-                    amount: paymentAmount,
-                    method: paymentMethod,
-                    reference: paymentReference || null,
-                    allocations,
+                    ...paymentPayload,
                     currency,
+                    idempotencyKey: paymentIdempotencyKeyRef.current.key,
                   }),
                 });
 
@@ -549,8 +633,12 @@ export default function FeesPageClient({
                 }
 
                 const nextInvoice = result?.invoice;
-                const nextAmountPaid = Number(nextInvoice?.amountPaid ?? (selectedInvoice.amountPaid + Math.round(Number(paymentAmount) * 100))) * 100;
-                const nextAmountDue = Number(nextInvoice?.amountDue ?? selectedInvoice.amountDue) * 100;
+                const nextAmountPaid = nextInvoice?.amountPaid !== undefined
+                  ? Math.round(Number(nextInvoice.amountPaid) * 100)
+                  : selectedInvoice.amountPaid + amountInCents;
+                const nextAmountDue = nextInvoice?.amountDue !== undefined
+                  ? Math.round(Number(nextInvoice.amountDue) * 100)
+                  : selectedInvoice.amountDue;
                 const nextStatus = nextInvoice?.status ?? (nextAmountPaid >= selectedInvoice.amountDue ? "PAID" : "PART_PAID");
 
                 setLocalInvoices((current) => current.map((invoice) => invoice.id === selectedInvoice.id ? {
@@ -563,6 +651,7 @@ export default function FeesPageClient({
 
                 playCloseTone();
                 setSelectedInvoice(null);
+                paymentIdempotencyKeyRef.current = null;
                 setPaymentAmount("");
                 setPaymentAllocations({});
                 setSelectedPaymentItems({});
@@ -576,10 +665,11 @@ export default function FeesPageClient({
                 setModalOpen(true);
                 playOpenTone();
               } catch (error) {
-                setIsSubmittingPayment(false);
                 const message = error instanceof Error ? error.message : "Failed to record payment";
                 console.error("Error recording payment:", message);
                 alert(message);
+              } finally {
+                setIsSubmittingPayment(false);
               }
             }}
             className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-md border border-border bg-surface shadow-[0_16px_50px_rgba(10,102,194,0.16)]"
@@ -597,6 +687,7 @@ export default function FeesPageClient({
                 onClick={() => {
                   playCloseTone();
                   setSelectedInvoice(null);
+                  paymentIdempotencyKeyRef.current = null;
                 }}
                 aria-label="Close"
                 className="flex h-8 w-8 items-center justify-center rounded-md border border-border transition-colors hover:bg-background"
@@ -639,7 +730,11 @@ export default function FeesPageClient({
                       const value = e.target.value;
                       setPaymentAmount(value);
                       if (selectedInvoice.items?.length) {
-                        setPaymentAllocations(distributePaymentAcrossItems(selectedInvoice.items, Math.round(Number(value || 0) * 100)));
+                        const allocations = distributePaymentAcrossItems(selectedInvoice.items, Math.round(Number(value || 0) * 100));
+                        setPaymentAllocations(allocations);
+                        setSelectedPaymentItems(
+                          Object.fromEntries(Object.entries(allocations).map(([itemId, amount]) => [itemId, Number(amount) > 0])),
+                        );
                       }
                     }}
                     required
@@ -679,23 +774,21 @@ export default function FeesPageClient({
                     {selectedInvoice.items!.map((item) => {
                       const itemBalance = getItemRemaining(item);
                       const paidAmount = getItemPaidAmount(item);
-                      const hasExistingPayment = paidAmount > 0;
-                      const rowValue = hasExistingPayment
-                        ? (paidAmount / 100).toFixed(2)
-                        : (paymentAllocations[item.id] || "0.00");
-                      const statusLabel = hasExistingPayment
-                        ? "Paid"
-                        : `${formatStatMoney(itemBalance)} Remaining`;
+                      const rowValue = paymentAllocations[item.id] || "0.00";
+                      const statusLabel = paidAmount > 0
+                        ? `${formatStatMoney(paidAmount)} paid · ${formatStatMoney(itemBalance)} remaining`
+                        : `${formatStatMoney(itemBalance)} remaining`;
+                      const selectedForPayment = selectedPaymentItems[item.id] === true;
 
                       return (
                         <div
                           key={item.id}
-                          className={`grid grid-cols-[minmax(0,1fr)_90px] items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm transition-colors ${hasExistingPayment ? "border-brand/20 bg-brand/5" : "border-border bg-surface"}`}
+                          className={`grid grid-cols-[minmax(0,1fr)_90px] items-center gap-2 rounded-md border px-2.5 py-1.5 text-sm transition-colors ${selectedForPayment ? "border-brand/20 bg-brand/5" : "border-border bg-surface"}`}
                         >
                           <div className="flex min-w-0 items-center gap-2">
                             <input
                               type="checkbox"
-                              checked={selectedPaymentItems[item.id] === true || hasExistingPayment}
+                              checked={selectedForPayment}
                               onChange={(event) => togglePaymentItem(item, event.target.checked)}
                               disabled={isSubmittingPayment || itemBalance <= 0}
                               className="h-4 w-4 rounded border-border text-brand focus:ring-brand"
@@ -704,11 +797,11 @@ export default function FeesPageClient({
                             <div className="flex min-w-0 items-center gap-1.5 text-xs sm:text-sm">
                               <span className="truncate font-medium text-foreground">{item.name}</span>
                               <span className="text-muted">|</span>
-                              <span className={hasExistingPayment ? "font-semibold text-brand" : "text-muted"}>{statusLabel}</span>
+                              <span className={selectedForPayment ? "font-semibold text-brand" : "text-muted"}>{statusLabel}</span>
                             </div>
                           </div>
                           <div
-                            className={`flex min-w-[90px] items-center justify-end rounded-full px-2.5 py-1 text-right text-xs font-semibold text-white ${hasExistingPayment ? "bg-brand" : "bg-brand/80"}`}
+                            className={`flex min-w-[90px] items-center justify-end rounded-full px-2.5 py-1 text-right text-xs font-semibold text-white ${selectedForPayment ? "bg-brand" : "bg-brand/80"}`}
                           >
                             {rowValue}
                           </div>
@@ -741,6 +834,7 @@ export default function FeesPageClient({
                     onClick={() => {
                       playCloseTone();
                       setSelectedInvoice(null);
+                      paymentIdempotencyKeyRef.current = null;
                     }}
                     className="rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-background"
                   >
@@ -944,6 +1038,44 @@ export default function FeesPageClient({
               <Search className="h-4 w-4" />
               <span className="hidden sm:inline">{isSearchOpen ? "Close" : "Search"}</span>
             </Button>
+            <Button
+              type="button"
+              variant="default"
+              disabled={duplicateInvoiceIds.size === 0}
+              aria-pressed={duplicatesOnly}
+              aria-label={
+                duplicatesOnly
+                  ? "Show all invoices"
+                  : `Review ${duplicateInvoiceIds.size} possible duplicate invoices`
+              }
+              title={
+                duplicateInvoiceIds.size > 0
+                  ? "Matches are based on student identity, schedule name, and term. Review each invoice before deciding whether it is a duplicate."
+                  : "No possible duplicate invoices found"
+              }
+              onClick={() => {
+                if (!duplicatesOnly) {
+                  setActivePhase("ALL");
+                  setActiveStatus("ALL");
+                  setSearchQuery("");
+                }
+                setDuplicatesOnly(!duplicatesOnly);
+                setCurrentPage(1);
+              }}
+              className={`inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold shadow-none sm:px-3 ${
+                duplicateInvoiceIds.size > 0
+                  ? "border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                  : "border border-border bg-background text-muted"
+              }`}
+            >
+              <AlertCircle className="h-4 w-4" />
+              <span>{duplicatesOnly ? "Show all" : "Duplicates"}</span>
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] leading-none ${
+                duplicateInvoiceIds.size > 0 ? "bg-amber-200 text-amber-950" : "bg-muted/20 text-muted"
+              }`}>
+                {duplicateInvoiceIds.size}
+              </span>
+            </Button>
             <form onSubmit={handleIssueBillsSubmit} className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-none">
               <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground sm:flex-none">
                 <CalendarDays className="h-4 w-4 text-[#0A66C2]" />
@@ -1076,6 +1208,7 @@ export default function FeesPageClient({
           <p className="text-sm text-muted">
             Showing {paginatedInvoices.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}–
             {Math.min(currentPage * itemsPerPage, filteredInvoices.length)} of {filteredInvoices.length} invoice{filteredInvoices.length !== 1 ? "s" : ""}
+            {duplicatesOnly && " · duplicate review includes all terms and statuses"}
             {searchQuery && ` matching "${searchQuery}"`}
           </p>
           <label className="text-sm text-muted whitespace-nowrap">
@@ -1105,6 +1238,7 @@ export default function FeesPageClient({
                     <th className="px-4 py-2 font-medium">Student</th>
                     <th className="px-4 py-2 font-medium">Phase / Class</th>
                     <th className="px-4 py-2 font-medium">Term</th>
+                    <th className="px-4 py-2 font-medium">Fee schedule</th>
                     <th className="px-4 py-2 font-medium">Invoice No.</th>
                     <th className="px-4 py-2 font-medium text-right">Amount Due</th>
                     <th className="px-4 py-2 font-medium text-right">Paid</th>
@@ -1134,6 +1268,14 @@ export default function FeesPageClient({
                           </div>
                         </td>
                         <td className="px-4 py-2 text-muted">{inv.feeSchedule?.term?.name ?? "—"}</td>
+                        <td className="px-4 py-2 text-muted">
+                          <span>{inv.feeSchedule?.name ?? "—"}</span>
+                          {duplicateInvoiceIds.has(inv.id) && (
+                            <span className="ml-2 inline-flex rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
+                              Possible duplicate
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-2 text-muted"><code className="text-xs">{inv.invoiceNo ?? "—"}</code></td>
                         <td className="px-4 py-2 text-right font-semibold">{formatStatMoney(inv.amountDue)}</td>
                         <td className="px-4 py-2 text-right font-semibold text-green-600">{formatStatMoney(inv.amountPaid)}</td>
@@ -1202,6 +1344,12 @@ export default function FeesPageClient({
                           </span>
                           <span className="ml-1">{classLabel}</span>
                         </p>
+                        <p className="mt-1 text-xs text-muted">
+                          {inv.feeSchedule?.name ?? "Fee schedule unavailable"}
+                          {duplicateInvoiceIds.has(inv.id) && (
+                            <span className="ml-2 font-semibold text-amber-800">Possible duplicate</span>
+                          )}
+                        </p>
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         <Badge variant={inv.status === "PAID" ? "success" : inv.status === "OVERDUE" ? "error" : inv.status === "PART_PAID" ? "warning" : "secondary"} className="text-xs whitespace-nowrap">
@@ -1259,4 +1407,3 @@ export default function FeesPageClient({
     </>
   );
 }
-

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CreditCard, AlertCircle, Download } from "lucide-react";
+import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CreditCard, AlertCircle, ArrowUpRight } from "lucide-react";
 import { formatMoney } from "@/lib/format";
 import { getBackendUrl } from "@/lib/backend-url";
 import ParentPageShell from "@/components/parent-page-shell";
@@ -10,82 +11,124 @@ import { useEffectiveCurrency, useParentSchool } from "../parent-school-context"
 
 interface Payment {
   id: string;
-  invoiceId: string;
+  invoiceId: string | null;
   amount: number;
   paidAt: string;
-  method: "PAYSTACK" | "BANK_TRANSFER" | "CASH" | "POS" | "CHEQUE";
+  method: string;
   status: string;
   reference?: string;
 }
 
+interface ParentChild {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  admissionNo?: string | null;
+  photoUrl?: string | null;
+  class?: { name?: string | null } | null;
+}
+
+const paymentPageSize = 25;
+
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [totalPaid, setTotalPaid] = useState(0);
+  const [paymentCount, setPaymentCount] = useState(0);
+  const [latestPaidAt, setLatestPaidAt] = useState<string | null>(null);
+  const [pageOffset, setPageOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [children, setChildren] = useState<any[]>([]);
+  const [children, setChildren] = useState<ParentChild[]>([]);
   const [selectedChildId, setSelectedChildId] = useState<string | null>(null);
+  const [childSearch, setChildSearch] = useState("");
+  const requestSequence = useRef(0);
 
   const { school: parentSchool } = useParentSchool();
   const currency = useEffectiveCurrency(parentSchool);
 
-  const loadData = async () => {
-    try {
-      const backendUrl = getBackendUrl();
-      // Load payments (optionally filtered by selected child)
-      const paymentsUrl = selectedChildId ? `${backendUrl}/api/parent/payments?childId=${selectedChildId}` : `${backendUrl}/api/parent/payments`;
-      
-      const res = await fetch(paymentsUrl, {
+  const requestPayments = useCallback(async (childId: string | null, offset: number) => {
+    const paymentsUrl = new URL(`${getBackendUrl()}/api/parent/payments`);
+    if (childId) paymentsUrl.searchParams.set("childId", childId);
+    paymentsUrl.searchParams.set("offset", String(offset));
+    paymentsUrl.searchParams.set("limit", String(paymentPageSize));
+    const res = await fetch(paymentsUrl, {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
       });
 
-      if (!res.ok) {
-        throw new Error('Failed to load payments');
-      }
+    if (!res.ok) throw new Error('Failed to load payments');
+    return res.json();
+  }, []);
 
-      const data = await res.json();
+  const loadData = useCallback(async () => {
+    const requestId = ++requestSequence.current;
+    try {
+      const data = await requestPayments(selectedChildId, pageOffset);
+      if (requestId !== requestSequence.current) return;
+      setError(null);
       const paymentsList = data.payments || [];
       setPayments(paymentsList);
-      
-      const total = paymentsList.reduce((sum: number, p: Payment) => sum + p.amount, 0);
-      setTotalPaid(total);
-      setLoading(false);
+      setTotalPaid(data.totalPaid ?? 0);
+      setPaymentCount(data.paymentCount ?? paymentsList.length);
+      setLatestPaidAt(data.latestPaidAt ?? null);
     } catch (err) {
+      if (requestId !== requestSequence.current) return;
       console.error("Error loading payments:", err);
       setError(err instanceof Error ? err.message : 'Failed to load payments');
-      setLoading(false);
+    } finally {
+      if (requestId === requestSequence.current) setLoading(false);
     }
-  };
-
-  const loadChildren = async () => {
-    try {
-      const backendUrl = getBackendUrl();
-      const res = await fetch(`${backendUrl}/api/parent/children`, {
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      const childrenList = data.children || data.data || (Array.isArray(data) ? data : []) || [];
-      setChildren(childrenList);
-      if (childrenList.length > 0 && !selectedChildId) setSelectedChildId(childrenList[0].id);
-    } catch (err) {
-      console.error('Error loading children for payments:', err);
-    }
-  };
+  }, [pageOffset, requestPayments, selectedChildId]);
 
   useEffect(() => {
-    loadChildren();
-    loadData();
+    let active = true;
+    async function loadChildren() {
+      try {
+        const res = await fetch(`${getBackendUrl()}/api/parent/children`, {
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const childrenList = data.children || data.data || (Array.isArray(data) ? data : []) || [];
+        if (active) setChildren(childrenList);
+      } catch (err) {
+        console.error("Error loading children for payments:", err);
+      }
+    }
+    void loadChildren();
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
-    // reload payments when selected child changes
-    setLoading(true);
-    loadData();
-  }, [selectedChildId]);
+    let active = true;
+    const requestId = ++requestSequence.current;
+    async function loadPayments() {
+      try {
+        const data = await requestPayments(selectedChildId, pageOffset);
+        if (!active || requestId !== requestSequence.current) return;
+        setError(null);
+        const paymentsList = data.payments || [];
+        setPayments(paymentsList);
+        setTotalPaid(data.totalPaid ?? 0);
+        setPaymentCount(data.paymentCount ?? paymentsList.length);
+        setLatestPaidAt(data.latestPaidAt ?? null);
+      } catch (err) {
+        if (!active || requestId !== requestSequence.current) return;
+        console.error("Error loading payments:", err);
+        setError(err instanceof Error ? err.message : 'Failed to load payments');
+      } finally {
+        if (active && requestId === requestSequence.current) setLoading(false);
+      }
+    }
+    void loadPayments();
+    return () => {
+      active = false;
+    };
+  }, [pageOffset, requestPayments, selectedChildId]);
 
   if (loading) {
     return (
@@ -121,11 +164,18 @@ export default function PaymentsPage() {
     POS: "POS/Card",
     CHEQUE: "Cheque",
   };
+  const visibleChildren = children.filter((child) =>
+    [child.firstName, child.lastName, child.admissionNo]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(childSearch.trim().toLowerCase())
+  );
 
   return (
     <ParentPageShell onRefresh={loadData}>
       <div className="w-full space-y-6 py-0">
-        <ParentPageHeader icon={CreditCard} eyebrow="Finance operations" title="Payments" description="Track all payments, receipts, and transaction history across your children." count={`${payments.length} payments`} />
+        <ParentPageHeader icon={CreditCard} eyebrow="Finance operations" title="Payments" description="Track payment history across your children and open the related invoice for its receipt details." count={`${paymentCount} payments`} />
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
           {/* Left: children list for filtering */}
@@ -144,7 +194,8 @@ export default function PaymentsPage() {
                 <div className="p-4">
                   <input
                     placeholder="Filter by student..."
-                    onChange={() => {}}
+                    value={childSearch}
+                    onChange={(event) => setChildSearch(event.target.value)}
                     className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none"
                   />
                 </div>
@@ -152,12 +203,31 @@ export default function PaymentsPage() {
 
               <div className="overflow-hidden rounded-lg border border-border bg-surface">
                 <div className="divide-y divide-border max-h-[60vh] overflow-auto">
-                  {children.map((c) => {
+                  <button
+                    key="all-children"
+                    onClick={() => {
+                      if (selectedChildId !== null || pageOffset !== 0) {
+                        setLoading(true);
+                        setSelectedChildId(null);
+                        setPageOffset(0);
+                      }
+                    }}
+                    className={`w-full px-4 py-3 text-left text-sm font-medium hover:bg-background ${selectedChildId === null ? "bg-background text-brand" : "text-foreground"}`}
+                  >
+                    All children
+                  </button>
+                  {visibleChildren.map((c) => {
                     const isSelected = selectedChildId === c.id;
                     return (
                       <button
                         key={c.id}
-                        onClick={() => setSelectedChildId(c.id)}
+                        onClick={() => {
+                          if (selectedChildId !== c.id || pageOffset !== 0) {
+                            setLoading(true);
+                            setSelectedChildId(c.id);
+                            setPageOffset(0);
+                          }
+                        }}
                         className={`w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-background transition ${isSelected ? 'bg-background' : ''}`}
                       >
                         <div className="flex h-10 w-10 items-center justify-center border border-border bg-background text-brand overflow-hidden">
@@ -202,13 +272,13 @@ export default function PaymentsPage() {
                 </div>
                 <div className="border border-border bg-surface p-5">
                   <p className="text-xs font-bold uppercase tracking-[.1em] text-muted">Transactions</p>
-                  <p className="mt-4 text-3xl font-semibold text-foreground">{payments.length}</p>
+                  <p className="mt-4 text-3xl font-semibold text-foreground">{paymentCount}</p>
                 </div>
                 <div className="border border-border bg-surface p-5">
                   <p className="text-xs font-bold uppercase tracking-[.1em] text-muted">Latest payment</p>
                   <p className="mt-4 text-xl font-semibold text-foreground">
-                    {payments.length > 0
-                      ? new Date(payments[0].paidAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    {latestPaidAt
+                      ? new Date(latestPaidAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
                       : '—'}
                   </p>
                 </div>
@@ -227,7 +297,7 @@ export default function PaymentsPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-2">
                           <span className="inline-flex border border-[#b7dfbf] bg-[#e6f4ea] px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#137333]">Paid</span>
-                          <span className="text-xs text-muted">{methodLabels[payment.method] || payment.method}</span>
+                          <span className="text-xs text-muted">{methodLabels[payment.method as keyof typeof methodLabels] || payment.method}</span>
                         </div>
                         <p className="text-sm text-foreground font-medium">School Fees</p>
                         <p className="text-xs text-muted mt-1">Ref: {payment.reference || '—'}</p>
@@ -237,13 +307,49 @@ export default function PaymentsPage() {
                         <p className="text-sm font-semibold text-foreground mt-2">
                           {new Date(payment.paidAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                         </p>
-                        <button className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand hover:text-brand/80 transition">
-                          <Download className="h-3.5 w-3.5" /> Receipt
-                        </button>
+                        {payment.invoiceId && (
+                          <Link
+                            href={`/parent/invoices/${payment.invoiceId}`}
+                            className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand hover:text-brand/80 transition"
+                          >
+                            View invoice <ArrowUpRight className="h-3.5 w-3.5" />
+                          </Link>
+                        )}
                       </div>
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+            {paymentCount > paymentPageSize && (
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-muted">
+                  Showing {pageOffset + 1}–{Math.min(pageOffset + payments.length, paymentCount)} of {paymentCount} payments. Total paid includes all transactions.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={pageOffset === 0 || loading}
+                    onClick={() => {
+                      setLoading(true);
+                      setPageOffset(Math.max(0, pageOffset - paymentPageSize));
+                    }}
+                    className="border border-border px-3 py-2 text-sm font-semibold text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    disabled={pageOffset + payments.length >= paymentCount || loading}
+                    onClick={() => {
+                      setLoading(true);
+                      setPageOffset(pageOffset + paymentPageSize);
+                    }}
+                    className="border border-border px-3 py-2 text-sm font-semibold text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             )}
           </main>

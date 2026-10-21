@@ -11,7 +11,8 @@ interface FeeScheduleItem {
   amount: number;
   createdAt: string | Date;
   term: { id: string; name: string; academicYear: { name: string } };
-  class?: { id: string; name: string; arm?: string | null } | null;
+  phase?: "EARLY_YEARS" | "PRIMARY" | "SECONDARY" | null;
+  class?: { id: string; name: string; arm?: string | null; phase?: "EARLY_YEARS" | "PRIMARY" | "SECONDARY" } | null;
 }
 
 interface TermItem {
@@ -24,6 +25,7 @@ interface ClassItem {
   id: string;
   name: string;
   arm?: string | null;
+  phase?: "EARLY_YEARS" | "PRIMARY" | "SECONDARY";
 }
 
 export default function FeeSchedulesPage() {
@@ -67,17 +69,18 @@ export default function FeeSchedulesPage() {
         const result = await response.json();
 
         // Fetch country config to get currency from country selection modal
-        let countryConfig: any = null;
+        let countryCurrency: string | null = null;
         try {
           const countryRes = await fetch("/api/country/config");
           if (countryRes.ok) {
-            countryConfig = await countryRes.json();
+            const countryConfig: { data?: { currency?: unknown } } = await countryRes.json();
+            countryCurrency = typeof countryConfig.data?.currency === "string" ? countryConfig.data.currency : null;
           }
         } catch (err) {
           console.error("[Fee Schedules] Country config fetch error:", err);
         }
 
-        const schedulesCurrency = countryConfig?.data?.currency || result.currency || "NGN";
+        const schedulesCurrency = countryCurrency || result.currency || "NGN";
 
         setData({
           ...result,

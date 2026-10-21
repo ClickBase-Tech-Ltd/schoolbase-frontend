@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getBackendUrl } from "@/lib/backend-url";
 import { formatMoney, pupilName as formatPupilName, invoiceStatusLabel } from "@/lib/format";
 import { playOpenTone, playCloseTone } from "@/lib/sounds";
@@ -33,6 +33,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [paymentReference, setPaymentReference] = useState("");
   const [isRecordingPayment, setIsRecordingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const paymentIdempotencyKeyRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const [isDeletingInvoice, setIsDeletingInvoice] = useState(false);
   const [voidDialogOpen, setVoidDialogOpen] = useState(false);
   const [voidReason, setVoidReason] = useState("");
@@ -44,6 +45,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     setPaymentMethod("CASH");
     setPaymentReference("");
     setPaymentError(null);
+    paymentIdempotencyKeyRef.current = null;
     setPaymentModalOpen(true);
     playOpenTone();
   };
@@ -51,6 +53,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const closePaymentModal = () => {
     if (isRecordingPayment) return;
     setPaymentModalOpen(false);
+    paymentIdempotencyKeyRef.current = null;
     setPaymentError(null);
     playCloseTone();
   };
@@ -82,6 +85,17 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         remaining -= allocated;
         return allocated > 0 ? [{ invoiceItemId: item.id, amount: allocated / 100 }] : [];
       });
+      const paymentPayload = {
+        invoiceId: invoice.id,
+        amount: (paymentMinor / 100).toFixed(2),
+        method: paymentMethod,
+        reference: paymentReference.trim() || null,
+        allocations,
+      };
+      const paymentFingerprint = JSON.stringify(paymentPayload);
+      if (paymentIdempotencyKeyRef.current?.fingerprint !== paymentFingerprint) {
+        paymentIdempotencyKeyRef.current = { fingerprint: paymentFingerprint, key: crypto.randomUUID() };
+      }
 
       const backendUrl = getBackendUrl();
       const response = await fetch(`${backendUrl}/api/admin/fees/payments/record`, {
@@ -89,17 +103,15 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          invoiceId: invoice.id,
-          amount: (paymentMinor / 100).toFixed(2),
-          method: paymentMethod,
-          reference: paymentReference.trim() || null,
-          allocations,
+          ...paymentPayload,
+          idempotencyKey: paymentIdempotencyKeyRef.current.key,
         }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result.error || "Unable to record this payment.");
 
       setPaymentModalOpen(false);
+      paymentIdempotencyKeyRef.current = null;
       await fetchInvoice(invoiceId);
     } catch (recordError) {
       setPaymentError(recordError instanceof Error ? recordError.message : "Unable to record this payment.");
