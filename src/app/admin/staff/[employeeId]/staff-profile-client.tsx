@@ -55,6 +55,8 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
   const [startDate, setStartDate] = useState('');
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState('');
   const [reason, setReason] = useState('');
@@ -125,6 +127,10 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (newPassword && newPassword !== confirmNewPassword) {
+      setError('The new password and confirmation do not match.');
+      return;
+    }
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -135,6 +141,7 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
         body: (() => {
           const formData = new FormData();
           const values: Record<string, string> = { firstName, middleName, lastName, phone, jobTitle, department, classification, employmentType, startDate, emergencyContactName, emergencyContactPhone, reason };
+          if (newPassword) values.password = newPassword;
           if (employee?.user.role === 'TEACHER') {
             values.classIds = JSON.stringify(classIds);
             values.subjectIds = JSON.stringify(subjectIds);
@@ -150,6 +157,8 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
       setNotice('Profile updated and history recorded.');
       setReason('');
       setPhotoFile(null);
+      setNewPassword('');
+      setConfirmNewPassword('');
     } catch (saveError: unknown) {
       setError(saveError instanceof Error ? saveError.message : 'Unable to update staff profile.');
     } finally {
@@ -218,6 +227,42 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
           </section>
 
           {employee.user.role === 'TEACHER' ? <section className="space-y-4 border border-border bg-surface p-4 sm:p-6"><div><h2 className="text-lg font-semibold text-foreground">Teaching assignments</h2><p className="mt-1 text-sm text-muted">Assignments are school-scoped and saved with this profile update.</p></div><div className="grid gap-4 sm:grid-cols-2"><fieldset className="border border-border bg-background p-3"><legend className="px-1 text-sm font-semibold text-foreground">Classes</legend><div className="max-h-48 space-y-2 overflow-y-auto">{classes.map((item) => <label key={item.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={classIds.includes(item.id)} onChange={(event) => setClassIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} /><span>{item.name}{item.arm ? ` ${item.arm}` : ''}</span></label>)}</div></fieldset><fieldset className="border border-border bg-background p-3"><legend className="px-1 text-sm font-semibold text-foreground">Subjects</legend><div className="max-h-48 space-y-2 overflow-y-auto">{subjects.map((item) => <label key={item.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={subjectIds.includes(item.id)} onChange={(event) => setSubjectIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} /><span>{item.name}</span></label>)}</div></fieldset></div></section> : null}
+
+          {employee.user.role === 'TEACHER' || employee.user.role === 'BURSAR' ? (
+            <section className="space-y-4 border border-border bg-surface p-4 sm:p-6">
+              <div>
+                <h2 className="text-lg font-semibold text-foreground">Account access</h2>
+                <p className="mt-1 text-sm text-muted">Set a temporary password if this staff member can no longer sign in. Leave blank to keep the current password.</p>
+              </div>
+              <label className={labelClass}>
+                New temporary password
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  maxLength={128}
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  className={fieldClass}
+                  placeholder="At least 8 characters"
+                />
+              </label>
+              <label className={labelClass}>
+                Confirm temporary password
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  maxLength={128}
+                  value={confirmNewPassword}
+                  onChange={(event) => setConfirmNewPassword(event.target.value)}
+                  className={fieldClass}
+                  placeholder="Enter the new password again"
+                />
+              </label>
+              <p className="text-xs text-muted">The password is stored securely and is not displayed again. Share it with the staff member through a private channel.</p>
+            </section>
+          ) : null}
 
           <section className="space-y-4 border border-border bg-surface p-4 sm:p-6">
             <div><h2 className="text-lg font-semibold text-foreground">Employment details</h2><p className="mt-1 text-sm text-muted">Current status: {employee.employmentStatus}. Change account access from the directory.</p></div>

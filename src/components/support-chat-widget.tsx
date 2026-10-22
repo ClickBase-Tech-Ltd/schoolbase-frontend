@@ -9,7 +9,6 @@ type ChatMessage = { id: string; senderRole: string; senderName: string; body: s
 type Conversation = { id: string; subject: string; status: string; lastMessageAt: string; unreadCount: number; messages: ChatMessage[] };
 
 const topics = ["Student Records", "Fees & Payments", "Results", "Attendance", "Parents & Portal", "ID Card", "WhatsApp", "Account & Subscription", "Other"];
-const allowedFiles = ".jpg,.jpeg,.png,.webp,.pdf";
 const whatsappHref = "https://wa.me/2349032250338";
 
 function formatTime(value: string) {
@@ -242,8 +241,8 @@ export default function SupportChatWidget() {
               {!selected ? <label className="mb-2 block text-[10px] font-semibold uppercase tracking-wide text-muted">Topic: {topic}</label> : null}
               {(canReply || !selected) && (
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <input ref={fileRef} type="file" accept={allowedFiles} multiple className="hidden" onChange={(event) => setFiles(Array.from(event.target.files || []))} />
-                  <button type="button" onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand hover:underline"><Paperclip className="h-3.5 w-3.5" /> Attach image/PDF</button>
+                  <input ref={fileRef} type="file" multiple className="hidden" onChange={(event) => setFiles(Array.from(event.target.files || []))} />
+                  <button type="button" onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand hover:underline"><Paperclip className="h-3.5 w-3.5" /> Attach files</button>
                   {files.length ? <span className="max-w-[190px] truncate text-[10px] text-muted">{files.map((file) => file.name).join(", ")}</span> : null}
                 </div>
               )}
