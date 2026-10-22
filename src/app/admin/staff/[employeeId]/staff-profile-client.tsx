@@ -229,38 +229,40 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
           {employee.user.role === 'TEACHER' ? <section className="space-y-4 border border-border bg-surface p-4 sm:p-6"><div><h2 className="text-lg font-semibold text-foreground">Teaching assignments</h2><p className="mt-1 text-sm text-muted">Assignments are school-scoped and saved with this profile update.</p></div><div className="grid gap-4 sm:grid-cols-2"><fieldset className="border border-border bg-background p-3"><legend className="px-1 text-sm font-semibold text-foreground">Classes</legend><div className="max-h-48 space-y-2 overflow-y-auto">{classes.map((item) => <label key={item.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={classIds.includes(item.id)} onChange={(event) => setClassIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} /><span>{item.name}{item.arm ? ` ${item.arm}` : ''}</span></label>)}</div></fieldset><fieldset className="border border-border bg-background p-3"><legend className="px-1 text-sm font-semibold text-foreground">Subjects</legend><div className="max-h-48 space-y-2 overflow-y-auto">{subjects.map((item) => <label key={item.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={subjectIds.includes(item.id)} onChange={(event) => setSubjectIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} /><span>{item.name}</span></label>)}</div></fieldset></div></section> : null}
 
           {employee.user.role === 'TEACHER' || employee.user.role === 'BURSAR' ? (
-            <section className="space-y-4 border border-border bg-surface p-4 sm:p-6">
+            <section className="space-y-3 border border-border bg-surface p-4">
               <div>
-                <h2 className="text-lg font-semibold text-foreground">Account access</h2>
-                <p className="mt-1 text-sm text-muted">Set a temporary password if this staff member can no longer sign in. Leave blank to keep the current password.</p>
+                <h2 className="text-base font-semibold text-foreground">Account access</h2>
+                <p className="mt-1 text-xs text-muted">Set a temporary password if needed. Leave blank to keep the current password.</p>
               </div>
-              <label className={labelClass}>
-                New temporary password
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={8}
-                  maxLength={128}
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  className={fieldClass}
-                  placeholder="At least 8 characters"
-                />
-              </label>
-              <label className={labelClass}>
-                Confirm temporary password
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={8}
-                  maxLength={128}
-                  value={confirmNewPassword}
-                  onChange={(event) => setConfirmNewPassword(event.target.value)}
-                  className={fieldClass}
-                  placeholder="Enter the new password again"
-                />
-              </label>
-              <p className="text-xs text-muted">The password is stored securely and is not displayed again. Share it with the staff member through a private channel.</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className={labelClass}>
+                  New temporary password
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={8}
+                    maxLength={128}
+                    value={newPassword}
+                    onChange={(event) => setNewPassword(event.target.value)}
+                    className={fieldClass}
+                    placeholder="At least 8 characters"
+                  />
+                </label>
+                <label className={labelClass}>
+                  Confirm temporary password
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={8}
+                    maxLength={128}
+                    value={confirmNewPassword}
+                    onChange={(event) => setConfirmNewPassword(event.target.value)}
+                    className={fieldClass}
+                    placeholder="Confirm password"
+                  />
+                </label>
+              </div>
+              <p className="text-xs text-muted">Passwords are not shown again. Share temporary passwords privately.</p>
             </section>
           ) : null}
 
