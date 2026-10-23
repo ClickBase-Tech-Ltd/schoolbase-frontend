@@ -43,7 +43,6 @@ interface SchoolMeta {
   id?: string;
   name?: string | null;
   slug?: string | null;
-  initials?: string | null;
   logoUrl?: string | null;
 }
 
@@ -68,9 +67,7 @@ export default function ResultPinsAllPage() {
         fetch("/api/admin/settings/data", { credentials: "include" }),
       ]);
 
-      if (!schoolResponse.ok) return;
-
-      const schoolData = await schoolResponse.json();
+      const schoolData = schoolResponse.ok ? await schoolResponse.json() : null;
       const settingsData = settingsResponse.ok ? await settingsResponse.json() : null;
       const configuredLogoUrl = settingsData?.config?.logoUrl || schoolData?.logoUrl || schoolData?.school?.logoUrl || null;
       const resolvedLogoUrl = configuredLogoUrl ? resolveSchoolAssetUrl(configuredLogoUrl) : null;
@@ -78,8 +75,7 @@ export default function ResultPinsAllPage() {
       setSchoolMeta({
         id: schoolData?.id || schoolData?.school?.id,
         name: schoolData?.name || schoolData?.school?.name,
-        slug: schoolData?.slug || schoolData?.school?.slug,
-        initials: schoolData?.initials || schoolData?.school?.initials,
+        slug: settingsData?.config?.slug || schoolData?.slug || schoolData?.school?.slug,
         logoUrl: resolvedLogoUrl,
       });
     } catch (err) {
@@ -138,7 +134,7 @@ export default function ResultPinsAllPage() {
   };
 
   const handlePrintPin = async (pin: PinRecord) => {
-    const schoolCode = schoolMeta?.slug || schoolMeta?.initials || "school-code";
+    const schoolCode = schoolMeta?.slug || "—";
     const admissionNo = pin.student?.admissionNo || "N/A";
     const studentName = pin.student ? `${pin.student.firstName || ""} ${pin.student.lastName || ""}`.trim() : "Unassigned";
     const printWindow = window.open("", "_blank", "width=900,height=700");
@@ -363,7 +359,7 @@ export default function ResultPinsAllPage() {
               <div className="border border-border bg-background p-4">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-medium text-foreground">School code</span>
-                  <span className="font-semibold text-foreground">{schoolMeta?.slug || schoolMeta?.initials || "school-code"}</span>
+                  <span className="font-semibold text-foreground">{schoolMeta?.slug || "—"}</span>
                 </div>
               </div>
               <div className="border border-border bg-background p-4">

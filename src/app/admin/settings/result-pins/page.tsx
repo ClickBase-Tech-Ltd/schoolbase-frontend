@@ -35,7 +35,6 @@ interface StudentPinResult {
   sessionName?: string | null;
   termName?: string | null;
   assessmentName?: string | null;
-  schoolCode?: string | null;
   schoolName?: string | null;
 }
 
@@ -145,7 +144,6 @@ interface SchoolMeta {
   id?: string;
   name?: string | null;
   slug?: string | null;
-  initials?: string | null;
   logoUrl?: string | null;
 }
 
@@ -190,7 +188,7 @@ function PinModal({
 
         <div className="space-y-2">
           <div><span className="font-medium text-foreground">Student:</span> {pin.student ? `${pin.student.lastName || ''} ${pin.student.firstName || ''}`.trim() : '—'}</div>
-          <div><span className="font-medium text-foreground">School code:</span> {schoolMeta?.slug || schoolMeta?.initials || '—'}</div>
+          <div><span className="font-medium text-foreground">School code:</span> {schoolMeta?.slug || '—'}</div>
           <div><span className="font-medium text-foreground">Admission number:</span> {pin.student?.admissionNo || '—'}</div>
           <div><span className="font-medium text-foreground">Session:</span> {pin.term?.academicYear?.name || '—'}</div>
           <div><span className="font-medium text-foreground">Term:</span> {pin.term?.name || '—'}</div>
@@ -239,7 +237,7 @@ function GeneratedPinModal({
 
         <div className="space-y-2">
           <div><span className="font-medium text-foreground">Student:</span> {data.student ? `${data.student.lastName || ''} ${data.student.firstName || ''}`.trim() : '—'}</div>
-          <div><span className="font-medium text-foreground">School code:</span> {data.schoolCode || schoolMeta?.slug || schoolMeta?.initials || '—'}</div>
+          <div><span className="font-medium text-foreground">School code:</span> {schoolMeta?.slug || '—'}</div>
           <div><span className="font-medium text-foreground">Admission number:</span> {data.student?.admissionNo || '—'}</div>
           <div><span className="font-medium text-foreground">Session:</span> {data.sessionName || '—'}</div>
           <div><span className="font-medium text-foreground">Term:</span> {data.termName || '—'}</div>
@@ -345,9 +343,7 @@ export default function ResultPinsPage() {
         fetch("/api/admin/settings/data", { credentials: "include" }),
       ]);
 
-      if (!schoolResponse.ok) return;
-
-      const schoolData = await schoolResponse.json();
+      const schoolData = schoolResponse.ok ? await schoolResponse.json() : null;
       const settingsData = settingsResponse.ok ? await settingsResponse.json() : null;
       const configuredLogoUrl = settingsData?.config?.logoUrl || schoolData?.logoUrl || schoolData?.school?.logoUrl || null;
       const resolvedLogoUrl = configuredLogoUrl ? resolveSchoolAssetUrl(configuredLogoUrl) : null;
@@ -355,8 +351,7 @@ export default function ResultPinsPage() {
       setSchoolMeta({
         id: schoolData?.id || schoolData?.school?.id,
         name: schoolData?.name || schoolData?.school?.name,
-        slug: schoolData?.slug || schoolData?.school?.slug,
-        initials: schoolData?.initials || schoolData?.school?.initials,
+        slug: settingsData?.config?.slug || schoolData?.slug || schoolData?.school?.slug,
         logoUrl: resolvedLogoUrl,
       });
     } catch (err) {
@@ -709,7 +704,7 @@ export default function ResultPinsPage() {
       schoolName: schoolMeta?.name || undefined,
       schoolLogoUrl: schoolMeta?.logoUrl || (schoolMeta?.id ? `/api/school-logo/${encodeURIComponent(schoolMeta.id)}` : undefined),
       schoolId: schoolMeta?.id,
-      schoolCode: schoolMeta?.slug || schoolMeta?.initials || "school-code",
+      schoolCode: schoolMeta?.slug || "—",
       studentName: pin.student ? `${pin.student.lastName || ""} ${pin.student.firstName || ""}`.trim() : "Student",
       admissionNo: pin.student?.admissionNo || "N/A",
       session: pin.term?.academicYear?.name || "—",
@@ -881,7 +876,6 @@ export default function ResultPinsPage() {
           ...(data.student || {}),
           admissionNo: selectedStudent?.admissionNo || data.student?.admissionNo || null,
         },
-        schoolCode: schoolMeta?.slug || schoolMeta?.initials || null,
         schoolName: schoolMeta?.name || null,
       });
       setStudentId("");
@@ -897,7 +891,7 @@ export default function ResultPinsPage() {
     if (!generatedStudent?.pin) return;
 
     const studentName = generatedStudent.student ? `${generatedStudent.student.lastName || ""} ${generatedStudent.student.firstName || ""}`.trim() : "Student";
-    const schoolCode = generatedStudent.schoolCode || schoolMeta?.slug || schoolMeta?.initials || "school-code";
+    const schoolCode = schoolMeta?.slug || "—";
     const admissionNo = generatedStudent.student?.admissionNo || "N/A";
     const printWindow = window.open("", "_blank", "width=900,height=700");
     if (!printWindow) return;
@@ -972,7 +966,7 @@ export default function ResultPinsPage() {
         schoolName: data.school?.name || schoolMeta?.name || undefined,
         schoolLogoUrl: schoolMeta?.logoUrl || (schoolMeta?.id ? `/api/school-logo/${encodeURIComponent(schoolMeta.id)}` : undefined),
         schoolId: data.school?.id || schoolMeta?.id,
-        schoolCode: data.school?.slug || data.school?.initials || schoolMeta?.slug || schoolMeta?.initials || "school-code",
+        schoolCode: schoolMeta?.slug || "—",
         studentName: `${entry.student?.lastName || ""} ${entry.student?.firstName || ""}`.trim(),
         admissionNo: entry.student?.admissionNo || "N/A",
         session: entry.sessionName || data.sessionName || "—",
@@ -1107,7 +1101,7 @@ export default function ResultPinsPage() {
   };
 
   const handlePrintPin = async (pin: PinRecord) => {
-    const schoolCode = schoolMeta?.slug || schoolMeta?.initials || "school-code";
+    const schoolCode = schoolMeta?.slug || "—";
     const admissionNo = pin.student?.admissionNo || "N/A";
     const studentName = pin.student ? `${pin.student.lastName || ""} ${pin.student.firstName || ""}`.trim() : "Unassigned";
     const printWindow = window.open("", "_blank", "width=900,height=700");
