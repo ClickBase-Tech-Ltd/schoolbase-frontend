@@ -1532,6 +1532,7 @@ export default function ResultPinsPage() {
                       <th className="px-3 py-3 font-medium">PIN</th>
                       <th className="px-3 py-3 font-medium">Student</th>
                       <th className="px-3 py-3 font-medium">Admission No.</th>
+                      <th className="px-3 py-3 font-medium">School Code</th>
                       <th className="px-3 py-3 font-medium">Type</th>
                       <th className="px-3 py-3 font-medium">Status</th>
                       <th className="px-3 py-3 font-medium">Session</th>
@@ -1561,6 +1562,7 @@ export default function ResultPinsPage() {
                           <div className="text-xs text-muted">{pin.student?.class?.name || '—'}</div>
                         </td>
                         <td className="px-3 py-3 text-foreground">{pin.student?.admissionNo || '—'}</td>
+                        <td className="px-3 py-3 text-foreground">{schoolMeta?.slug || '—'}</td>
                         <td className="px-3 py-3">
                           <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getTypeBadgeClass(pin.type || 'GENERIC')}`}>
                             {pin.type || 'GENERIC'}
