@@ -6,11 +6,12 @@ import PublicShellGate from "@/components/public-shell-gate";
 import OfflineStatus from "@/components/offline-status";
 import PwaInstallPrompt from "@/components/pwa-install-prompt";
 import PublicWhatsAppContact from "@/components/public-whatsapp-contact";
+import { siteDescription, siteOgImage, siteTitle, siteUrl } from "@/lib/site-seo";
 
 export const metadata: Metadata = {
-  title: "SchoolBase — Everything your school needs in one simple platform",
-  description:
-    "Collect fees, publish results, communicate with families, and run school operations in one connected platform. ",
+  metadataBase: new URL(siteUrl),
+  title: siteTitle,
+  description: siteDescription,
   keywords: [
     "school management",
     "fee collection",
@@ -39,26 +40,19 @@ export const metadata: Metadata = {
     "google-site-verification": "cAqU-s5g0iU-8bvOexUa_zShdcpkNX7pMX7QKxLQM2A",
   },
   openGraph: {
-    title: "SchoolBase — Everything your school needs in one simple platform",
-    description:
-      "Collect fees, publish results, communicate with families, and run school operations in one connected platform.",
-    url: "https://schoolbase.live",
     siteName: "SchoolBase",
     images: [
       {
-        url: "https://schoolbase.live/og-image.png",
+        url: siteOgImage,
         width: 1200,
         height: 630,
       },
     ],
-    locale: "en_NG",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "SchoolBase",
-    description: "School management platform for fee collection and parent communication",
-    images: ["https://schoolbase.live/og-image.png"],
+    images: [siteOgImage],
   },
   robots: {
     index: true,
@@ -73,9 +67,6 @@ export const metadata: Metadata = {
   },
   verification: {
     google: "t16cQxxS0inhasAplgIcn3t1KCZQMYhzt74Nk8zVFxQ",
-  },
-  alternates: {
-    canonical: "https://schoolbase.live",
   },
 };
 
@@ -96,24 +87,23 @@ export default function RootLayout({
                 "@context": "https://schema.org",
                 "@type": "Organization",
                 name: "SchoolBase",
-                url: "https://schoolbase.live",
-                logo: "https://schoolbase.live/og-image.png",
-                sameAs: [],
+                url: siteUrl,
+                logo: `${siteUrl}/logo.png`,
               },
               {
                 "@context": "https://schema.org",
                 "@type": "WebSite",
                 name: "SchoolBase",
-                url: "https://schoolbase.live",
+                url: siteUrl,
               },
               {
                 "@context": "https://schema.org",
                 "@type": "SoftwareApplication",
                 name: "SchoolBase",
-                applicationCategory: "BusinessApplication",
+                applicationCategory: "EducationApplication",
                 operatingSystem: "Web",
-                url: "https://schoolbase.live/platform",
-                description: "Connected school administration, academic, fee, communication, parent, and reporting workflows.",
+                url: `${siteUrl}/platform`,
+                description: siteDescription,
               },
             ]),
           }}

@@ -6,6 +6,27 @@ import { loginForPath, roleCanAccess, roleRequirementForPath } from "@/lib/role-
 // Unified session cookie for all user types (staff, teachers, parents, admins)
 const SESSION_COOKIE = "schoolbase_session";
 const SESSION_COOKIE_NAMES = [SESSION_COOKIE, "schoolbase_staff", "staff_session"] as const;
+const ROLE_PROTECTED_PREFIXES = [
+  "/admin",
+  "/accounting",
+  "/schoolbase-admin",
+  "/teacher",
+  "/staff",
+  "/employee",
+  "/parent",
+  "/api/admin",
+  "/api/bursar",
+  "/api/teacher",
+  "/api/staff",
+  "/api/parent",
+  "/schoolbase-admin/api",
+] as const;
+
+function isRoleProtectedPath(pathname: string) {
+  return ROLE_PROTECTED_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
 
 function secret() {
   const key = process.env.SESSION_SECRET?.trim();
@@ -50,8 +71,28 @@ async function readValidToken(cookieName: string, cookieValue?: string) {
   }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
+  const requestHost = (
+    request.headers.get("host")
+    ?? request.headers.get("x-forwarded-host")
+    ?? request.nextUrl.host
+  )
+    .split(",")[0]
+    .trim()
+    .replace(/:\d+$/, "")
+    .toLowerCase();
+
+  if (requestHost === "www.schoolbase.live") {
+    const canonicalUrl = request.nextUrl.clone();
+    canonicalUrl.protocol = "https:";
+    canonicalUrl.hostname = "schoolbase.live";
+    canonicalUrl.port = "";
+    return NextResponse.redirect(canonicalUrl, 308);
+  }
+
   const { pathname } = request.nextUrl;
+  if (!isRoleProtectedPath(pathname)) return NextResponse.next();
+
   const isApiRequest = pathname.startsWith('/api/') || pathname.startsWith('/schoolbase-admin/api/');
   const requirement = roleRequirementForPath(pathname, request.method);
   const cookie = SESSION_COOKIE_NAMES
@@ -122,18 +163,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/admin/:path*",
-    "/accounting/:path*",
-    "/schoolbase-admin/:path*",
-    "/teacher/:path*",
-    "/staff/:path*",
-    "/employee/:path*",
-    "/parent/:path*",
-    "/api/admin/:path*",
-    "/api/bursar/:path*",
-    "/api/teacher/:path*",
-    "/api/staff/:path*",
-    "/api/parent/:path*",
-    "/schoolbase-admin/api/:path*",
+    "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
 };

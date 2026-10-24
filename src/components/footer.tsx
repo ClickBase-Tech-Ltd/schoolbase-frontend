@@ -197,7 +197,7 @@ export default function Footer() {
               </li>
               <li>
                 <Link
-                  href={`${siteUrl}/school-management-software`}
+                  href={`${siteUrl}/liberia-school-software`}
                   className="text-white/70 hover:text-white"
                 >
                   🇱🇷 Liberia
@@ -205,7 +205,7 @@ export default function Footer() {
               </li>
               <li>
                 <Link
-                  href={`${siteUrl}/school-management-software`}
+                  href={`${siteUrl}/sierra-leone-school-software`}
                   className="text-white/70 hover:text-white"
                 >
                   🇸🇱 Sierra Leone
@@ -213,7 +213,7 @@ export default function Footer() {
               </li>
               <li>
                 <Link
-                  href={`${siteUrl}/school-management-software`}
+                  href={`${siteUrl}/gambia-school-software`}
                   className="text-white/70 hover:text-white"
                 >
                   🇬🇲 The Gambia
