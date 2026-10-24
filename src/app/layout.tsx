@@ -86,9 +86,20 @@ export default function RootLayout({
               {
                 "@context": "https://schema.org",
                 "@type": "Organization",
-                name: "SchoolBase",
+                name: "SchoolBase Africa",
                 url: siteUrl,
                 logo: `${siteUrl}/logo.png`,
+                founder: {
+                  "@type": "Person",
+                  name: "Nwokpor Raymond Ikenna",
+                },
+                areaServed: [
+                  { "@type": "Country", name: "Nigeria", identifier: "NG" },
+                  { "@type": "Country", name: "Ghana", identifier: "GH" },
+                  { "@type": "Country", name: "Sierra Leone", identifier: "SL" },
+                  { "@type": "Country", name: "Liberia", identifier: "LR" },
+                  { "@type": "Country", name: "The Gambia", identifier: "GM" },
+                ],
               },
               {
                 "@context": "https://schema.org",
