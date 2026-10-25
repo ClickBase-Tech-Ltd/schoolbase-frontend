@@ -264,6 +264,14 @@ export default function Footer() {
                   Founder
                 </Link>
               </li>
+              <li>
+                <Link
+                  href={`${siteUrl}/investors`}
+                  className="text-white/70 hover:text-white font-semibold"
+                >
+                  Investors & partners
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
