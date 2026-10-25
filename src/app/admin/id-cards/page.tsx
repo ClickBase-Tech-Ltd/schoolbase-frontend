@@ -209,7 +209,6 @@ export default function AdminIdCardsPage() {
   const [search, setSearch] = useState("");
   const [classId, setClassId] = useState("");
   const [quote, setQuote] = useState<any>(null);
-  const [greetingName, setGreetingName] = useState("there");
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
   const [draftExpiresAt, setDraftExpiresAt] = useState<string | null>(null);
@@ -217,18 +216,6 @@ export default function AdminIdCardsPage() {
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    requestJson<{ session?: { name?: string | null } }>("/api/admin/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    }).then((data) => {
-      if (active && data.session?.name?.trim()) setGreetingName(data.session.name.trim());
-    }).catch(() => undefined);
-    return () => { active = false; };
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -435,18 +422,23 @@ export default function AdminIdCardsPage() {
 
   return (
     <main className="min-h-screen pb-12">
-      <div className="mx-auto max-w-7xl space-y-6 px-2 py-6 sm:px-8 sm:py-8 lg:px-12">
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-          <div>
-            <p className="mb-1 text-sm font-medium text-brand">Hello, {greetingName}</p>
-            <h1 className="text-3xl font-bold text-foreground">ID Card Studio</h1>
-            <p className="mt-2 max-w-3xl text-muted">Select active students, review the server-calculated price, and generate print-ready cards after verified payment.</p>
+      <div className="mx-auto max-w-7xl space-y-6 px-0 py-4 sm:px-8 sm:py-8 lg:px-12">
+        <header className="relative overflow-hidden border border-border bg-surface px-6 pb-7 pt-10 sm:px-8 sm:pb-8 sm:pt-12">
+          <div className="absolute right-0 top-0 h-full w-1/3 bg-brand-light/40 [clip-path:polygon(35%_0,100%_0,100%_100%,0_100%)]" />
+          <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.16em] text-brand">
+                <CreditCard className="h-4 w-4" /> Student services
+              </div>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">ID Card Studio</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">Select active students, review the server-calculated price, and generate print-ready cards after verified payment.</p>
+            </div>
+            <Link href="/admin/students" className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-hover">
+              <Users className="h-4 w-4" />
+              Student records
+            </Link>
           </div>
-          <Link href="/admin/students" className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-hover">
-            <Users className="h-4 w-4" />
-            Student records
-          </Link>
-        </div>
+        </header>
 
         {draftNotice ? <div role="status" className="flex flex-wrap items-center justify-between gap-2 border border-border bg-surface px-3 py-2 text-xs text-muted"><span>{draftNotice}{draftExpiresAt ? ` Expires ${new Date(draftExpiresAt).toLocaleDateString()}.` : ""}</span><button type="button" onClick={clearDraft} className="font-semibold text-brand underline underline-offset-2">Clear saved draft</button></div> : null}
 
