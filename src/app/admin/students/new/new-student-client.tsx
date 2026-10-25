@@ -5,10 +5,11 @@ import { getBackendUrl } from "@/lib/backend-url";
 
 
 
-import { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
+import { useState, useEffect, useRef, type ChangeEvent, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, ChevronDown, Loader2, Upload, X, UserPlus } from "lucide-react";
+import { AlertCircle, ArrowLeft, Camera, CameraOff, Check, CheckCircle2, ChevronDown, Loader2, Upload, X, UserPlus } from "lucide-react";
 import { WhatsAppIcon } from "@/components/ui/icons";
 
 export default function NewStudentClient() {
@@ -19,6 +20,12 @@ export default function NewStudentClient() {
   
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string>("");
+  const uploadPhotoInputRef = useRef<HTMLInputElement>(null);
+  const cameraVideoRef = useRef<HTMLVideoElement>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const [isCapturingPhoto, setIsCapturingPhoto] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string>("");
   const [errorModalOpen, setErrorModalOpen] = useState(false);
@@ -105,14 +112,100 @@ export default function NewStudentClient() {
 
   const handlePhotoChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
-    if (!file) {
-      setPhotoFile(null);
-      setPhotoPreview("");
-      return;
-    }
+    event.target.value = "";
+    if (!file) return;
 
     setPhotoFile(file);
     setPhotoPreview(URL.createObjectURL(file));
+  };
+
+  useEffect(() => {
+    if (!isCameraOpen) return;
+
+    let cancelled = false;
+    const videoElement = cameraVideoRef.current;
+    async function startCamera() {
+      setCameraError("");
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraError("Camera access is unavailable in this browser. Use a secure connection or upload a photo instead.");
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: { ideal: "environment" } },
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        cameraStreamRef.current = stream;
+        if (videoElement) {
+          videoElement.srcObject = stream;
+          await videoElement.play();
+        }
+      } catch (cameraRequestError) {
+        if (cancelled) return;
+        if (cameraRequestError instanceof Error && cameraRequestError.name === "NotAllowedError") {
+          setCameraError("Camera permission was denied. Allow camera access in your browser settings, or upload a photo instead.");
+        } else if (cameraRequestError instanceof Error && cameraRequestError.name === "NotFoundError") {
+          setCameraError("No camera was found on this device. You can upload a photo instead.");
+        } else if (!window.isSecureContext) {
+          setCameraError("Camera access requires HTTPS or localhost. Open SchoolBase securely, or upload a photo instead.");
+        } else {
+          setCameraError(cameraRequestError instanceof Error ? cameraRequestError.message : "Could not start the camera. You can upload a photo instead.");
+        }
+      }
+    }
+
+    void startCamera();
+    return () => {
+      cancelled = true;
+      cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
+      if (videoElement) videoElement.srcObject = null;
+    };
+  }, [isCameraOpen]);
+
+  useEffect(() => {
+    if (!photoPreview) return;
+    return () => URL.revokeObjectURL(photoPreview);
+  }, [photoPreview]);
+
+  const captureStudentPhoto = async () => {
+    const video = cameraVideoRef.current;
+    if (!video || !video.videoWidth || !video.videoHeight) {
+      setCameraError("The camera is not ready yet. Please wait a moment and try again.");
+      return;
+    }
+
+    setIsCapturingPhoto(true);
+    setCameraError("");
+    try {
+      const scale = Math.min(1, 1600 / Math.max(video.videoWidth, video.videoHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Could not prepare the captured photo.");
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const imageBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (blob) => blob ? resolve(blob) : reject(new Error("Could not capture the photo. Please try again.")),
+          "image/jpeg",
+          0.9,
+        );
+      });
+      setPhotoFile(new File([imageBlob], `student-photo-${Date.now()}.jpg`, { type: "image/jpeg" }));
+      setPhotoPreview(URL.createObjectURL(imageBlob));
+      setIsCameraOpen(false);
+    } catch (captureError) {
+      setCameraError(captureError instanceof Error ? captureError.message : "Could not capture the photo. Please try again.");
+    } finally {
+      setIsCapturingPhoto(false);
+    }
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -276,17 +369,37 @@ export default function NewStudentClient() {
                 <span className={`h-2 w-2 rounded-full ${whatsAppConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
               </div>
             )}
-            <Button variant="secondary" href="/admin/students">
-              Back to student list
-            </Button>
-            <Button type="submit" form="new-student-form" disabled={isSubmitting}>
+            <Link
+              href="/admin/students"
+              aria-label="Back to student list"
+              title="Back to student list"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-brand bg-white text-brand transition-colors hover:bg-brand-light sm:h-auto sm:w-auto sm:px-5 sm:py-2.5"
+            >
+              <ArrowLeft className="h-5 w-5 sm:hidden" aria-hidden="true" />
+              <span className="hidden sm:inline">Back to student list</span>
+            </Link>
+            <Button
+              type="submit"
+              form="new-student-form"
+              disabled={isSubmitting}
+              aria-label={isSubmitting ? "Saving student" : "Save student"}
+              title={isSubmitting ? "Saving student" : "Save student"}
+              className="h-11 w-11 shrink-0 px-0 sm:h-auto sm:w-auto sm:px-5"
+            >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
+                  <Loader2 className="h-5 w-5 sm:h-4 sm:w-4" aria-hidden="true" />
+                  <span className="hidden sm:inline">Saving...</span>
                 </>
               ) : (
-                "Save student"
+                <>
+                  <CheckCircle2
+                    className="sm:hidden"
+                    style={{ width: 22, height: 22, minWidth: 22, minHeight: 22 }}
+                    aria-hidden="true"
+                  />
+                  <span className="hidden sm:inline">Save student</span>
+                </>
               )}
             </Button>
           </div>
@@ -324,11 +437,44 @@ export default function NewStudentClient() {
               )}
             </div>
 
-            <label className="mt-5 block text-sm font-semibold text-foreground">
-              Upload photo
-              <input name="photo" type="file" accept="image/png,image/jpeg,image/jpg,image/webp" onChange={handlePhotoChange} className="mt-2 w-full rounded-2xl border border-border px-4 py-3 text-sm text-foreground file:mr-4 file:rounded-full file:border-0 file:bg-brand file:px-4 file:py-2 file:text-sm file:text-white" />
-            </label>
-            <p className="mt-3 text-xs leading-5 text-muted">JPG, PNG or WEBP. Keep the file under 4MB and use a square image for best layout.</p>
+            <p className="mt-5 text-sm font-semibold text-foreground">Add a student photo</p>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <input
+                ref={uploadPhotoInputRef}
+                name="photo"
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/webp"
+                onChange={handlePhotoChange}
+                className="sr-only"
+                aria-label="Upload student photo"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => uploadPhotoInputRef.current?.click()}
+                aria-label="Upload student photo"
+                title="Upload student photo"
+                className="h-11 w-full px-0 sm:h-auto sm:px-5 sm:py-2.5"
+              >
+                <Upload className="h-5 w-5 sm:h-4 sm:w-4" aria-hidden="true" />
+                <span className="hidden sm:inline">Upload photo</span>
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setCameraError("");
+                  setIsCameraOpen(true);
+                }}
+                aria-label="Take student photo with camera"
+                title="Take student photo with camera"
+                className="h-11 w-full px-0 sm:h-auto sm:px-5 sm:py-2.5"
+              >
+                <Camera className="h-5 w-5 sm:h-4 sm:w-4" aria-hidden="true" />
+                <span className="hidden sm:inline">Take photo</span>
+              </Button>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-muted">Use a JPG, PNG or WEBP image under 4MB; a square portrait works best.</p>
 
             <div className="mt-4 text-sm text-muted">
               <p className="mt-2">Admission number: <span className="font-semibold">{nextAdmissionNo}</span></p>
@@ -550,6 +696,64 @@ export default function NewStudentClient() {
           </div>
         </div>
       </form>
+
+      {isCameraOpen && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-3 sm:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="student-camera-title"
+        >
+          <section className="w-full max-w-xl overflow-hidden rounded-xl border border-border bg-surface shadow-2xl">
+            <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5">
+              <div>
+                <h2 id="student-camera-title" className="font-semibold text-foreground">Take student photo</h2>
+                <p className="text-xs text-muted">Position the student in the frame, then capture.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCameraOpen(false)}
+                aria-label="Close camera"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-background hover:text-foreground"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </header>
+            <div className="space-y-3 p-4 sm:p-5">
+              <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-black">
+                <video
+                  ref={cameraVideoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  className="h-full w-full object-cover"
+                  aria-label="Live camera preview"
+                />
+                {cameraError ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 p-5 text-center text-white">
+                    <CameraOff className="h-8 w-8" aria-hidden="true" />
+                    <p role="alert" className="text-sm">{cameraError}</p>
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button type="button" variant="secondary" onClick={() => setIsCameraOpen(false)} className="w-full sm:w-auto">
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={captureStudentPhoto}
+                  disabled={isCapturingPhoto || Boolean(cameraError)}
+                  className="w-full sm:w-auto"
+                >
+                  {isCapturingPhoto ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Check className="h-4 w-4" aria-hidden="true" />}
+                  {isCapturingPhoto ? "Capturing..." : "Capture photo"}
+                </Button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
 
       {errorModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" role="dialog" aria-modal="true" aria-labelledby="student-registration-error-title">
