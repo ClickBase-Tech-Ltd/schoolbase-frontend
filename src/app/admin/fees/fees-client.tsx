@@ -942,20 +942,27 @@ export default function FeesPageClient({
             </div>
 
           <div className="ml-auto flex items-center gap-2">
-            {whatsAppConnected !== null && (
-              <div className="inline-flex items-center gap-2.5 self-start rounded-full border border-border bg-surface px-2.5 py-1.5 shadow-sm sm:self-auto" title={whatsAppConnected ? 'WhatsApp connected — Ready to send reminders' : 'WhatsApp disconnected — Reconnect via settings'}>
-                <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${whatsAppConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+            {(whatsAppConnected !== null || whatsAppStatusMessage) && (
+              <div
+                className="inline-flex items-center gap-2.5 self-start rounded-full border border-border bg-surface px-2.5 py-1.5 shadow-sm sm:self-auto"
+                title={whatsAppConnected === null
+                  ? whatsAppStatusMessage || 'WhatsApp status is unavailable.'
+                  : whatsAppConnected
+                    ? 'WhatsApp connected — Ready to send reminders'
+                    : 'WhatsApp disconnected — Reconnect via settings'}
+              >
+                <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full ${whatsAppConnected === true ? 'bg-emerald-100 text-emerald-700' : whatsAppConnected === false ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
                   <WhatsAppIcon className="h-4 w-4" />
                 </span>
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-semibold text-foreground">
-                    {whatsAppConnected ? 'Connected' : 'Disconnected'}
+                    {whatsAppConnected === null ? 'Status unavailable' : whatsAppConnected ? 'Connected' : 'Disconnected'}
                   </span>
                   <span className="hidden text-[10px] text-muted sm:inline">
-                    {whatsAppConnected ? 'Ready' : 'Reconnect'}
+                    {whatsAppConnected === null ? 'Check access' : whatsAppConnected ? 'Ready' : 'Reconnect'}
                   </span>
                 </div>
-                <span className={`h-2 w-2 rounded-full ${whatsAppConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                <span className={`h-2 w-2 rounded-full ${whatsAppConnected === true ? 'bg-emerald-500' : whatsAppConnected === false ? 'bg-amber-500' : 'bg-slate-400'}`} />
               </div>
             )}
           </div>

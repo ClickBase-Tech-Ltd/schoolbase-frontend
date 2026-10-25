@@ -94,18 +94,18 @@ export default function FeesPage() {
             credentials: "include",
             headers: { "Content-Type": "application/json" },
           });
+          const whatsappData = await whatsappRes.json().catch(() => null);
           if (whatsappRes.ok) {
-            const whatsappData = await whatsappRes.json();
             setWhatsAppConnected(whatsappData?.session?.status === 'connected');
             setWhatsAppStatusMessage(whatsappData?.session?.statusMessage || whatsappData?.session?.status || null);
           } else {
-            setWhatsAppConnected(false);
-            setWhatsAppStatusMessage('Unable to retrieve WhatsApp status.');
+            setWhatsAppConnected(null);
+            setWhatsAppStatusMessage(whatsappData?.error || `Unable to retrieve WhatsApp status (HTTP ${whatsappRes.status}).`);
           }
         } catch (err) {
           console.error("Error loading WhatsApp status:", err);
-          setWhatsAppConnected(false);
-          setWhatsAppStatusMessage('Unable to retrieve WhatsApp status.');
+          setWhatsAppConnected(null);
+          setWhatsAppStatusMessage(err instanceof Error ? err.message : 'Unable to retrieve WhatsApp status.');
         }
       } catch (err) {
         console.error("Error loading fees:", err);

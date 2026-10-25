@@ -27,6 +27,9 @@ assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/students/data'), '
 assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/students/data'), 'TEACHER'), false);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/invoices/invoice-1'), 'BURSAR'), true);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/invoices/invoice-1'), 'PARENT'), false);
+assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/whatsapp/status'), 'BURSAR'), true);
+assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/whatsapp/status'), 'SCHOOL_ADMIN'), true);
+assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/whatsapp/status', 'POST'), 'BURSAR'), false);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/verify', 'POST'), null), true);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/parent/login', 'POST'), null), true);
 assert.equal(roleCanAccess(roleRequirementForPath('/staff'), 'STAFF'), true);

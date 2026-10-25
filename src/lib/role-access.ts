@@ -51,6 +51,9 @@ export function roleRequirementForPath(pathname: string, method = 'GET'): RoleRe
     if (/^\/api\/admin\/(school-logo|school-stamp|school-signature)(\/|$)/.test(pathname)) {
       return SHARED_SCHOOL_ASSET_ROLES;
     }
+    if (pathname === '/api/admin/whatsapp/status' && normalizedMethod === 'GET') {
+      return ['SCHOOL_ADMIN', 'BURSAR'];
+    }
     if (/^\/api\/admin\/(fees|invoices)(\/|$)/.test(pathname)) return ['SCHOOL_ADMIN', 'BURSAR'];
     if (/^\/api\/admin\/school\/[^/]+$/.test(pathname)) return ['SCHOOL_ADMIN', 'BURSAR'];
     return ['SCHOOL_ADMIN'];
