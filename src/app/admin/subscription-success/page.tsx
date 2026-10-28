@@ -2,106 +2,116 @@ import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, CheckCircle2, CreditCard } from "lucide-react";
 
-async function ActivateSchoolServer({ reference }: { reference: string }) {
+interface SubscriptionVerificationResponse {
+  success?: boolean;
+  error?: string;
+  reference?: string;
+  school?: {
+    name?: string;
+    plan?: string;
+    status?: string;
+  };
+}
+
+function VerificationError({ message }: { message: string }) {
+  return (
+    <div className="border border-red-200 bg-red-50 p-8">
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="mt-0.5 h-5 w-5 text-red-700" />
+        <div>
+          <h2 className="text-xl font-semibold text-red-900">Verification failed</h2>
+          <p className="mt-3 text-sm text-red-800">{message}</p>
+        </div>
+      </div>
+      <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <Button href="/admin" className="w-full">
+          Go to Dashboard
+        </Button>
+        <Button href="/admin/subscribe" variant="secondary" className="w-full">
+          Try Again
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+async function ActivateSchoolServer({ reference, transactionId }: { reference: string; transactionId?: string }) {
+  let verificationData: SubscriptionVerificationResponse | null = null;
+  let verificationError: string | null = null;
+
   try {
     const backendUrl = process.env.BACKEND_URL ?? "http://localhost:3006";
-    const response = await fetch(`${backendUrl}/api/paystack/verify-subscription`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reference }),
-    });
+    const response = await fetch(
+      `${backendUrl}/api/${transactionId ? "flutterwave/subscription/verify" : "paystack/verify-subscription"}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(transactionId ? { reference, transactionId } : { reference }),
+        cache: "no-store",
+      },
+    );
 
-    const data = await response.json();
-    if (!data.success) {
-      return (
-        <div className="border border-red-200 bg-red-50 p-8">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="mt-0.5 h-5 w-5 text-red-700" />
-            <div>
-          <h2 className="text-xl font-semibold text-red-900">Verification failed</h2>
-          <p className="mt-3 text-sm text-red-800">{data.error || "Could not verify payment."}</p>
-            </div>
-          </div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
-            <Button href="/admin" className="w-full">
-              Go to Dashboard
-            </Button>
-            <Button href="/admin/subscribe" variant="secondary" className="w-full">
-              Try Again
-            </Button>
-          </div>
-        </div>
-      );
+    const responseData: unknown = await response.json();
+    if (!responseData || typeof responseData !== "object") {
+      verificationError = "Could not read the payment verification response.";
+    } else {
+      verificationData = responseData as SubscriptionVerificationResponse;
+      if (!response.ok || !verificationData.success) {
+        verificationError = verificationData.error || "Could not verify payment.";
+      }
     }
-
-    return (
-      <div className="border border-border bg-surface p-6 sm:p-8">
-        <div className="border border-emerald-200 bg-emerald-50 p-6">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 items-center justify-center bg-emerald-100 text-emerald-700">
-              <CheckCircle2 className="h-6 w-6" />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold text-emerald-900">Subscription activated</h2>
-              <p className="mt-2 text-sm text-emerald-800">
-                Your payment has been confirmed and your school can now access SchoolBase.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
-          <div className="border border-border bg-background p-5">
-            <p className="text-xs uppercase tracking-[0.24em] text-muted">School</p>
-            <p className="mt-2 font-medium text-foreground">{data.school?.name || "—"}</p>
-          </div>
-          <div className="border border-border bg-background p-5">
-            <p className="text-xs uppercase tracking-[0.24em] text-muted">Plan</p>
-            <p className="mt-2 font-medium text-foreground">{data.school?.plan || "—"}</p>
-          </div>
-          <div className="border border-border bg-background p-5">
-            <p className="text-xs uppercase tracking-[0.24em] text-muted">Status</p>
-            <p className="mt-2 font-medium text-foreground">{data.school?.status || "—"}</p>
-          </div>
-          <div className="border border-border bg-background p-5">
-            <p className="text-xs uppercase tracking-[0.24em] text-muted">Reference</p>
-            <p className="mt-2 font-medium text-foreground break-all">{data.reference || reference}</p>
-          </div>
-        </div>
-
-        <div className="mt-8 grid gap-3 sm:grid-cols-2">
-          <Button href="/admin" className="w-full">
-            Go to Dashboard
-          </Button>
-          <Button href="/admin/subscription" variant="secondary" className="w-full">
-            Manage Subscription
-          </Button>
-        </div>
-      </div>
-    );
   } catch (err) {
-    return (
-      <div className="border border-red-200 bg-red-50 p-8">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="mt-0.5 h-5 w-5 text-red-700" />
+    verificationError = err instanceof Error ? err.message : "An error occurred while verifying your payment.";
+  }
+
+  if (verificationError) return <VerificationError message={verificationError} />;
+  if (!verificationData?.success) return <VerificationError message="Could not verify payment." />;
+
+  return (
+    <div className="border border-border bg-surface p-6 sm:p-8">
+      <div className="border border-emerald-200 bg-emerald-50 p-6">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center bg-emerald-100 text-emerald-700">
+            <CheckCircle2 className="h-6 w-6" />
+          </div>
           <div>
-        <h2 className="text-xl font-semibold text-red-900">Verification error</h2>
-        <p className="mt-3 text-sm text-red-800">
-          {err instanceof Error ? err.message : "An error occurred while verifying your payment."}
-        </p>
+            <h2 className="text-xl font-semibold text-emerald-900">Subscription activated</h2>
+            <p className="mt-2 text-sm text-emerald-800">
+              Your payment has been confirmed and your school can now access SchoolBase.
+            </p>
           </div>
         </div>
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <Button href="/admin" className="w-full">
-            Go to Dashboard
-          </Button>
-          <Button href="/admin/subscribe" variant="secondary" className="w-full">
-            Try Again
-          </Button>
+      </div>
+
+      <div className="mt-8 grid gap-4 sm:grid-cols-2">
+        <div className="border border-border bg-background p-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-muted">School</p>
+          <p className="mt-2 font-medium text-foreground">{verificationData.school?.name || "—"}</p>
+        </div>
+        <div className="border border-border bg-background p-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-muted">Plan</p>
+          <p className="mt-2 font-medium text-foreground">{verificationData.school?.plan || "—"}</p>
+        </div>
+        <div className="border border-border bg-background p-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-muted">Status</p>
+          <p className="mt-2 font-medium text-foreground">{verificationData.school?.status || "—"}</p>
+        </div>
+        <div className="border border-border bg-background p-5">
+          <p className="text-xs uppercase tracking-[0.24em] text-muted">Reference</p>
+          <p className="mt-2 font-medium text-foreground break-all">{verificationData.reference || reference}</p>
         </div>
       </div>
-    );
-  }
+
+      <div className="mt-8 grid gap-3 sm:grid-cols-2">
+        <Button href="/admin" className="w-full">
+          Go to Dashboard
+        </Button>
+        <Button href="/admin/subscription" variant="secondary" className="w-full">
+          Manage Subscription
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export default function SubscriptionSuccessPage({
@@ -115,11 +125,10 @@ export default function SubscriptionSuccessPage({
     status?: string;
   };
 }) {
-  const reference =
-    searchParams.reference ||
-    searchParams.tx_ref ||
-    searchParams.flw_ref ||
-    searchParams.transaction_id;
+  const transactionId = searchParams.transaction_id;
+  const reference = transactionId
+    ? searchParams.tx_ref || ""
+    : searchParams.reference || searchParams.tx_ref || searchParams.flw_ref || "";
 
   return (
     <main className="min-h-screen pb-12">
@@ -146,7 +155,7 @@ export default function SubscriptionSuccessPage({
               </div>
             }
           >
-            <ActivateSchoolServer reference={reference} />
+            <ActivateSchoolServer reference={reference} transactionId={transactionId} />
           </Suspense>
         ) : (
             <div className="border border-yellow-200 bg-yellow-50 p-8">

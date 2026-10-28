@@ -86,10 +86,8 @@ export default function SettingsPageClient({
   const [tagline, setTagline] = useState(school.tagline ?? "");
   const [country, setCountry] = useState(school.country ?? countriesData.default ?? "NG");
   const [currency, setCurrency] = useState(
-    school.currency ?? countriesData.countries[(school.country ?? countriesData.default ?? "NG") as keyof typeof countriesData.countries]?.currency ?? "NGN",
+    countriesData.countries[(school.country ?? countriesData.default ?? "NG") as keyof typeof countriesData.countries]?.currency ?? school.currency ?? "NGN",
   );
-  const [detectedCountryName, setDetectedCountryName] = useState<string | null>(null);
-  const [detectedCurrency, setDetectedCurrency] = useState<string | null>(null);
   const [address, setAddress] = useState(school.address ?? "");
   const [email, setEmail] = useState(school.email ?? "");
   const [phone, setPhone] = useState(school.phone ?? "");
@@ -135,34 +133,6 @@ export default function SettingsPageClient({
       })),
     [],
   );
-
-  const currencyOptions = useMemo(
-    () => Array.from(new Set(countryOptions.map((option) => option.currency))),
-    [countryOptions],
-  );
-
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadCountryConfig() {
-      try {
-        const response = await fetch("/api/country/config");
-        if (!response.ok) return;
-        const config = await response.json();
-        if (!mounted) return;
-
-        setDetectedCountryName(config.data?.name || null);
-        setDetectedCurrency(config.data?.currency || school.currency || null);
-      } catch (err) {
-        console.error("Error loading country config:", err);
-      }
-    }
-
-    loadCountryConfig();
-    return () => {
-      mounted = false;
-    };
-  }, [school.country, school.currency]);
 
   const [uploading, setUploading] = useState<{ [key: string]: boolean }>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -543,11 +513,6 @@ export default function SettingsPageClient({
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.16em] text-brand"><Building2 className="h-4 w-4" /> School operations</div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">School settings</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Manage your school profile, branding, payments, admissions, and result access from one workspace.</p>
-          {detectedCountryName && detectedCurrency ? (
-            <p className="mt-2 text-sm text-muted">
-              Detected market: <span className="font-semibold text-foreground">{detectedCountryName}</span> · <span className="font-semibold text-brand">{detectedCurrency}</span>
-            </p>
-          ) : null}
         </div>
         <div className="relative flex flex-wrap gap-3">
           <Link
@@ -720,22 +685,15 @@ export default function SettingsPageClient({
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-2">Currency</label>
-                <select
+                <input
                   value={currency}
-                  onChange={(event) => setCurrency(event.target.value)}
+                  readOnly
+                  aria-readonly="true"
                   className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-brand/50"
-                >
-                  {currencyOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-                {!school.currency && detectedCurrency ? (
-                  <p className="mt-2 text-xs text-muted">
-                    Default currency for your region is {detectedCurrency}.
-                  </p>
-                ) : null}
+                />
+                <p className="mt-2 text-xs text-muted">
+                  Currency follows your billing country. Contact support for a billing-market change after paid billing begins.
+                </p>
               </div>
             </div>
 

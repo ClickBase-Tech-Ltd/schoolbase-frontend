@@ -1,7 +1,6 @@
 import { Metadata } from 'next'
 import { ChevronDown } from 'lucide-react'
 import { ContentSection, PublicContentShell } from '@/components/public-content-shell'
-import { getPublicPricing } from '@/lib/public-pricing'
 
 export const metadata: Metadata = {
   title: 'FAQ | SchoolBase Frequently Asked Questions',
@@ -125,10 +124,7 @@ const faqs = [
 ]
 
 export default async function FAQPage() {
-  const pricing = await getPublicPricing();
-  const priceAnswer = pricing
-    ? `Current ${pricing.currency} plans: ${pricing.plans.starter.label} ${pricing.plans.starter.priceLabel}, ${pricing.plans.standard.label} ${pricing.plans.standard.priceLabel}, and ${pricing.plans.group.label} ${pricing.plans.group.priceLabel}. Prices may change; confirm the amount shown at checkout before payment.`
-    : 'Current plan prices and billing periods are shown on the SchoolBase homepage and subscription page. Pricing can vary by country and may change; confirm the amount shown before payment.';
+  const priceAnswer = 'Subscription prices and payment options depend on your school’s billing country. Choose the school’s country on the pricing page to see the applicable plans and payment availability before checkout.';
   const visibleFaqs = faqs.map((category) => category.category === 'Pricing'
     ? { ...category, questions: category.questions.map((item) => item.q === 'How much does SchoolBase cost?' ? { ...item, a: priceAnswer } : item) }
     : category);

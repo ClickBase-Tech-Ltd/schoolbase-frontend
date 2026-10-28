@@ -45,6 +45,53 @@ interface AuditLog {
   school?: { name?: string | null } | null;
 }
 
+type BillingMarketCode = "NG" | "GH" | "SL" | "LR" | "GM";
+type BillingPlanCode = "STARTER" | "GROWTH" | "ENTERPRISE";
+type BillingProvider = "PAYSTACK" | "FLUTTERWAVE";
+
+interface BillingMarketPlan {
+  label: string;
+  amountMinor: number;
+  studentLimit: number | null;
+  customPriceLabel: string;
+}
+
+interface BillingMarketSetting {
+  pricingStatus: "DRAFT" | "PUBLISHED";
+  provider: BillingProvider;
+  providerVerified: boolean;
+  checkoutEnabled: boolean;
+  plans: Record<BillingPlanCode, BillingMarketPlan>;
+}
+
+type BillingMarketCatalog = Record<BillingMarketCode, BillingMarketSetting>;
+
+interface BillingMarketReadiness {
+  checkoutAvailable: boolean;
+  provider: BillingProvider;
+  providerReady: boolean;
+  blockers: string[];
+}
+
+type BillingReadiness = {
+  markets: Record<BillingMarketCode, BillingMarketReadiness>;
+  flutterwave: {
+    secretKeyConfigured: boolean;
+    webhookSecretConfigured: boolean;
+    frontendUrlConfigured: boolean;
+  };
+};
+
+const billingMarketDisplay: Record<BillingMarketCode, { name: string; currency: string; locale: string }> = {
+  NG: { name: "Nigeria", currency: "NGN", locale: "en-NG" },
+  GH: { name: "Ghana", currency: "GHS", locale: "en-GH" },
+  SL: { name: "Sierra Leone", currency: "SLE", locale: "en-SL" },
+  LR: { name: "Liberia", currency: "LRD", locale: "en-LR" },
+  GM: { name: "The Gambia", currency: "GMD", locale: "en-GM" },
+};
+
+const billingPlanCodes: BillingPlanCode[] = ["STARTER", "GROWTH", "ENTERPRISE"];
+
 const competitionFeatureOptions = [
   { key: "competition.enabled", label: "Competition module", description: "Master switch. All Competition capabilities remain unavailable while this is off." },
   { key: "competition.dailyChallenge.enabled", label: "Daily challenges", description: "Student access to daily challenge practice." },
@@ -75,11 +122,7 @@ interface PlatformSettingsState {
   signupNotificationRecipients: string[];
   supportNotificationRecipients: string[];
   competitionFeatures: Record<CompetitionFeatureKey, boolean>;
-  paymentPlans: {
-    STARTER: { label: string; priceLabel: string; amountMinor: number; studentLimit: number | null };
-    GROWTH: { label: string; priceLabel: string; amountMinor: number; studentLimit: number | null };
-    ENTERPRISE: { label: string; priceLabel: string; amountMinor: number; studentLimit: number | null };
-  };
+  billingMarketPricing: BillingMarketCatalog | null;
 }
 
 const defaultSettings: PlatformSettingsState = {
@@ -91,11 +134,7 @@ const defaultSettings: PlatformSettingsState = {
   signupNotificationRecipients: [],
   supportNotificationRecipients: [],
   competitionFeatures: Object.fromEntries(competitionFeatureOptions.map(({ key }) => [key, false])) as Record<CompetitionFeatureKey, boolean>,
-  paymentPlans: {
-    STARTER: { label: "", priceLabel: "", amountMinor: 0, studentLimit: null },
-    GROWTH: { label: "", priceLabel: "", amountMinor: 0, studentLimit: null },
-    ENTERPRISE: { label: "", priceLabel: "", amountMinor: 0, studentLimit: null },
-  },
+  billingMarketPricing: null,
 };
 
 export default function SettingsClient() {
@@ -112,6 +151,7 @@ export default function SettingsClient() {
   const [stats, setStats] = useState<PlatformStats | null>(null);
   const [activity, setActivity] = useState<AuditLog[]>([]);
   const [settings, setSettings] = useState<PlatformSettingsState>(defaultSettings);
+  const [billingReadiness, setBillingReadiness] = useState<BillingReadiness | null>(null);
   const [recipientDrafts, setRecipientDrafts] = useState({ signup: "", support: "" });
   const [formData, setFormData] = useState({ name: "", email: "" });
   const [openPanels, setOpenPanels] = useState({
@@ -126,7 +166,7 @@ export default function SettingsClient() {
     controls: false,
     supportEmail: false,
     notifications: false,
-    paymentPlans: false,
+    billingMarketPricing: false,
   });
 
   function togglePanel(panel: keyof typeof openPanels) {
@@ -137,13 +177,8 @@ export default function SettingsClient() {
     setOpenPreferencePanels((current) => ({ ...current, [panel]: !current[panel] }));
   }
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
   async function loadData() {
     try {
-      setLoading(true);
       const [profileRes, statsRes, settingsRes, activityRes] = await Promise.all([
         fetch("/schoolbase-admin/api/profile", { credentials: "include" }),
         fetch("/schoolbase-admin/api/stats", { credentials: "include" }),
@@ -175,7 +210,7 @@ export default function SettingsClient() {
 
       if (settingsRes.ok) {
         const settingsData = await settingsRes.json();
-        const loadedPlans = settingsData?.settings?.paymentPlans ?? {};
+        setBillingReadiness(settingsData?.billingReadiness ?? null);
         const loadedCompetitionFeatures = settingsData?.settings?.competitionFeatures ?? settingsData?.defaults?.competitionFeatures ?? {};
         const nextSettings: PlatformSettingsState = {
           maintenanceMode: Boolean(settingsData?.settings?.maintenanceMode ?? settingsData?.defaults?.maintenanceMode ?? false),
@@ -186,11 +221,7 @@ export default function SettingsClient() {
           signupNotificationRecipients: Array.isArray(settingsData?.settings?.signupNotificationRecipients) ? settingsData.settings.signupNotificationRecipients : defaultSettings.signupNotificationRecipients,
           supportNotificationRecipients: Array.isArray(settingsData?.settings?.supportNotificationRecipients) ? settingsData.settings.supportNotificationRecipients : defaultSettings.supportNotificationRecipients,
           competitionFeatures: Object.fromEntries(competitionFeatureOptions.map(({ key }) => [key, loadedCompetitionFeatures[key] === true])) as Record<CompetitionFeatureKey, boolean>,
-          paymentPlans: {
-            STARTER: { ...defaultSettings.paymentPlans.STARTER, ...(loadedPlans.STARTER ?? {}) },
-            GROWTH: { ...defaultSettings.paymentPlans.GROWTH, ...(loadedPlans.GROWTH ?? {}) },
-            ENTERPRISE: { ...defaultSettings.paymentPlans.ENTERPRISE, ...(loadedPlans.ENTERPRISE ?? {}) },
-          },
+          billingMarketPricing: settingsData?.settings?.billingMarketPricing ?? null,
         };
         setSettings(nextSettings);
         setRecipientDrafts({
@@ -210,6 +241,10 @@ export default function SettingsClient() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    void Promise.resolve().then(loadData);
+  }, []);
 
   function handleChange(e: ChangeEvent<HTMLInputElement>) {
     const { name, value } = e.target;
@@ -245,20 +280,37 @@ export default function SettingsClient() {
     }));
   }
 
-  function handlePlanChange(plan: keyof PlatformSettingsState["paymentPlans"], field: "label" | "priceLabel" | "amountMinor" | "studentLimit", value: string) {
+  function updateMarketSetting(
+    code: BillingMarketCode,
+    update: (market: BillingMarketSetting) => BillingMarketSetting,
+  ) {
     setSettings((prev) => ({
       ...prev,
-      paymentPlans: {
-        ...prev.paymentPlans,
+      billingMarketPricing: prev.billingMarketPricing
+        ? { ...prev.billingMarketPricing, [code]: update(prev.billingMarketPricing[code]) }
+        : prev.billingMarketPricing,
+    }));
+  }
+
+  function handleMarketPlanChange(
+    code: BillingMarketCode,
+    plan: BillingPlanCode,
+    field: keyof BillingMarketPlan,
+    value: string,
+  ) {
+    updateMarketSetting(code, (market) => ({
+      ...market,
+      plans: {
+        ...market.plans,
         [plan]: {
-          ...prev.paymentPlans[plan],
-          [field]: field === "label" || field === "priceLabel"
+          ...market.plans[plan],
+          [field]: field === "label" || field === "customPriceLabel"
             ? value
+            : field === "amountMinor"
+            ? Math.max(0, Math.round(Number(value || 0) * 100))
             : value === ""
             ? null
-            : field === "amountMinor"
-            ? Math.round(Number(value) * 100)
-            : Number(value),
+            : Math.max(1, Math.floor(Number(value))),
         },
       },
     }));
@@ -316,6 +368,12 @@ export default function SettingsClient() {
         throw new Error(data?.message || "Failed to save settings.");
       }
 
+      const readinessResponse = await fetch("/schoolbase-admin/api/settings", { credentials: "include" });
+      if (readinessResponse.ok) {
+        const readinessData = await readinessResponse.json();
+        setBillingReadiness(readinessData?.billingReadiness ?? null);
+      }
+
       setSettings((prev) => ({
         ...prev,
         signupNotificationRecipients: settingsToSave.signupNotificationRecipients,
@@ -360,7 +418,7 @@ export default function SettingsClient() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="border border-border bg-surface p-5">
           <button type="button" onClick={() => togglePanel("overview")} className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={openPanels.overview} aria-controls="platform-overview-panel">
-            <span className="flex items-center gap-2"><BarChart3 className="h-4 w-4 text-brand" /><span className="font-semibold text-foreground">Platform Overview</span></span>
+            <span className="flex items-center gap-2"><BarChart3 className="h-4 w-4 text-brand" /><span><span className="block font-semibold text-foreground">Platform Overview</span><span className="block text-xs text-muted">Key school and support metrics</span></span></span>
             <ChevronRight className={`h-4 w-4 text-muted transition-transform duration-200 ${openPanels.overview ? "rotate-90 text-foreground" : ""}`} />
           </button>
 
@@ -386,7 +444,7 @@ export default function SettingsClient() {
 
         <div className="border border-border bg-surface p-5">
           <button type="button" onClick={() => togglePanel("admin")} className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={openPanels.admin} aria-controls="platform-admin-panel">
-            <span className="flex items-center gap-2"><User className="h-4 w-4 text-brand" /><span className="font-semibold text-foreground">Platform Admin</span></span>
+            <span className="flex items-center gap-2"><User className="h-4 w-4 text-brand" /><span><span className="block font-semibold text-foreground">Platform Admin</span><span className="block text-xs text-muted">Manage your administrator profile</span></span></span>
             <ChevronRight className={`h-4 w-4 text-muted transition-transform duration-200 ${openPanels.admin ? "rotate-90 text-foreground" : ""}`} />
           </button>
 
@@ -424,7 +482,7 @@ export default function SettingsClient() {
 
         <div className="border border-border bg-surface p-5">
           <button type="button" onClick={() => togglePanel("system")} className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={openPanels.system} aria-controls="system-info-panel">
-            <span className="flex items-center gap-2"><Server className="h-4 w-4 text-brand" /><span className="font-semibold text-foreground">System Info</span></span>
+            <span className="flex items-center gap-2"><Server className="h-4 w-4 text-brand" /><span><span className="block font-semibold text-foreground">System Info</span><span className="block text-xs text-muted">Platform account and environment details</span></span></span>
             <ChevronRight className={`h-4 w-4 text-muted transition-transform duration-200 ${openPanels.system ? "rotate-90 text-foreground" : ""}`} />
           </button>
 
@@ -457,10 +515,10 @@ export default function SettingsClient() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <div className="border border-border bg-surface p-5">
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
+        <div className="self-start border border-border bg-surface p-5">
           <button type="button" onClick={() => togglePanel("preferences")} className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={openPanels.preferences} aria-controls="platform-preferences-panel">
-            <span className="flex items-center gap-2"><Shield className="h-4 w-4 text-brand" /><span className="font-semibold text-foreground">Platform Preferences</span></span>
+            <span className="flex items-center gap-2"><Shield className="h-4 w-4 text-brand" /><span><span className="block font-semibold text-foreground">Platform Preferences</span><span className="block text-xs text-muted">Platform controls, support, and notifications</span></span></span>
             <ChevronRight className={`h-4 w-4 text-muted transition-transform duration-200 ${openPanels.preferences ? "rotate-90 text-foreground" : ""}`} />
           </button>
 
@@ -576,34 +634,6 @@ export default function SettingsClient() {
             </div>
 
             <div className="border-t border-border pt-5">
-              <button type="button" onClick={() => togglePreferencePanel("paymentPlans")} className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={openPreferencePanels.paymentPlans} aria-controls="payment-plans-panel">
-                <span className="flex items-center gap-2"><CreditCard className="h-4 w-4 text-brand" /><span><span className="block text-sm font-semibold text-foreground">Payment plans</span><span className="block text-xs text-muted">Prices, labels, and student limits</span></span></span>
-                <ChevronRight className={`h-4 w-4 text-muted transition-transform duration-200 ${openPreferencePanels.paymentPlans ? "rotate-90 text-foreground" : ""}`} />
-              </button>
-              {openPreferencePanels.paymentPlans && <div id="payment-plans-panel" className="mt-4">
-              <p className="mb-3 text-xs text-muted">Enter prices in naira. The system converts them to kobo automatically for secure payment processing.</p>
-              <div className="overflow-x-auto border border-border">
-                <table className="w-full min-w-[620px] text-left text-sm">
-                  <thead className="border-b border-border bg-background text-xs text-muted">
-                    <tr><th className="px-3 py-2">Plan</th><th className="px-3 py-2">Display name</th><th className="px-3 py-2">Public price label</th><th className="px-3 py-2">Price</th><th className="px-3 py-2">Student limit</th></tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {(Object.keys(settings.paymentPlans) as Array<keyof PlatformSettingsState["paymentPlans"]>).map((plan) => (
-                      <tr key={plan}>
-                        <td className="px-3 py-3 font-semibold text-foreground">{plan}</td>
-                        <td className="px-3 py-3"><input value={settings.paymentPlans[plan].label ?? ""} onChange={(event) => handlePlanChange(plan, "label", event.target.value)} className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm" /></td>
-                        <td className="px-3 py-3"><input value={settings.paymentPlans[plan].priceLabel ?? ""} onChange={(event) => handlePlanChange(plan, "priceLabel", event.target.value)} placeholder="Custom pricing" className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm" /></td>
-                        <td className="px-3 py-3"><div className="flex items-center rounded-lg border border-border bg-background"><span className="pl-2 text-sm text-muted">₦</span><input type="number" min="0" step="100" value={settings.paymentPlans[plan].amountMinor == null ? "" : settings.paymentPlans[plan].amountMinor / 100} onChange={(event) => handlePlanChange(plan, "amountMinor", event.target.value)} className="w-full rounded-lg bg-transparent px-2 py-1.5 text-sm outline-none" /></div></td>
-                        <td className="px-3 py-3"><input type="number" min="0" value={settings.paymentPlans[plan].studentLimit ?? ""} onChange={(event) => handlePlanChange(plan, "studentLimit", event.target.value)} placeholder="Unlimited" className="w-full rounded-lg border border-border bg-background px-2 py-1.5 text-sm" /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              </div>}
-            </div>
-
-            <div className="border-t border-border pt-5">
               <h3 className="text-sm font-semibold text-foreground">Competition feature controls</h3>
               <p className="mt-1 text-xs text-muted">No Competition workflows are active yet. Keep these off until each feature is implemented and reviewed. Server access also requires the master switch and user permissions.</p>
               <div className="mt-3 divide-y divide-border border border-border bg-background px-3">
@@ -645,9 +675,191 @@ export default function SettingsClient() {
           </div>}
         </div>
 
+        <div className="self-start border border-border bg-surface p-5">
+          <button
+            type="button"
+            onClick={() => togglePreferencePanel("billingMarketPricing")}
+            className="flex w-full items-center justify-between gap-3 text-left"
+            aria-expanded={openPreferencePanels.billingMarketPricing}
+            aria-controls="billing-market-pricing-panel"
+          >
+            <span className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-brand" />
+              <span>
+                <span className="block font-semibold text-foreground">Country billing and prices</span>
+                <span className="block text-xs text-muted">Market plans, prices, and checkout controls</span>
+              </span>
+            </span>
+            <ChevronRight className={`h-4 w-4 text-muted transition-transform duration-200 ${openPreferencePanels.billingMarketPricing ? "rotate-90 text-foreground" : ""}`} />
+          </button>
+
+          {openPreferencePanels.billingMarketPricing && (
+            <div id="billing-market-pricing-panel" className="mt-4 space-y-4">
+              <div className="border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted">
+                Prices for Ghana, Sierra Leone, Liberia, and The Gambia are drafts until reviewed and approved. Enter prices in major currency units; the system stores minor units. Publishing makes prices public but does not bypass checkout readiness checks.
+              </div>
+              <div className="border border-border bg-background p-3 text-xs text-muted">
+                <p className="font-semibold text-foreground">Gateway credentials and setup</p>
+                <p className="mt-1">
+                  Keep provider secrets out of this settings page and the billing catalog. Configure them as backend deployment secrets: <code>PAYSTACK_SECRET_KEY</code>, or <code>FLUTTERWAVE_SECRET_KEY</code> and <code>FLUTTERWAVE_WEBHOOK_SECRET_HASH</code>. Set a trusted HTTPS <code>FRONTEND_URL</code> as well.
+                </p>
+                <p className="mt-2">
+                  Configure the Flutterwave webhook to <code>https://&lt;API-domain&gt;/api/flutterwave/webhook</code>. The provider dropdown selects the intended provider per market; it does not store credentials or certify merchant eligibility.
+                </p>
+              </div>
+
+              {!settings.billingMarketPricing ? (
+                <p className="text-sm text-muted">The billing catalog could not be loaded. Refresh the page or contact support.</p>
+              ) : (Object.keys(billingMarketDisplay) as BillingMarketCode[]).map((code) => {
+                const market = settings.billingMarketPricing![code];
+                const display = billingMarketDisplay[code];
+                const readiness = billingReadiness?.markets?.[code];
+                return (
+                  <section key={code} className="space-y-3 border border-border bg-background p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h4 className="font-semibold text-foreground">{display.name} <span className="font-normal text-muted">({code} · {display.currency})</span></h4>
+                        <p className="mt-1 text-xs text-muted">
+                          {market.pricingStatus === "PUBLISHED" ? "Published pricing" : "Unpublished draft"}
+                          {code === "NG"
+                            ? " · Paystack"
+                            : ` · Flutterwave checkout ${market.checkoutEnabled ? "enabled in catalog (server gates still apply)" : "off by default"}`}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-4 text-xs">
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={market.pricingStatus === "PUBLISHED"}
+                            onChange={(event) => updateMarketSetting(code, (current) => ({ ...current, pricingStatus: event.target.checked ? "PUBLISHED" : "DRAFT" }))}
+                          />
+                          Publish prices
+                        </label>
+                        {code !== "NG" && (
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={market.providerVerified}
+                              onChange={(event) => updateMarketSetting(code, (current) => ({ ...current, providerVerified: event.target.checked }))}
+                            />
+                            Merchant setup reviewed
+                          </label>
+                        )}
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={market.checkoutEnabled}
+                            onChange={(event) => updateMarketSetting(code, (current) => ({ ...current, checkoutEnabled: event.target.checked }))}
+                          />
+                          Allow checkout
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className={`border p-3 text-xs ${readiness?.checkoutAvailable ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-800" : "border-amber-500/30 bg-amber-500/5 text-amber-950"}`}>
+                      <p className="font-semibold">
+                        Checkout readiness: {readiness?.checkoutAvailable ? `Ready via ${readiness.provider}` : "Not ready"}
+                      </p>
+                      {readiness?.blockers.length ? (
+                        <ul className="mt-1 list-inside list-disc space-y-0.5">
+                          {readiness.blockers.map((blocker) => <li key={blocker}>{blocker}</li>)}
+                        </ul>
+                      ) : !readiness ? (
+                        <p className="mt-1">Readiness details are unavailable. Reload this page to check backend configuration.</p>
+                      ) : null}
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <label className="text-xs text-muted">
+                        Intended payment provider
+                        <select
+                          value={market.provider}
+                          onChange={(event) => updateMarketSetting(code, (current) => ({ ...current, provider: event.target.value as BillingProvider }))}
+                          className="mt-1 w-full rounded-lg border border-border bg-surface px-2 py-2 text-sm text-foreground"
+                        >
+                          <option value="PAYSTACK">Paystack</option>
+                          <option value="FLUTTERWAVE">Flutterwave</option>
+                        </select>
+                      </label>
+                      <div className="text-xs text-muted">
+                        Confirm charge currency, settlement, refunds, webhooks, and reconciliation with your merchant account. Backend credentials and a successful sandbox/live test are also required.
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-3">
+                      {billingPlanCodes.map((plan) => {
+                        const planSetting = market.plans[plan];
+                        return (
+                          <div key={plan} className="space-y-2 border border-border p-3">
+                            <p className="text-xs font-semibold text-foreground">{plan}</p>
+                            <label className="block text-xs text-muted">
+                              Display name
+                              <input
+                                value={planSetting.label}
+                                onChange={(event) => handleMarketPlanChange(code, plan, "label", event.target.value)}
+                                className="mt-1 w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground"
+                              />
+                            </label>
+                            <label className="block text-xs text-muted">
+                              Price ({display.currency})
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={planSetting.amountMinor / 100}
+                                onChange={(event) => handleMarketPlanChange(code, plan, "amountMinor", event.target.value)}
+                                className="mt-1 w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground"
+                              />
+                              <span className="mt-1 block">
+                                Preview: {new Intl.NumberFormat(display.locale, { style: "currency", currency: display.currency, maximumFractionDigits: 2 }).format(planSetting.amountMinor / 100)}
+                              </span>
+                            </label>
+                            <label className="block text-xs text-muted">
+                              Student limit
+                              <input
+                                type="number"
+                                min="1"
+                                value={planSetting.studentLimit ?? ""}
+                                placeholder="Unlimited"
+                                onChange={(event) => handleMarketPlanChange(code, plan, "studentLimit", event.target.value)}
+                                className="mt-1 w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground"
+                              />
+                            </label>
+                            {plan === "ENTERPRISE" && (
+                              <label className="block text-xs text-muted">
+                                Custom price label
+                                <input
+                                  value={planSetting.customPriceLabel}
+                                  onChange={(event) => handleMarketPlanChange(code, plan, "customPriceLabel", event.target.value)}
+                                  placeholder="Custom pricing"
+                                  className="mt-1 w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-foreground"
+                                />
+                              </label>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={handleSaveSettings}
+                disabled={savingSettings}
+                className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save Billing Settings
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="border border-border bg-surface p-5">
           <button type="button" onClick={() => togglePanel("activity")} className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={openPanels.activity} aria-controls="recent-activity-panel">
-            <span className="flex items-center gap-2"><Activity className="h-4 w-4 text-brand" /><span className="font-semibold text-foreground">Recent Activity</span></span>
+            <span className="flex items-center gap-2"><Activity className="h-4 w-4 text-brand" /><span><span className="block font-semibold text-foreground">Recent Activity</span><span className="block text-xs text-muted">Latest platform and school events</span></span></span>
             <ChevronRight className={`h-4 w-4 text-muted transition-transform duration-200 ${openPanels.activity ? "rotate-90 text-foreground" : ""}`} />
           </button>
 
@@ -678,37 +890,36 @@ export default function SettingsClient() {
             )}
           </div>}
         </div>
-      </div>
+        <div className="self-start border border-border bg-surface p-5">
+          <button type="button" onClick={() => togglePanel("security")} className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={openPanels.security} aria-controls="security-notes-panel">
+            <span className="flex items-center gap-2"><Shield className="h-4 w-4 text-brand" /><span><span className="block font-semibold text-foreground">Security &amp; Operational Notes</span><span className="block text-xs text-muted">Account protection and operational guidance</span></span></span>
+            <ChevronRight className={`h-4 w-4 text-muted transition-transform duration-200 ${openPanels.security ? "rotate-90 text-foreground" : ""}`} />
+          </button>
 
-      <div className="border border-border bg-surface p-5">
-        <button type="button" onClick={() => togglePanel("security")} className="flex w-full items-center justify-between gap-3 text-left" aria-expanded={openPanels.security} aria-controls="security-notes-panel">
-          <span className="flex items-center gap-2"><Shield className="h-4 w-4 text-brand" /><span className="font-semibold text-foreground">Security &amp; Operational Notes</span></span>
-          <ChevronRight className={`h-4 w-4 text-muted transition-transform duration-200 ${openPanels.security ? "rotate-90 text-foreground" : ""}`} />
-        </button>
-
-        {openPanels.security && <div id="security-notes-panel" className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div className="border border-border bg-background p-3">
-            <div className="flex items-center gap-2">
-              <KeyRound className="h-4 w-4 text-muted" />
-              <p className="text-sm font-medium text-foreground">Password</p>
+          {openPanels.security && <div id="security-notes-panel" className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div className="border border-border bg-background p-3">
+              <div className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4 text-muted" />
+                <p className="text-sm font-medium text-foreground">Password</p>
+              </div>
+              <p className="mt-2 text-xs text-muted">Change login details through auth settings if needed.</p>
             </div>
-            <p className="mt-2 text-xs text-muted">Change login details through auth settings if needed.</p>
-          </div>
-          <div className="border border-border bg-background p-3">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-muted" />
-              <p className="text-sm font-medium text-foreground">Session health</p>
+            <div className="border border-border bg-background p-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-muted" />
+                <p className="text-sm font-medium text-foreground">Session health</p>
+              </div>
+              <p className="mt-2 text-xs text-muted">Your current session is protected by the platform admin cookie.</p>
             </div>
-            <p className="mt-2 text-xs text-muted">Your current session is protected by the platform admin cookie.</p>
-          </div>
-          <div className="border border-border bg-background p-3">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-muted" />
-              <p className="text-sm font-medium text-foreground">Issue tracking</p>
+            <div className="border border-border bg-background p-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-muted" />
+                <p className="text-sm font-medium text-foreground">Issue tracking</p>
+              </div>
+              <p className="mt-2 text-xs text-muted">Monitor support and trial counts above to spot platform health issues.</p>
             </div>
-            <p className="mt-2 text-xs text-muted">Monitor support and trial counts above to spot platform health issues.</p>
-          </div>
-        </div>}
+          </div>}
+        </div>
       </div>
     </div>
   );

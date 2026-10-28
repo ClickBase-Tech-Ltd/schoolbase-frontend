@@ -18,6 +18,15 @@ interface Plan {
   disabled?: boolean;
 }
 
+interface SchoolBillingProfile {
+  id: string;
+  name: string;
+  slug: string;
+  country: string;
+  currency: string;
+  plan: string;
+}
+
 function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -142,15 +151,18 @@ export default function SubscribePage() {
   const [loading, setLoading] = useState(true);
   const [plans, setPlans] = useState<Plan[]>(defaultPlans);
   const [selectedPlan, setSelectedPlan] = useState<Plan>(defaultPlans[1]);
-  const [currency, setCurrency] = useState("NGN");
-  const [countryCode, setCountryCode] = useState("NG");
-  const [countryName, setCountryName] = useState("Nigeria");
+  const [currency, setCurrency] = useState("");
+  const [countryCode, setCountryCode] = useState("");
+  const [countryName, setCountryName] = useState("Billing market");
+  const [checkoutAvailable, setCheckoutAvailable] = useState(false);
+  const [paymentProvider, setPaymentProvider] = useState<string | null>(null);
+  const [marketMessage, setMarketMessage] = useState<string | null>(null);
 
   const [adminName, setAdminName] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [schoolName, setSchoolName] = useState("");
   const [schoolSlug, setSchoolSlug] = useState("");
-  const [schoolData, setSchoolData] = useState<any>(null);
+  const [schoolData, setSchoolData] = useState<SchoolBillingProfile | null>(null);
   const [showBankPanel, setShowBankPanel] = useState(false);
 
   const openBankModal = () => {
@@ -171,43 +183,10 @@ export default function SubscribePage() {
     let mounted = true;
 
     Promise.all([
-      fetch("/api/country/config").then((r) => r.json()).catch(() => ({})),
-      fetch("/api/pricing", { cache: "no-store" }).then((r) => r.json()).catch(() => ({})),
       fetch("/api/admin/verify", { method: "POST" }).then((r) => r.json()).catch(() => ({})),
     ])
-      .then(([countryData, pricingData, adminData]) => {
+      .then(async ([adminData]) => {
         if (!mounted) return;
-
-        const configData = countryData?.data;
-
-        const resolvedCountryCode = countryData?.country || "NG";
-        const resolvedCountryName = configData?.name || "Nigeria";
-        const resolvedCurrency = configData?.currency || "NGN";
-
-        setCountryCode(resolvedCountryCode);
-        setCountryName(resolvedCountryName);
-        setCurrency(resolvedCurrency);
-
-        const configuredPlans = pricingData?.plans;
-        if (configuredPlans) {
-          const updatedPlans = defaultPlans.map((p) => ({
-            ...p,
-            amountMinor: configuredPlans[p.id === "enterprise" ? "group" : p.id]?.amountMinor ?? p.amountMinor,
-            priceLabel: configuredPlans[p.id === "enterprise" ? "group" : p.id]?.priceLabel ?? p.priceLabel,
-            disabled: p.id === "enterprise",
-            features: p.features.map((feature) => {
-              const limit = configuredPlans[p.id === "enterprise" ? "group" : p.id]?.studentLimit;
-              if (feature.startsWith("Up to ") && limit) return `Up to ${limit.toLocaleString()} students`;
-              if (feature === "Unlimited students" && limit) return `Up to ${limit.toLocaleString()} students`;
-              return feature;
-            }),
-          }));
-
-          setPlans(updatedPlans);
-          setSelectedPlan((current) =>
-            updatedPlans.find((plan) => plan.id === current.id) ?? updatedPlans[1]
-          );
-        }
 
         if (adminData?.authenticated && adminData?.session) {
           const session = adminData.session;
@@ -216,29 +195,99 @@ export default function SubscribePage() {
           setAdminEmail(session.email || "");
 
           if (session.schoolId) {
-            fetch(`/api/admin/school/${session.schoolId}`)
-              .then((r) => {
-                if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                return r.json();
-              })
-              .then((schoolData) => {
-                if (!mounted) return;
+            const schoolResponse = await fetch(`/api/admin/school/${session.schoolId}`);
+            if (!schoolResponse.ok) throw new Error(`Unable to load school billing profile (HTTP ${schoolResponse.status}).`);
+            const resolvedSchool = await schoolResponse.json();
+            if (!mounted) return;
 
-                setSchoolName(schoolData.name || "");
-                setSchoolSlug(schoolData.slug || "");
-                setSchoolData(schoolData);
-              })
-              .catch((err) => {
-                console.warn("Failed to fetch school data:", err.message);
-                // Continue loading even if school data fails
+            setSchoolName(resolvedSchool.name || "");
+            setSchoolSlug(resolvedSchool.slug || "");
+            setSchoolData(resolvedSchool);
+
+            const schoolCountry = typeof resolvedSchool.country === "string"
+              ? resolvedSchool.country.trim().toUpperCase()
+              : "";
+            if (!schoolCountry) {
+              throw new Error("Your school's billing country is not set. Contact support before subscribing.");
+            }
+            setCountryCode(schoolCountry);
+            setCountryName(schoolCountry);
+
+            const pricingResponse = await fetch(
+              `/api/pricing?country=${encodeURIComponent(schoolCountry)}`,
+              { cache: "no-store" },
+            );
+            const pricingData = await pricingResponse.json().catch(() => null);
+            if (!pricingResponse.ok || !pricingData) {
+              throw new Error(pricingData?.error || "Unable to load pricing for your school's billing market.");
+            }
+            if (!mounted) return;
+
+            const schoolCurrency = typeof resolvedSchool.currency === "string"
+              ? resolvedSchool.currency.trim().toUpperCase()
+              : "";
+            const currencyMatchesMarket = schoolCurrency === String(pricingData.currency).toUpperCase();
+            const marketCheckoutAvailable = pricingData.checkoutAvailable === true && currencyMatchesMarket;
+            setCountryCode(pricingData.countryCode);
+            setCountryName(pricingData.countryName);
+            setCurrency(pricingData.currency);
+            setCheckoutAvailable(marketCheckoutAvailable);
+            setPaymentProvider(marketCheckoutAvailable ? pricingData.provider ?? null : null);
+            setMarketMessage(currencyMatchesMarket
+              ? pricingData.message ?? null
+              : "Your school's saved billing currency does not match its country. Update the school profile or contact support before subscribing.");
+
+            const configuredPlans = pricingData.plans;
+            if (configuredPlans) {
+              const updatedPlans = defaultPlans.map((p) => {
+                const config = configuredPlans[p.id === "enterprise" ? "group" : p.id];
+                return {
+                  ...p,
+                  amountMinor: config?.amountMinor ?? 0,
+                  priceLabel: config?.priceLabel ?? "Pricing unavailable",
+                  disabled: p.id === "enterprise" || !marketCheckoutAvailable || !config?.amountMinor,
+                  features: p.features.map((feature) => {
+                    const limit = config?.studentLimit;
+                    if (feature.startsWith("Up to ") && limit) return `Up to ${limit.toLocaleString()} students`;
+                    if (feature === "Unlimited students" && limit) return `Up to ${limit.toLocaleString()} students`;
+                    return feature;
+                  }),
+                };
               });
+
+              setPlans(updatedPlans);
+              setSelectedPlan(updatedPlans.find((plan) => plan.id === "standard" && !plan.disabled)
+                ?? updatedPlans.find((plan) => !plan.disabled)
+                ?? updatedPlans[1]);
+            } else {
+              setCheckoutAvailable(false);
+              setPlans(defaultPlans.map((plan) => ({
+                ...plan,
+                amountMinor: 0,
+                priceLabel: "Pricing not yet available in this market",
+                disabled: true,
+              })));
+            }
+          } else {
+            throw new Error("Your school billing profile is unavailable. Contact support before subscribing.");
           }
+        } else {
+          throw new Error("Sign in as a school administrator to view subscription pricing for your school.");
         }
 
         setLoading(false);
       })
       .catch((err) => {
         console.error("Failed to load subscription page:", err);
+        if (mounted) {
+          setMarketMessage(err instanceof Error ? err.message : "Unable to load your school's billing market.");
+          setPlans(defaultPlans.map((plan) => ({
+            ...plan,
+            amountMinor: 0,
+            priceLabel: "Pricing unavailable",
+            disabled: true,
+          })));
+        }
         setLoading(false);
       });
 
@@ -247,7 +296,11 @@ export default function SubscribePage() {
     };
   }, []);
 
-  const paymentProvider = countryCode === "NG" ? "Paystack" : "Flutterwave";
+  const paymentProviderLabel = paymentProvider === "PAYSTACK"
+    ? "Paystack"
+    : paymentProvider === "FLUTTERWAVE"
+      ? "Flutterwave"
+      : "Online checkout unavailable";
   const currentSchoolPlan = String(schoolData?.plan || "").toUpperCase();
   const currentPlanCardId = currentSchoolPlan === "STARTER"
     ? "starter"
@@ -287,7 +340,7 @@ export default function SubscribePage() {
               Pricing shown for
             </div>
           </div>
-          <span className="font-semibold text-foreground">{countryName} · {currency}</span>
+          <span className="font-semibold text-foreground">{countryName}{currency ? ` · ${currency}` : ""}</span>
         </div>
 
         {/* Payment Provider */}
@@ -298,11 +351,11 @@ export default function SubscribePage() {
               Payment provider
             </div>
           </div>
-          <span className="font-semibold text-foreground">{paymentProvider}</span>
+          <span className="font-semibold text-foreground">{paymentProviderLabel}</span>
         </div>
 
         {/* Alternative Payment Toggle */}
-        <button
+        {countryCode === "NG" && checkoutAvailable ? <button
           type="button"
           onClick={openBankModal}
           className="inline-flex items-center gap-2 bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
@@ -314,10 +367,17 @@ export default function SubscribePage() {
             </div>
           </div>
           <span className="text-white">Show alternative payment</span>
-        </button>
+        </button> : null}
           </div>
         </div>
       </header>
+
+      {marketMessage ? (
+        <div role="status" className="border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          {marketMessage}
+          {!checkoutAvailable ? <a href="mailto:sales@schoolbase.live" className="ml-1 font-semibold underline">Contact SchoolBase</a> : null}
+        </div>
+      ) : null}
 
       {/* Plans */}
       <section>
@@ -425,11 +485,11 @@ export default function SubscribePage() {
               </span>
             </p>
             <p className="mt-2 text-sm text-muted">
-              Prices are displayed in {currency} for {countryName}. Checkout uses {paymentProvider} for this market.
+              Prices are displayed in {currency} for {countryName}. Checkout uses {paymentProviderLabel}.
             </p>
           </div>
 
-          {countryCode === "NG" ? (
+          {checkoutAvailable && paymentProvider === "PAYSTACK" ? (
             <PaystackPurchaseButton
               amountMinor={selectedPlan.amountMinor}
               currency={currency}
@@ -442,7 +502,7 @@ export default function SubscribePage() {
               disabled={!adminName || !adminEmail || !schoolName || !isValidEmail(adminEmail)}
               isSubscription={true}
             />
-          ) : (
+          ) : checkoutAvailable && paymentProvider === "FLUTTERWAVE" ? (
             <FlutterwavePurchaseButton
               amountMinor={selectedPlan.amountMinor}
               currency={currency}
@@ -455,7 +515,7 @@ export default function SubscribePage() {
               disabled={!adminName || !adminEmail || !schoolName || !isValidEmail(adminEmail)}
               isSubscription={true}
             />
-          )}
+          ) : <p className="text-sm text-muted">Online checkout is not enabled for this billing market yet. Contact SchoolBase to discuss payment options.</p>}
         </section>
       )}
 

@@ -29,6 +29,13 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { amountMinor, currency, email, name, phone, plan, schoolName, slug, redirectUrl, isSubscription } = body || {};
 
+    if (isSubscription === true) {
+      return NextResponse.json(
+        { error: "Flutterwave subscription checkout is not enabled for any billing market." },
+        { status: 409 },
+      );
+    }
+
     const normalizedEmail = typeof email === "string" ? email.trim() : "";
     const normalizedName = typeof name === "string" ? name.trim() : "";
     const normalizedSchoolName = typeof schoolName === "string" ? schoolName.trim() : "";
@@ -81,7 +88,7 @@ export async function POST(request: Request) {
     });
 
     const responseText = await response.text();
-    let data: any = null;
+    let data: { message?: string; error?: string; data?: { link?: string } } | null = null;
 
     try {
       data = responseText ? JSON.parse(responseText) : null;

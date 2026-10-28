@@ -199,12 +199,14 @@ export function PaystackPurchaseButton({
         body: JSON.stringify({
           email,
           amountMinor,
+          currency,
           metadata: {
             plan,
             schoolName,
             name,
             phone,
             schoolSlug: slug ?? "",
+            isSubscription,
           },
           callback_url: `${window.location.origin}${isSubscription ? "/admin/subscription-success" : "/purchase/success"}`,
         }),

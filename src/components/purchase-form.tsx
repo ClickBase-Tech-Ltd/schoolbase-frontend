@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
 import { parsePublicPricing, type PublicPlan, type PublicPricing } from "@/lib/public-pricing";
 import { PaystackPurchaseButton } from "@/components/paystack-purchase-button";
+import countriesConfig from "../../config/countries.json";
 
 interface PurchaseFormProps {
   initialPlan?: string;
@@ -20,43 +21,91 @@ const planDescriptions: Record<string, string> = {
 type PurchasePlan = PublicPlan & { id: "starter" | "standard" | "group"; description: string; disabled: boolean };
 
 function toPurchasePlans(pricing: PublicPricing | null): PurchasePlan[] {
-  if (!pricing) return [];
+  if (!pricing?.plans) return [];
+  const plans = pricing.plans;
   return (["starter", "standard", "group"] as const).map((id) => ({
-    ...pricing.plans[id],
+    ...plans[id],
     id,
     description: planDescriptions[id],
-    disabled: id === "group" || pricing.plans[id].amountMinor <= 0,
+    disabled: id === "group" || !pricing.checkoutAvailable || plans[id].amountMinor <= 0,
   }));
 }
 
 export function PurchaseForm({ initialPlan = "starter", success = false }: PurchaseFormProps) {
   const [plans, setPlans] = useState<PurchasePlan[]>([]);
   const [currency, setCurrency] = useState("NGN");
+  const [countryCode, setCountryCode] = useState("");
   const [pricingLoading, setPricingLoading] = useState(true);
   const [pricingError, setPricingError] = useState<string | null>(null);
+  const [pricingUnavailableMessage, setPricingUnavailableMessage] = useState<string | null>(null);
+  const pricingRequestId = useRef(0);
 
   useEffect(() => {
     let mounted = true;
-    fetch("/api/pricing", { cache: "no-store" })
+    const requestId = ++pricingRequestId.current;
+    fetch("/api/country/config", { cache: "no-store" })
       .then((response) => response.ok ? response.json() : null)
-      .then((payload) => {
-        if (!mounted) return;
+      .then(async (countryData) => {
+        const supportedCountries = (countriesConfig as { countries: Record<string, { name: string }> }).countries;
+        const suggestedCountry = typeof countryData?.country === "string" && supportedCountries[countryData.country]
+          ? countryData.country
+          : (countriesConfig as { default: string }).default;
+        if (!mounted || requestId !== pricingRequestId.current) return;
+        setCountryCode(suggestedCountry);
+        const response = await fetch(`/api/pricing?country=${encodeURIComponent(suggestedCountry)}`, { cache: "no-store" });
+        const payload = response.ok ? await response.json() : null;
         const pricing = parsePublicPricing(payload);
+        if (!mounted || requestId !== pricingRequestId.current) return;
         if (!pricing) {
           setPricingError("We couldn't load current plan prices. Please retry before continuing to checkout.");
           return;
         }
         setCurrency(pricing.currency);
+        setPricingUnavailableMessage(pricing.checkoutAvailable ? null : pricing.message || "Online checkout is not yet available for this market.");
         setPlans(toPurchasePlans(pricing));
       })
-      .catch(() => setPricingError("We couldn't load current plan prices. Please retry before continuing to checkout."))
+      .catch(() => {
+        if (mounted && requestId === pricingRequestId.current) {
+          setPricingError("We couldn't load current plan prices. Please retry before continuing to checkout.");
+        }
+      })
       .finally(() => {
-        if (mounted) setPricingLoading(false);
+        if (mounted && requestId === pricingRequestId.current) setPricingLoading(false);
       });
     return () => {
       mounted = false;
+      pricingRequestId.current += 1;
     };
   }, []);
+
+  const changeCountry = async (nextCountryCode: string) => {
+    setCountryCode(nextCountryCode);
+    setPricingLoading(true);
+    setPricingError(null);
+    setPricingUnavailableMessage(null);
+    setPlans([]);
+    const requestId = ++pricingRequestId.current;
+
+    try {
+      const response = await fetch(`/api/pricing?country=${encodeURIComponent(nextCountryCode)}`, { cache: "no-store" });
+      const payload = response.ok ? await response.json() : null;
+      const pricing = parsePublicPricing(payload);
+      if (requestId !== pricingRequestId.current) return;
+      if (!pricing) {
+        setPricingError("We couldn't load current plan prices. Please retry before continuing to checkout.");
+        return;
+      }
+      setCurrency(pricing.currency);
+      setPricingUnavailableMessage(pricing.checkoutAvailable ? null : pricing.message || "Online checkout is not yet available for this market.");
+      setPlans(toPurchasePlans(pricing));
+    } catch {
+      if (requestId === pricingRequestId.current) {
+        setPricingError("We couldn't load current plan prices. Please retry before continuing to checkout.");
+      }
+    } finally {
+      if (requestId === pricingRequestId.current) setPricingLoading(false);
+    }
+  };
 
   const [schoolName, setSchoolName] = useState("");
   const [slug, setSlug] = useState("");
@@ -69,8 +118,8 @@ export function PurchaseForm({ initialPlan = "starter", success = false }: Purch
 
   const canPay = useMemo(
     () =>
-      !!schoolName && !!contactName && !!email && !!selectedPlan && !selectedPlan.disabled && !pricingLoading && !pricingError,
-    [contactName, email, schoolName, selectedPlan],
+      !!schoolName && !!slug && !!contactName && !!email && !!selectedPlan && !selectedPlan.disabled && !pricingLoading && !pricingError && !pricingUnavailableMessage,
+    [contactName, email, pricingError, pricingLoading, pricingUnavailableMessage, schoolName, selectedPlan, slug],
   );
 
   const bankAccountName = process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME;
@@ -95,6 +144,24 @@ export function PurchaseForm({ initialPlan = "starter", success = false }: Purch
 
         {pricingLoading ? <div className="flex items-center gap-3 border-b border-border py-8 text-sm text-muted"><Loader2 className="h-4 w-4 animate-spin"/>Loading current plans…</div> : null}
         {pricingError ? <div role="alert" className="mt-6 flex flex-col gap-4 border border-amber-300 bg-[#fff9ed] p-4 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between"><p>{pricingError}</p><button type="button" onClick={() => window.location.reload()} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 border border-amber-400 bg-white px-3 font-semibold"><ArrowRight className="h-4 w-4"/>Retry</button></div> : null}
+        <label className="mt-6 block max-w-sm text-sm font-medium text-foreground">
+          School billing country
+          <select
+            value={countryCode}
+            onChange={(event) => void changeCountry(event.target.value)}
+            disabled={pricingLoading}
+            className="mt-1.5 h-11 w-full border border-border bg-white px-3 text-sm"
+          >
+            {Object.entries((countriesConfig as { countries: Record<string, { name: string; currency: string }> }).countries).map(([code, country]) => (
+              <option key={code} value={code}>{country.name} ({country.currency})</option>
+            ))}
+          </select>
+        </label>
+        {pricingUnavailableMessage ? (
+          <div role="status" className="mt-5 border border-amber-300 bg-[#fff9ed] p-4 text-sm text-amber-950">
+            {pricingUnavailableMessage} <a href="mailto:sales@schoolbase.live" className="font-semibold underline">Contact SchoolBase</a>
+          </div>
+        ) : null}
 
         {plans.length > 0 ? <>
           <section className="mt-8" aria-labelledby="plans-heading">
@@ -112,7 +179,7 @@ export function PurchaseForm({ initialPlan = "starter", success = false }: Purch
             <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-muted">Step 2</p><h2 id="contact-heading" className="mt-1 text-xl font-semibold">School and contact details</h2><p className="mt-2 text-sm text-muted">We use these details to set up your school subscription.</p></div>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <label className={labelClass}>School name<input required value={schoolName} onChange={(event) => setSchoolName(event.target.value)} type="text" autoComplete="organization" placeholder="Greenfield School" className={fieldClass}/></label>
-              <label className={labelClass}>School URL name <span className="font-normal text-muted">Optional</span><input value={slug} onChange={(event) => setSlug(event.target.value)} placeholder="greenfield" className={fieldClass}/><span className="mt-1 block text-xs font-normal text-muted">Lowercase letters, numbers, and hyphens.</span></label>
+              <label className={labelClass}>Existing SchoolBase URL name<input required value={slug} onChange={(event) => setSlug(event.target.value)} placeholder="greenfield" className={fieldClass}/><span className="mt-1 block text-xs font-normal text-muted">Use the existing school&apos;s SchoolBase URL name so the payment can be assigned to the correct billing account.</span></label>
               <label className={labelClass}>Contact name<input required value={contactName} onChange={(event) => setContactName(event.target.value)} type="text" autoComplete="name" placeholder="Aisha Bello" className={fieldClass}/></label>
               <label className={labelClass}>Contact email<input required value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="admin@example.com" className={fieldClass}/></label>
               <label className={labelClass}>Contact phone<input value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" autoComplete="tel" placeholder="+234 801 234 5678" className={fieldClass}/></label>

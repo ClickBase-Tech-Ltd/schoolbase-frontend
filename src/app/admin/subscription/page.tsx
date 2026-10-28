@@ -147,9 +147,10 @@ export default function SubscriptionPage() {
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [countryCode, setCountryCode] = useState("NG");
-  const [countryName, setCountryName] = useState("Nigeria");
-  const [currency, setCurrency] = useState("NGN");
+  const [countryName, setCountryName] = useState("Billing market");
+  const [currency, setCurrency] = useState("");
+  const [checkoutAvailable, setCheckoutAvailable] = useState(false);
+  const [paymentProvider, setPaymentProvider] = useState<string | null>(null);
   const [countryPlans, setCountryPlans] = useState<Record<string, { amountMinor: number; priceLabel: string }>>({
     starter: { amountMinor: 0, priceLabel: "Pricing unavailable" },
     standard: { amountMinor: 0, priceLabel: "Pricing unavailable" },
@@ -173,49 +174,67 @@ export default function SubscriptionPage() {
     async function loadSubscription() {
       try {
         console.log('[Subscription] Loading subscription status...');
-        const [countryResponse, pricingResponse, response] = await Promise.all([
-          fetch("/api/country/config", { credentials: 'include', headers: { 'Content-Type': 'application/json' } }),
-          fetch("/api/pricing", { credentials: 'include', headers: { 'Content-Type': 'application/json' }, cache: "no-store" }),
-          fetch("/api/admin/subscription/status", {
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-          }),
-        ]);
-
-        const countryConfig = await countryResponse.json().catch(() => null);
-        const configData = countryConfig?.data;
-        const resolvedCountryCode = countryConfig?.country || "NG";
-        const resolvedCountryName = configData?.name || "Nigeria";
-        const resolvedCurrency = configData?.currency || "NGN";
-
-        setCountryCode(resolvedCountryCode);
-        setCountryName(resolvedCountryName);
-        setCurrency(resolvedCurrency);
-
-        const pricingData = await pricingResponse.json().catch(() => null);
-        if (pricingData?.plans) {
-          setCountryPlans((prevPlans) => ({
-            starter: pricingData.plans.starter || prevPlans.starter,
-            standard: pricingData.plans.standard || prevPlans.standard,
-            group: pricingData.plans.group || prevPlans.group,
-          }));
-        }
+        const response = await fetch("/api/admin/subscription/status", {
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+        });
 
         console.log('[Subscription] Response status:', response.status);
+        const data = await response.json().catch(() => null);
 
         if (!response.ok) {
-          const errorBody = await response.json().catch(() => null);
-          console.error('[Subscription] Backend error:', errorBody);
+          console.error('[Subscription] Backend error:', data);
           throw new Error(
-            errorBody?.error || 
-            errorBody?.reason || 
+            data?.error ||
+            data?.reason ||
             `Failed to load subscription status (${response.status})`
           );
         }
 
-        const data = await response.json();
         console.log('[Subscription] Data loaded:', data);
         setSubscription(data);
+
+        const resolvedCountryCode = typeof data?.country === 'string' ? data.country : '';
+        const pricingResponse = resolvedCountryCode
+          ? await fetch(`/api/pricing?country=${encodeURIComponent(resolvedCountryCode)}`, {
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            cache: "no-store",
+          })
+          : null;
+        const pricingData = pricingResponse?.ok ? await pricingResponse.json().catch(() => null) : null;
+
+        if (pricingData) {
+          const currencyMatchesMarket = typeof data?.currency === 'string'
+            && data.currency.trim().toUpperCase() === String(pricingData.currency).toUpperCase();
+          setCountryName(pricingData.countryName);
+          setCurrency(pricingData.currency);
+          setCheckoutAvailable(pricingData.checkoutAvailable === true && currencyMatchesMarket);
+          setPaymentProvider(currencyMatchesMarket ? pricingData.provider ?? null : null);
+          if (pricingData.plans && currencyMatchesMarket) {
+            setCountryPlans({
+              starter: pricingData.plans.starter,
+              standard: pricingData.plans.standard,
+              group: pricingData.plans.group,
+            });
+          } else {
+            setCountryPlans({
+              starter: { amountMinor: 0, priceLabel: "Pricing unavailable" },
+              standard: { amountMinor: 0, priceLabel: "Pricing unavailable" },
+              group: { amountMinor: 0, priceLabel: "Contact sales" },
+            });
+          }
+        } else {
+          setCountryName(resolvedCountryCode || "Unknown market");
+          setCurrency(typeof data?.currency === 'string' ? data.currency : "");
+          setCheckoutAvailable(false);
+          setPaymentProvider(null);
+          setCountryPlans({
+            starter: { amountMinor: 0, priceLabel: "Pricing unavailable" },
+            standard: { amountMinor: 0, priceLabel: "Pricing unavailable" },
+            group: { amountMinor: 0, priceLabel: "Contact sales" },
+          });
+        }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : "Failed to load subscription";
         console.error('[Subscription] Error:', errorMsg);
@@ -228,8 +247,6 @@ export default function SubscriptionPage() {
     loadSubscription();
   }, []);
 
-  const paymentProvider = countryCode === "NG" ? "Paystack" : "Flutterwave";
-
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -237,6 +254,12 @@ export default function SubscriptionPage() {
       </div>
     );
   }
+
+  const paymentProviderLabel = paymentProvider === "PAYSTACK"
+    ? "Paystack"
+    : paymentProvider === "FLUTTERWAVE"
+      ? "Flutterwave"
+      : null;
 
   if (error || !subscription) {
     // Check if it's a subscription-related error
@@ -256,12 +279,18 @@ export default function SubscriptionPage() {
           </div>
         </header>
 
+        {!checkoutAvailable ? (
+          <div role="status" className="border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            Online subscription checkout is not enabled for {countryName} yet. Contact SchoolBase to discuss available options.
+          </div>
+        ) : null}
+
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="border border-border bg-surface px-4 py-2 text-sm text-muted">
             Current market: <span className="font-semibold text-foreground">{countryName}</span> · <span className="font-semibold text-brand">{currency}</span>
           </div>
           <div className="border border-border bg-surface px-4 py-2 text-sm font-medium text-muted">
-            Payment provider: <span className="font-semibold text-foreground">{paymentProvider}</span>
+            Payment provider: <span className="font-semibold text-foreground">{paymentProviderLabel || "Not enabled for this market"}</span>
           </div>
         </div>
 
@@ -336,7 +365,8 @@ export default function SubscriptionPage() {
   const status = subscription.subscriptionStatus;
   const config = statusConfig[status] || statusConfig.PENDING;
   const planKey = getCountryPlanKey(subscription.currentPlan);
-  const priceLabel = countryPlans[planKey]?.priceLabel || planDetails[subscription.currentPlan]?.price || planDetails.FREE.price;
+  const priceLabel = countryPlans[planKey]?.priceLabel
+    || (checkoutAvailable ? planDetails[subscription.currentPlan]?.price || planDetails.FREE.price : "Pricing not configured for this market");
   const planConfig = {
     ...planDetails[subscription.currentPlan] || planDetails.FREE,
     price: priceLabel,
@@ -366,7 +396,7 @@ export default function SubscriptionPage() {
           </div>
           <div className="flex flex-wrap gap-3">
             <div className="border border-border bg-background px-3 py-2 text-sm text-muted">Market: <span className="font-semibold text-foreground">{countryName}</span> · <span className="font-semibold text-brand">{currency}</span></div>
-            <div className="border border-border bg-background px-3 py-2 text-sm text-muted">Provider: <span className="font-semibold text-foreground">{paymentProvider}</span></div>
+            <div className="border border-border bg-background px-3 py-2 text-sm text-muted">Provider: <span className="font-semibold text-foreground">{paymentProviderLabel || "Not enabled for this market"}</span></div>
           </div>
         </div>
       </header>

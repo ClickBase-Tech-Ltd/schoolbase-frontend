@@ -118,7 +118,8 @@ export default async function HomePage() {
   if (parentSession) {
     redirect("/parent");
   }
-  const [{ country, config }, pricingData] = await Promise.all([getCountryConfig(), getPublicPricing()]);
+  const { country, config } = await getCountryConfig();
+  const pricingData = await getPublicPricing(country);
   const configuredPlans = pricingData?.plans;
   const plans = configuredPlans ? [
     { id: "starter", name: configuredPlans.starter.label || "Starter", pupils: configuredPlans.starter.studentLimit ? `Up to ${configuredPlans.starter.studentLimit.toLocaleString()} pupils` : "Unlimited pupils", price: configuredPlans.starter.priceLabel },
@@ -127,6 +128,10 @@ export default async function HomePage() {
   ] : [];
   const starterPriceLabel = configuredPlans?.starter.priceLabel ?? "Current price unavailable";
   const countryLabel = config.name || country;
+  const billingCurrency = pricingData?.currency || config.currency;
+  const checkoutLabel = pricingData?.checkoutAvailable && pricingData.provider
+    ? `Online checkout available via ${pricingData.provider === "PAYSTACK" ? "Paystack" : "Flutterwave"}`
+    : `Online checkout is not yet available for ${countryLabel}`;
 
   return (
     <div className="bg-background">
@@ -231,16 +236,16 @@ export default async function HomePage() {
               {/* Left column: copy */}
               <div className="p-6 sm:p-8 lg:p-10">
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
-                  Buy subscription now
+                  Subscription pricing · {countryLabel} ({billingCurrency})
                 </p>
                 <h2 className="mt-4 text-3xl font-bold leading-tight text-foreground sm:text-4xl">
-                  Secure your subscription and begin onboarding today.
+                  Choose the right plan and begin onboarding.
                 </h2>
                 <p className="mt-5 text-base leading-7 text-muted">
-                  Choose your plan and complete the checkout with Paystack. Our team will confirm your school setup immediately and help you go live with confidence.
+                  Your school’s billing country determines its local pricing and available payment provider. Final billing market details are confirmed during school setup.
                 </p>
                 <ul className="mt-8 space-y-3 text-sm text-muted">
-                  <li>✓ Instant Paystack checkout</li>
+                  <li>✓ {checkoutLabel}</li>
                   <li>✓ {starterPriceLabel} starter plan</li>
                   <li>✓ ClickBase Technologies Ltd payment collection</li>
                 </ul>

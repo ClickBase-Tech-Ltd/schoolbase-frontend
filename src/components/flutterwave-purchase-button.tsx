@@ -36,30 +36,20 @@ export function FlutterwavePurchaseButton({
     setLoading(true);
 
     try {
-      const appUrl =
-        typeof window !== "undefined"
-          ? window.location.origin
-          : process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-      const redirectUrl = `${appUrl}${isSubscription ? "/admin/subscription-success" : "/purchase/success"}`;
-
-      const response = await fetch("/api/flutterwave/init", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        isSubscription ? "/api/flutterwave/subscription/init" : "/api/flutterwave/init",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(
+            isSubscription
+              ? { plan }
+              : { amountMinor, currency, email, name, phone, plan, schoolName, slug, isSubscription },
+          ),
         },
-        body: JSON.stringify({
-          amountMinor,
-          currency,
-          email,
-          name,
-          phone,
-          plan,
-          schoolName,
-          slug,
-          redirectUrl,
-          isSubscription,
-        }),
-      });
+      );
 
       const data = await response.json();
 

@@ -80,7 +80,7 @@ export default function SubscriptionsPageClient({
 
   useEffect(() => {
     let mounted = true;
-    fetch("/api/pricing", { credentials: "include", cache: "no-store" })
+    fetch("/api/pricing?country=NG", { credentials: "include", cache: "no-store" })
       .then((response) => response.json())
       .then((data) => {
         if (!mounted || !data?.plans) return;

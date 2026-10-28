@@ -19,6 +19,7 @@ const COUNTRIES = Object.entries(countriesJson.countries)
   .map(([code, config]) => ({
     code,
     name: config.name,
+    currency: config.currency,
     emoji: COUNTRY_EMOJIS[code] || "🌍",
   }));
 
@@ -26,8 +27,6 @@ export function CountrySelectModal() {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [initialRegion, setInitialRegion] = useState<string | null>(null);
-  const [autoConfirmed, setAutoConfirmed] = useState(false);
 
   useEffect(() => {
     fetch("/api/country/config")
@@ -38,15 +37,11 @@ export function CountrySelectModal() {
           return;
         }
 
-        const lang = navigator.language || "";
-        const region = lang.split("-")[1]?.toUpperCase() || null;
-        const supportedRegion = region && COUNTRIES.some((country) => country.code === region)
-          ? region
-          : null;
-        const initial = supportedRegion ?? COUNTRIES[0].code;
-
-        setSelected(initial);
-        setInitialRegion(supportedRegion);
+        const detectedCountry = typeof data?.country === "string" &&
+          COUNTRIES.some((country) => country.code === data.country)
+          ? data.country
+          : COUNTRIES[0].code;
+        setSelected(detectedCountry);
         setOpen(true);
       })
       .catch(() => {
@@ -83,16 +78,9 @@ export function CountrySelectModal() {
     }
   }, [selected]);
 
-  useEffect(() => {
-    if (!open || !initialRegion || autoConfirmed || loading) return;
-    const confirmationTimer = window.setTimeout(() => {
-      void confirm();
-      setAutoConfirmed(true);
-    }, 0);
-    return () => window.clearTimeout(confirmationTimer);
-  }, [confirm, initialRegion, open, autoConfirmed, loading]);
-
   if (!open) return null;
+
+  const selectedCountry = COUNTRIES.find((country) => country.code === selected);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#071a31]/70 px-4 py-4 backdrop-blur-sm">
@@ -106,7 +94,7 @@ export function CountrySelectModal() {
               Select your country.
             </h3>
             <p className="mt-3 max-w-md text-sm leading-6 text-muted">
-              Choose your country so we can personalize your pricing, currency, and onboarding experience.
+              Confirm your billing country to see the right local currency and pricing. You can change the selection before confirming.
             </p>
           </div>
           <button
@@ -139,7 +127,7 @@ export function CountrySelectModal() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-foreground">{country.name}</p>
-                  <p className="mt-0.5 text-xs text-muted">{country.code}</p>
+                  <p className="mt-0.5 text-xs text-muted">{country.code} · {country.currency}</p>
                 </div>
                 {active ? <Check className="h-5 w-5 shrink-0 text-brand" /> : null}
               </button>
@@ -149,7 +137,9 @@ export function CountrySelectModal() {
 
         <div className="mt-6 flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs leading-5 text-muted">
-            You can change this later if needed. Local pricing will update after confirmation.
+            {selectedCountry
+              ? `Pricing will be shown in ${selectedCountry.currency}.`
+              : "Choose a country to see its local pricing."} You can change this later if needed.
           </p>
           <button
             type="button"

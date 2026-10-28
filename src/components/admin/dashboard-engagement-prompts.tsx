@@ -24,8 +24,7 @@ export function DashboardEngagementPrompts() {
   const [forcedPromptDismissed, setForcedPromptDismissed] = useState(false);
   const searchParams = useSearchParams();
   const requestedPrompt = searchParams.get("engagementPrompt");
-  const forcedPrompt = process.env.NODE_ENV === "development"
-    && (requestedPrompt === "review" || requestedPrompt === "social")
+  const forcedPrompt = (requestedPrompt === "review" || requestedPrompt === "social")
     ? requestedPrompt
     : null;
   const displayedPrompt = forcedPrompt && !forcedPromptDismissed ? forcedPrompt : activePrompt;
