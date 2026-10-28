@@ -489,49 +489,56 @@ export default function SubscribePage() {
       {/* Checkout */}
       {!selectedPlan.disabled && (
         <section className="border border-border bg-surface p-5 sm:p-6">
-          <div className="mb-4">
-            <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-brand" />
-              <h3 className="text-lg font-semibold text-foreground">Checkout</h3>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 shrink-0 text-brand" />
+                <h3 className="text-lg font-semibold text-foreground">Checkout</h3>
+              </div>
+              <p className="text-sm text-muted">
+                Upgrading <span className="font-semibold">{schoolName}</span> →
+                <span className="ml-1 font-semibold text-brand">
+                  {selectedPlan.name}
+                </span>
+              </p>
+              <p className="mt-2 text-sm text-muted">
+                Prices are displayed in {currency} for {countryName}. Checkout uses {paymentProviderLabel}.
+              </p>
             </div>
-            <p className="text-sm text-muted">
-              Upgrading <span className="font-semibold">{schoolName}</span> →
-              <span className="text-brand font-semibold ml-1">
-                {selectedPlan.name}
-              </span>
-            </p>
-            <p className="mt-2 text-sm text-muted">
-              Prices are displayed in {currency} for {countryName}. Checkout uses {paymentProviderLabel}.
-            </p>
-          </div>
 
-          {checkoutAvailable && paymentProvider === "PAYSTACK" ? (
-            <PaystackPurchaseButton
-              amountMinor={selectedPlan.amountMinor}
-              currency={currency}
-              email={adminEmail}
-              name={adminName}
-              plan={selectedPlan.id}
-              schoolName={schoolName}
-              slug={schoolSlug}
-              phone=""
-              disabled={!adminName || !adminEmail || !schoolName || !isValidEmail(adminEmail)}
-              isSubscription={true}
-            />
-          ) : checkoutAvailable && paymentProvider === "FLUTTERWAVE" ? (
-            <FlutterwavePurchaseButton
-              amountMinor={selectedPlan.amountMinor}
-              currency={currency}
-              email={adminEmail}
-              name={adminName}
-              plan={selectedPlan.id}
-              schoolName={schoolName}
-              slug={schoolSlug}
-              phone=""
-              disabled={!adminName || !adminEmail || !schoolName || !isValidEmail(adminEmail)}
-              isSubscription={true}
-            />
-          ) : <p className="text-sm text-muted">Online checkout is not enabled for this billing market yet. Contact SchoolBase to discuss payment options.</p>}
+            <div className="w-full max-w-40 self-end sm:shrink-0">
+              {checkoutAvailable && paymentProvider === "PAYSTACK" ? (
+                <PaystackPurchaseButton
+                  amountMinor={selectedPlan.amountMinor}
+                  currency={currency}
+                  email={adminEmail}
+                  name={adminName}
+                  plan={selectedPlan.id}
+                  schoolName={schoolName}
+                  slug={schoolSlug}
+                  phone=""
+                  disabled={!adminName || !adminEmail || !schoolName || !isValidEmail(adminEmail)}
+                  isSubscription={true}
+                />
+              ) : checkoutAvailable && paymentProvider === "FLUTTERWAVE" ? (
+                <FlutterwavePurchaseButton
+                  amountMinor={selectedPlan.amountMinor}
+                  currency={currency}
+                  email={adminEmail}
+                  name={adminName}
+                  plan={selectedPlan.id}
+                  schoolName={schoolName}
+                  slug={schoolSlug}
+                  phone=""
+                  disabled={!adminName || !adminEmail || !schoolName || !isValidEmail(adminEmail)}
+                  isSubscription={true}
+                />
+              ) : null}
+            </div>
+          </div>
+          {!checkoutAvailable ? (
+            <p className="mt-4 text-sm text-muted">Online checkout is not enabled for this billing market yet. Contact SchoolBase to discuss payment options.</p>
+          ) : null}
         </section>
       )}
 
