@@ -14,6 +14,7 @@ interface FlutterwavePurchaseButtonProps {
   phone: string;
   disabled?: boolean;
   isSubscription?: boolean;
+  isPublicSubscription?: boolean;
 }
 
 export function FlutterwavePurchaseButton({
@@ -27,6 +28,7 @@ export function FlutterwavePurchaseButton({
   phone,
   disabled = false,
   isSubscription = false,
+  isPublicSubscription = false,
 }: FlutterwavePurchaseButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,20 +38,24 @@ export function FlutterwavePurchaseButton({
     setLoading(true);
 
     try {
-      const response = await fetch(
-        isSubscription ? "/api/flutterwave/subscription/init" : "/api/flutterwave/init",
-        {
+      const endpoint = isPublicSubscription
+        ? "/api/flutterwave/public-subscription/init"
+        : isSubscription
+          ? "/api/flutterwave/subscription/init"
+          : "/api/flutterwave/init";
+      const response = await fetch(endpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify(
-            isSubscription
+            isPublicSubscription
+              ? { plan, slug, email, name }
+              : isSubscription
               ? { plan }
               : { amountMinor, currency, email, name, phone, plan, schoolName, slug, isSubscription },
           ),
-        },
-      );
+        });
 
       const data = await response.json();
 

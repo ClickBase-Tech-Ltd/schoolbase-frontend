@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
 import { parsePublicPricing, type PublicPlan, type PublicPricing } from "@/lib/public-pricing";
 import { PaystackPurchaseButton } from "@/components/paystack-purchase-button";
+import { FlutterwavePurchaseButton } from "@/components/flutterwave-purchase-button";
 import countriesConfig from "../../config/countries.json";
 
 interface PurchaseFormProps {
@@ -29,8 +30,9 @@ function toPurchasePlans(pricing: PublicPricing | null): PurchasePlan[] {
     description: planDescriptions[id],
     disabled: id === "group" ||
       !pricing.checkoutAvailable ||
-      pricing.countryCode !== "NG" ||
-      pricing.provider !== "PAYSTACK" ||
+      (pricing.countryCode === "NG"
+        ? pricing.provider !== "PAYSTACK"
+        : pricing.provider !== "FLUTTERWAVE") ||
       plans[id].amountMinor <= 0,
   }));
 }
@@ -39,8 +41,11 @@ function getPublicPurchaseUnavailableMessage(pricing: PublicPricing): string | n
   if (!pricing.checkoutAvailable) {
     return pricing.message || "Online checkout is not yet available for this market.";
   }
-  if (pricing.countryCode !== "NG" || pricing.provider !== "PAYSTACK") {
-    return `Online checkout through this page is currently available only for Nigeria. Contact SchoolBase for subscription options in ${pricing.countryName} (${pricing.currency}).`;
+  const providerMatchesMarket = pricing.countryCode === "NG"
+    ? pricing.provider === "PAYSTACK"
+    : pricing.provider === "FLUTTERWAVE";
+  if (!providerMatchesMarket) {
+    return `Online checkout is not configured for this market. Contact SchoolBase for subscription options in ${pricing.countryName} (${pricing.currency}).`;
   }
   return null;
 }
@@ -205,9 +210,9 @@ export function PurchaseForm({ initialPlan = "starter", success = false }: Purch
           </section>
 
           <section className="mt-10 border-y border-border py-6" aria-labelledby="payment-heading">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-muted">Step 3</p><h2 id="payment-heading" className="mt-1 text-xl font-semibold">Review and continue</h2><p className="mt-2 text-sm text-muted">{selectedPlan ? `${selectedPlan.label} · ${selectedPlan.priceLabel}` : "Select a paid plan to continue."}</p></div><div className="flex flex-wrap items-center gap-3">{selectedPlan?.disabled ? <a href="mailto:sales@schoolbase.live" className="inline-flex min-h-11 items-center gap-2 border border-border bg-white px-4 text-sm font-semibold">Contact sales <ArrowRight className="h-4 w-4"/></a> : selectedPlan ? <PaystackPurchaseButton amountMinor={selectedPlan.amountMinor} currency={currency} email={email} name={contactName} plan={selectedPlan.id === "standard" ? "GROWTH" : "STARTER"} schoolName={schoolName} slug={slug} phone={phone} disabled={!canPay} isSubscription={true}/> : null}
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-muted">Step 3</p><h2 id="payment-heading" className="mt-1 text-xl font-semibold">Review and continue</h2><p className="mt-2 text-sm text-muted">{selectedPlan ? `${selectedPlan.label} · ${selectedPlan.priceLabel}` : "Select a paid plan to continue."}</p></div><div className="flex flex-wrap items-center gap-3">{selectedPlan?.disabled ? <a href="mailto:sales@schoolbase.live" className="inline-flex min-h-11 items-center gap-2 border border-border bg-white px-4 text-sm font-semibold">Contact sales <ArrowRight className="h-4 w-4"/></a> : selectedPlan && paymentProvider === "PAYSTACK" ? <PaystackPurchaseButton amountMinor={selectedPlan.amountMinor} currency={currency} email={email} name={contactName} plan={selectedPlan.id === "standard" ? "GROWTH" : "STARTER"} schoolName={schoolName} slug={slug} phone={phone} disabled={!canPay} isSubscription={true}/> : selectedPlan && paymentProvider === "FLUTTERWAVE" ? <FlutterwavePurchaseButton amountMinor={selectedPlan.amountMinor} currency={currency} email={email} name={contactName} plan={selectedPlan.id === "standard" ? "GROWTH" : "STARTER"} schoolName={schoolName} slug={slug} phone={phone} disabled={!canPay} isSubscription isPublicSubscription/> : null}
               {selectedPlan?.id === "starter" && !selectedPlan.disabled ? <Link href="/signup" className="inline-flex min-h-11 items-center gap-2 border border-border bg-white px-4 text-sm font-semibold text-foreground transition hover:border-brand hover:text-brand"><CheckCircle2 className="h-4 w-4"/>Start free trial</Link> : null}</div></div>
-            <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-muted"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand"/>{countryCode === "NG" && paymentProvider === "PAYSTACK" ? "Checkout is processed securely by Paystack. Your selected price and amount are validated against current SchoolBase plan settings." : "Contact SchoolBase to arrange subscription options for this market."}</p>
+            <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-muted"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand"/>{paymentProvider ? `Checkout is processed securely by ${paymentProvider === "PAYSTACK" ? "Paystack" : "Flutterwave"}. Your selected price and amount are validated against current SchoolBase plan settings.` : "Contact SchoolBase to arrange subscription options for this market."}</p>
           </section>
         </> : null}
 
