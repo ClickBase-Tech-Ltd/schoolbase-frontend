@@ -27,14 +27,29 @@ function toPurchasePlans(pricing: PublicPricing | null): PurchasePlan[] {
     ...plans[id],
     id,
     description: planDescriptions[id],
-    disabled: id === "group" || !pricing.checkoutAvailable || plans[id].amountMinor <= 0,
+    disabled: id === "group" ||
+      !pricing.checkoutAvailable ||
+      pricing.countryCode !== "NG" ||
+      pricing.provider !== "PAYSTACK" ||
+      plans[id].amountMinor <= 0,
   }));
+}
+
+function getPublicPurchaseUnavailableMessage(pricing: PublicPricing): string | null {
+  if (!pricing.checkoutAvailable) {
+    return pricing.message || "Online checkout is not yet available for this market.";
+  }
+  if (pricing.countryCode !== "NG" || pricing.provider !== "PAYSTACK") {
+    return `Online checkout through this page is currently available only for Nigeria. Contact SchoolBase for subscription options in ${pricing.countryName} (${pricing.currency}).`;
+  }
+  return null;
 }
 
 export function PurchaseForm({ initialPlan = "starter", success = false }: PurchaseFormProps) {
   const [plans, setPlans] = useState<PurchasePlan[]>([]);
   const [currency, setCurrency] = useState("NGN");
   const [countryCode, setCountryCode] = useState("");
+  const [paymentProvider, setPaymentProvider] = useState<string | null>(null);
   const [pricingLoading, setPricingLoading] = useState(true);
   const [pricingError, setPricingError] = useState<string | null>(null);
   const [pricingUnavailableMessage, setPricingUnavailableMessage] = useState<string | null>(null);
@@ -61,7 +76,8 @@ export function PurchaseForm({ initialPlan = "starter", success = false }: Purch
           return;
         }
         setCurrency(pricing.currency);
-        setPricingUnavailableMessage(pricing.checkoutAvailable ? null : pricing.message || "Online checkout is not yet available for this market.");
+        setPaymentProvider(pricing.provider);
+        setPricingUnavailableMessage(getPublicPurchaseUnavailableMessage(pricing));
         setPlans(toPurchasePlans(pricing));
       })
       .catch(() => {
@@ -83,6 +99,7 @@ export function PurchaseForm({ initialPlan = "starter", success = false }: Purch
     setPricingLoading(true);
     setPricingError(null);
     setPricingUnavailableMessage(null);
+    setPaymentProvider(null);
     setPlans([]);
     const requestId = ++pricingRequestId.current;
 
@@ -96,7 +113,8 @@ export function PurchaseForm({ initialPlan = "starter", success = false }: Purch
         return;
       }
       setCurrency(pricing.currency);
-      setPricingUnavailableMessage(pricing.checkoutAvailable ? null : pricing.message || "Online checkout is not yet available for this market.");
+      setPaymentProvider(pricing.provider);
+      setPricingUnavailableMessage(getPublicPurchaseUnavailableMessage(pricing));
       setPlans(toPurchasePlans(pricing));
     } catch {
       if (requestId === pricingRequestId.current) {
@@ -189,7 +207,7 @@ export function PurchaseForm({ initialPlan = "starter", success = false }: Purch
           <section className="mt-10 border-y border-border py-6" aria-labelledby="payment-heading">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.14em] text-muted">Step 3</p><h2 id="payment-heading" className="mt-1 text-xl font-semibold">Review and continue</h2><p className="mt-2 text-sm text-muted">{selectedPlan ? `${selectedPlan.label} · ${selectedPlan.priceLabel}` : "Select a paid plan to continue."}</p></div><div className="flex flex-wrap items-center gap-3">{selectedPlan?.disabled ? <a href="mailto:sales@schoolbase.live" className="inline-flex min-h-11 items-center gap-2 border border-border bg-white px-4 text-sm font-semibold">Contact sales <ArrowRight className="h-4 w-4"/></a> : selectedPlan ? <PaystackPurchaseButton amountMinor={selectedPlan.amountMinor} currency={currency} email={email} name={contactName} plan={selectedPlan.id === "standard" ? "GROWTH" : "STARTER"} schoolName={schoolName} slug={slug} phone={phone} disabled={!canPay} isSubscription={true}/> : null}
               {selectedPlan?.id === "starter" && !selectedPlan.disabled ? <Link href="/signup" className="inline-flex min-h-11 items-center gap-2 border border-border bg-white px-4 text-sm font-semibold text-foreground transition hover:border-brand hover:text-brand"><CheckCircle2 className="h-4 w-4"/>Start free trial</Link> : null}</div></div>
-            <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-muted"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand"/>Checkout is processed securely by Paystack. Your selected price and amount are validated against current SchoolBase plan settings.</p>
+            <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-muted"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brand"/>{countryCode === "NG" && paymentProvider === "PAYSTACK" ? "Checkout is processed securely by Paystack. Your selected price and amount are validated against current SchoolBase plan settings." : "Contact SchoolBase to arrange subscription options for this market."}</p>
           </section>
         </> : null}
 
