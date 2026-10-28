@@ -463,11 +463,27 @@ export default function SubscribePage() {
       <section className="border-l-4 border-brand border-y border-r border-brand/20 bg-brand-light px-5 py-4">
         <p className="text-[11px] font-bold uppercase tracking-[.14em] text-brand">Optional staff enablement</p>
         <p className="mt-1 text-sm leading-6 text-foreground">
-          Administrator onboarding is included with your subscription. School-wide training for teachers, bursars, and front-office staff is available separately at an introductory rate of <span className="font-semibold">NGN 28,295</span>.
+          Administrator onboarding is included with your subscription. School-wide training for teachers, bursars, and front-office staff is available separately.
+          {countryCode === "NG" ? (
+            <> The introductory rate is <span className="font-semibold">NGN 28,295</span>.</>
+          ) : countryCode ? (
+            <> Contact us for a training quote for {countryName}{currency ? ` (${currency})` : ""}.</>
+          ) : (
+            <> Contact us for pricing in your school&apos;s billing market.</>
+          )}
         </p>
-        <a href="/staff-training" target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center text-sm font-semibold text-brand hover:text-brand-hover">
-          View staff training details <span className="ml-1" aria-hidden="true">-&gt;</span>
-        </a>
+        {countryCode === "NG" ? (
+          <a href="/staff-training" target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center text-sm font-semibold text-brand hover:text-brand-hover">
+            View staff training details <span className="ml-1" aria-hidden="true">-&gt;</span>
+          </a>
+        ) : (
+          <a
+            href={`mailto:info@schoolbase.live?subject=${encodeURIComponent(`Staff training quote for ${countryName}`)}&body=${encodeURIComponent(`Please share a staff training quote for my school in ${countryName}${currency ? ` (${currency})` : ""}.`)}`}
+            className="mt-3 inline-flex items-center text-sm font-semibold text-brand hover:text-brand-hover"
+          >
+            Request a local-market quote <span className="ml-1" aria-hidden="true">-&gt;</span>
+          </a>
+        )}
       </section>
 
       {/* Checkout */}
