@@ -1,9 +1,16 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { BookOpen, ShieldCheck } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { ParentLoginForm } from "@/components/auth/parent-login-form";
 import { getParentSession } from "@/lib/auth";
 import { ContextualAdSlot } from "@/components/login-page-ad-slot";
+
+export const metadata: Metadata = {
+  title: "Parent Sign In | SchoolBase",
+  description: "Sign in to the SchoolBase parent portal.",
+  robots: { index: false, follow: false },
+};
 
 export default async function ParentLoginPage() {
   const session = await getParentSession();

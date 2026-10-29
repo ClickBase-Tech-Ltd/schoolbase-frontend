@@ -42,6 +42,7 @@ export default function robots(): MetadataRoute.Robots {
           '/for-bursars',
           '/for-teachers',
           '/for-parents',
+          '/parent/login',
           '/ghana-school-software',
           '/nigeria-school-software',
           '/sierra-leone-school-software',
@@ -69,7 +70,6 @@ export default function robots(): MetadataRoute.Robots {
           '/blog',
         ],
         disallow: [
-          '/login',
           '/signup/verify',
           '/signup/success',
           '/forgot-password',

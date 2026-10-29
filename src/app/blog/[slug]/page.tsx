@@ -21,6 +21,15 @@ const INTERNAL_LINKS = {
   'student attendance management software': '/blog/student-attendance-management-software',
   'attendance management': '/blog/student-attendance-management-software',
   'admissions platform': '/blog/school-website-admissions-platform',
+  'student records and administration': '/docs/admin',
+  'admissions workflows': '/docs/admissions',
+  'academic results': '/docs/academics',
+  'fee workflows': '/docs/fees',
+  'accounting and cashbook': '/docs/accounting',
+  'teacher workflows': '/docs/teachers',
+  'parent access': '/docs/parents',
+  'communication workflows': '/docs/communication',
+  'reports and broadsheets': '/docs/reports',
 } as const
 
 function escapeRegExp(value: string) {
@@ -118,6 +127,9 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   const canonicalUrl = `https://schoolbase.live/blog/${post.slug}`
   const imageUrl = post.image ? `https://schoolbase.live${post.image}` : undefined
   const publishedDate = !isNaN(Date.parse(post.publishedAt)) ? new Date(post.publishedAt).toISOString() : undefined
+  const updatedDate = post.updatedAt && !isNaN(Date.parse(post.updatedAt))
+    ? new Date(post.updatedAt).toISOString()
+    : publishedDate
 
   return (
     <div className="min-h-screen bg-background">
@@ -143,7 +155,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
               name: 'SchoolBase',
             },
             datePublished: publishedDate,
-            dateModified: publishedDate,
+            dateModified: updatedDate,
           }),
         }}
       />
@@ -162,6 +174,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
               <span className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4 text-brand" />{post.readingTime}</span>
               <span aria-hidden="true">·</span>
               <time>{post.publishedAt}</time>
+              {post.updatedAt ? <><span aria-hidden="true">·</span><span>Updated {post.updatedAt}</span></> : null}
               {post.authorName ? <><span aria-hidden="true">·</span><span>{post.authorName}</span></> : null}
             </div>
             <div className="mt-9 flex flex-wrap gap-3">

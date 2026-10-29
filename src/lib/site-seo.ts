@@ -1,6 +1,6 @@
-export const siteTitle = 'SchoolBase Africa | School Management Software for West African Schools'
+export const siteTitle = 'SchoolBase | School Management Software for African Schools'
 export const siteDescription =
-  'The all-in-one school management system built for schools in Nigeria, Ghana, Sierra Leone, Liberia, and The Gambia. Automate WAEC-aligned termly results, report card broadsheets, parent portals, and local fee collections cleanly.'
+  'SchoolBase connects school administration, fees, attendance, results, and parent communication for schools in Nigeria, Ghana, and across West Africa.'
 export const siteUrl = 'https://schoolbase.live'
 export const siteOgImage = `${siteUrl}/og-image.png`
 export const westAfricanCountryAlternates = {
