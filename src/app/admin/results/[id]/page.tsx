@@ -210,7 +210,7 @@ export default function AssessmentDetailPage({
         ? `${result.pupil.class.name}${result.pupil.class.arm ? ` ${result.pupil.class.arm}` : ''}`
         : 'Class not assigned';
 
-const subjectId = result.subjectRef?.id ?? null;
+      const subjectId = result.subjectRef?.id ?? null;
       const subjectName = result.subjectRef?.name || result.subject || 'General';
       const subjectKey = subjectId ? `id:${subjectId}` : `name:${subjectName}`;
 
@@ -220,8 +220,8 @@ const subjectId = result.subjectRef?.id ?? null;
         pupils: new Map(),
       };
 
-      if (!group.subjects.has(subjectId)) {
-        group.subjects.set(subjectId, subjectName);
+      if (!group.subjects.has(subjectKey)) {
+        group.subjects.set(subjectKey, subjectName);
       }
 
       const pupil = group.pupils.get(result.pupilId) ?? {
@@ -232,7 +232,7 @@ const subjectId = result.subjectRef?.id ?? null;
         resultsBySubject: new Map(),
       };
 
-      pupil.resultsBySubject.set(subjectId, result);
+      pupil.resultsBySubject.set(subjectKey, result);
       group.pupils.set(result.pupilId, pupil);
       groups.set(className, group);
     });
