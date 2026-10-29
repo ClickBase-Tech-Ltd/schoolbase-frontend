@@ -14,6 +14,7 @@ interface Pupil {
   admissionNo?: string;
   photoUrl?: string;
   className?: string;
+  isInactive?: boolean;
 }
 
 interface ReportsTabProps {
@@ -31,6 +32,7 @@ interface StudentDetails {
   firstName?: string;
   lastName?: string;
   schoolId?: string;
+  isInactive?: boolean;
 }
 
 export function AdminReportsTab({ assessmentId, pupils, status }: ReportsTabProps) {
@@ -75,6 +77,7 @@ export function AdminReportsTab({ assessmentId, pupils, status }: ReportsTabProp
               admissionNo: pupil.admissionNo,
               photoUrl: pupil.photoUrl,
               className: pupil.className,
+              isInactive: pupil.isInactive,
             });
           }
           return;
@@ -90,6 +93,10 @@ export function AdminReportsTab({ assessmentId, pupils, status }: ReportsTabProp
           firstName: data.firstName,
           lastName: data.lastName,
           schoolId: data.schoolId,
+          isInactive:
+            pupils.find((pupil) => pupil.id === selectedPupilId)?.isInactive === true ||
+            data.isActive === false ||
+            String(data.status ?? '').trim().toUpperCase() === 'INACTIVE',
         });
       } catch (err) {
         console.error('Error fetching pupil details:', err);
@@ -102,6 +109,7 @@ export function AdminReportsTab({ assessmentId, pupils, status }: ReportsTabProp
             admissionNo: pupil.admissionNo,
             photoUrl: pupil.photoUrl,
             className: pupil.className,
+            isInactive: pupil.isInactive,
           });
         }
       } finally {
@@ -140,6 +148,7 @@ export function AdminReportsTab({ assessmentId, pupils, status }: ReportsTabProp
             {pupils.map((pupil) => (
               <option key={pupil.id} value={pupil.id}>
                 {pupil.name}
+                {pupil.isInactive ? " (Inactive)" : ""}
                 {pupil.admissionNo ? ` (${pupil.admissionNo})` : ""}
               </option>
             ))}
@@ -173,6 +182,9 @@ export function AdminReportsTab({ assessmentId, pupils, status }: ReportsTabProp
               <div className="flex-1 min-w-0">
                 <h3 className="text-lg font-semibold text-foreground">
                   {selectedPupilDetails.name}
+                  {selectedPupilDetails.isInactive && (
+                    <Badge variant="warning" className="ml-2">Inactive</Badge>
+                  )}
                 </h3>
                 {selectedPupilDetails.admissionNo && (
                   <p className="text-sm text-muted mt-2">

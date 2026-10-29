@@ -47,6 +47,8 @@ interface Assessment {
       firstName: string;
       lastName: string;
       admissionNo?: string;
+      isActive?: boolean;
+      status?: string | null;
       class?: {
         id: string;
         name: string;
@@ -66,6 +68,7 @@ interface Assessment {
       pupilId: string;
       pupilName: string;
       admissionNo?: string | null;
+      isInactive: boolean;
       subjectId: string | null;
       subjectName: string;
       terms: Array<{
@@ -88,6 +91,7 @@ interface SubjectScore {
 interface PupilBroadsheetRow {
   pupilId: string;
   name: string;
+  isInactive: boolean;
   admissionNo?: string;
   className?: string;
   subjectScores: SubjectScore[];
@@ -111,15 +115,7 @@ function resolveResultTotal(result: {
   examScore: number | null;
   totalScore: number | null;
 }) {
-  if (result.totalScore !== null && result.totalScore !== undefined) {
-    return result.totalScore;
-  }
-
-  if (result.caScore === null || result.testScore === null || result.examScore === null) {
-    return null;
-  }
-
-  return result.caScore + result.testScore + result.examScore;
+  return result.totalScore;
 }
 
 function resolveGrade(average: number | null) {
@@ -197,6 +193,7 @@ export default function AssessmentDetailPage({
           {
             pupilId: string;
             name: string;
+            isInactive: boolean;
             admissionNo?: string;
             className?: string;
             resultsBySubject: Map<string, typeof assessment.results[number]>;
@@ -213,6 +210,8 @@ export default function AssessmentDetailPage({
       const subjectId = result.subjectRef?.id ?? null;
       const subjectName = result.subjectRef?.name || result.subject || 'General';
       const subjectKey = subjectId ? `id:${subjectId}` : `name:${subjectName}`;
+      const isInactive =
+        result.pupil.isActive === false || result.pupil.status?.trim().toUpperCase() === 'INACTIVE';
 
       const group = groups.get(className) ?? {
         className,
@@ -227,6 +226,7 @@ export default function AssessmentDetailPage({
       const pupil = group.pupils.get(result.pupilId) ?? {
         pupilId: result.pupilId,
         name: `${result.pupil.lastName} ${result.pupil.firstName}`.trim(),
+        isInactive,
         admissionNo: result.pupil.admissionNo ?? undefined,
         className,
         resultsBySubject: new Map(),
@@ -264,6 +264,7 @@ export default function AssessmentDetailPage({
             return {
               pupilId: pupil.pupilId,
               name: pupil.name,
+              isInactive: pupil.isInactive,
               admissionNo: pupil.admissionNo,
               className: pupil.className,
               subjectScores,
@@ -489,6 +490,7 @@ export default function AssessmentDetailPage({
   const reportPupils = pupils.map((pupil) => ({
     ...pupil,
     name: `${pupil.lastName} ${pupil.firstName}`.trim(),
+    isInactive: pupil.isActive === false || pupil.status?.trim().toUpperCase() === 'INACTIVE',
   }));
   const isConfigured = Boolean(assessment.componentData);
 
@@ -790,7 +792,10 @@ export default function AssessmentDetailPage({
 
                         return (
                           <tr key={`${row.pupilId}:${row.subjectId ?? row.subjectName}`} className="border-t border-border hover:bg-background/50">
-                            <td className="px-3 py-3 font-medium">{row.pupilName}</td>
+                            <td className="px-3 py-3 font-medium">
+                              <span>{row.pupilName}</span>
+                              {row.isInactive && <Badge variant="warning" className="ml-2">Inactive</Badge>}
+                            </td>
                             <td className="px-3 py-3 text-sm text-muted">{row.subjectName}</td>
                             <td className="px-3 py-3 text-center">
                               {firstTermValue !== null ? (
@@ -922,7 +927,10 @@ export default function AssessmentDetailPage({
                     {group.pupils.map((row, index) => (
                       <tr key={row.pupilId} className="border-t border-border hover:bg-background/50">
                         <td className="px-3 py-2 font-medium sm:px-4">{index + 1}</td>
-                        <td className="px-3 py-2 font-medium sm:px-4">{row.name}</td>
+                        <td className="px-3 py-2 font-medium sm:px-4">
+                          <span>{row.name}</span>
+                          {row.isInactive && <Badge variant="warning" className="ml-2">Inactive</Badge>}
+                        </td>
                         <td className="px-3 py-2 text-muted sm:px-4">{row.admissionNo ?? '—'}</td>
                         {row.subjectScores.map((score) => (
                           <td key={score.subjectId} className="px-3 py-2 text-center sm:px-4">
