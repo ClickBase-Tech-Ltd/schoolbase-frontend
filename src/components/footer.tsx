@@ -44,6 +44,7 @@ export default function Footer() {
               <li><Link href={`${siteUrl}/docs/teachers`} className="text-white/70 hover:text-white">Teachers</Link></li>
               <li><Link href={`${siteUrl}/docs/parents`} className="text-white/70 hover:text-white">Parents</Link></li>
               <li><Link href={`${siteUrl}/docs/fees`} className="text-white/70 hover:text-white">Fees & payments</Link></li>
+              <li><Link href={`${siteUrl}/schoolbase-login`} className="text-white/70 hover:text-white">SchoolBase login help</Link></li>
             </ul>
           </div>
 

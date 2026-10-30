@@ -1,6 +1,6 @@
 export const siteTitle = 'SchoolBase | School Management Software for African Schools'
 export const siteDescription =
-  'SchoolBase connects school administration, fees, attendance, results, and parent communication for schools in Nigeria, Ghana, and across West Africa.'
+  'School management software for schools in Nigeria, Ghana, Sierra Leone, Liberia, and The Gambia. Connect student records, fees, attendance, results, report cards, and parent communication.'
 export const siteUrl = 'https://schoolbase.live'
 export const siteOgImage = `${siteUrl}/og-image.png`
 export const westAfricanCountryAlternates = {

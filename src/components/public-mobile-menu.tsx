@@ -40,6 +40,7 @@ export function PublicMobileMenu() {
         <Link href="/for-principals" className="px-3 py-2 hover:bg-brand-light hover:text-brand">For Your Role</Link>
         <Link href="/compare" className="px-3 py-2 hover:bg-brand-light hover:text-brand">Compare</Link>
         <Link href="/how-to-use-schoolbase" className="px-3 py-2 hover:bg-brand-light hover:text-brand">How to use SchoolBase</Link>
+        <Link href="/guides" className="px-3 py-2 hover:bg-brand-light hover:text-brand">School management guides</Link>
         <Link href="/blog" className="px-3 py-2 hover:bg-brand-light hover:text-brand">Blog</Link>
         <Link href="/investors" className="px-3 py-2 hover:bg-brand-light hover:text-brand">Investor & partner enquiries</Link>
         <div className="my-1 border-t border-border" />

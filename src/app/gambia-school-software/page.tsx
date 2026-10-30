@@ -4,9 +4,9 @@ import { CountrySoftwareDetails } from '@/components/country-software-details'
 import { PublicAudienceShell } from '@/components/public-audience-shell'
 import { westAfricanCountryAlternates } from '@/lib/site-seo'
 
-const title = 'School Management Software in The Gambia | SchoolBase'
+const title = 'School Management System in The Gambia | SchoolBase'
 const description =
-  'School management software for Gambian schools to organize termly results, report cards, fees, attendance, and parent communication in dalasi.'
+  'School management software for Gambian schools to connect student records, fee tracking, attendance, termly results, report cards, and parent communication.'
 
 export const metadata: Metadata = {
   title,
@@ -29,7 +29,7 @@ export default function GambiaPage() {
     <>
       <PublicAudienceShell
         eyebrow="SchoolBase for Gambian schools"
-        title="School management software for schools in The Gambia."
+        title="A school management system for schools in The Gambia."
         description="Connect school administration, academic records, fees, attendance, and parent communication in one organized platform."
         proofLabel="The Gambia school operations"
         proofTitle="One system for the school term"

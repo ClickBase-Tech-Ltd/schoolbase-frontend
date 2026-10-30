@@ -65,6 +65,9 @@ export default async function Header() {
               <Link href="/how-to-use-schoolbase" className="hover:text-brand">
                 How to use
               </Link>
+              <Link href="/guides" className="hover:text-brand">
+                Guides
+              </Link>
               <Link href="/blog" className="hover:text-brand">
                 Blog
               </Link>

@@ -60,6 +60,57 @@ const guides = [
   },
 ];
 
+const schoolTypes = [
+  {
+    href: "/school-management-software-for-private-schools",
+    title: "Private schools",
+    text: "Explore connected workflows for school administration, fees, results, and parent access.",
+  },
+  {
+    href: "/school-management-software-for-primary-schools",
+    title: "Primary schools",
+    text: "Review school-management workflows for primary classes, attendance, and academic reporting.",
+  },
+  {
+    href: "/school-management-software-for-secondary-schools",
+    title: "Secondary schools",
+    text: "Explore tools for classes, assessments, examination results, and communication with families.",
+  },
+  {
+    href: "/school-management-software-for-boarding-schools",
+    title: "Boarding schools",
+    text: "See how connected student and school records support day-to-day operations.",
+  },
+  {
+    href: "/school-management-software-for-international-schools",
+    title: "International schools",
+    text: "Review school-management workflows for diverse school communities.",
+  },
+  {
+    href: "/school-management-software-for-early-childhood-schools",
+    title: "Early childhood schools",
+    text: "Explore practical administration and parent communication for early learning teams.",
+  },
+];
+
+const countries = [
+  ["Nigeria", "/nigeria-school-software"],
+  ["Ghana", "/ghana-school-software"],
+  ["Sierra Leone", "/sierra-leone-school-software"],
+  ["Liberia", "/liberia-school-software"],
+  ["The Gambia", "/gambia-school-software"],
+];
+
+const workflows = [
+  ["School management software", "/school-management-software"],
+  ["Student information and records", "/use-cases/data-management"],
+  ["School fees and payment records", "/school-fee-management-software"],
+  ["Results and report cards", "/results-publishing-software"],
+  ["Student attendance", "/attendance-management-software"],
+  ["Parent portal and communication", "/parent-communication-software"],
+  ["Admissions management", "/docs/admissions"],
+];
+
 export default function GuidesPage() {
   return (
     <main className="overflow-hidden bg-background">
@@ -70,12 +121,12 @@ export default function GuidesPage() {
               SchoolBase guides
             </p>
             <h1 className="mt-6 max-w-3xl text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-6xl">
-              Practical guidance for running a clearer, more connected school.
+              School management guides for the challenges schools face every day.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-muted sm:text-xl">
-              Explore useful guidance for school finance, academics, operations,
-              digital transformation, and choosing the right management
-              platform.
+              Find practical advice on school fees, student records, academic
+              results, report cards, attendance, and school digitisation—then
+              explore the SchoolBase workflows related to each challenge.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
               <Link
@@ -171,6 +222,120 @@ export default function GuidesPage() {
               </Link>
             ))}
           </div>
+        </div>
+      </section>
+      <section className="border-y border-border bg-white py-16 sm:py-20">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="max-w-3xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
+              Find a school workflow
+            </p>
+            <h2 className="mt-4 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Explore school management solutions by need.
+            </h2>
+            <p className="mt-4 text-lg leading-8 text-muted">
+              Whether you are looking for a way to manage fees online, organize
+              student information, process results, or communicate with
+              parents, start with the workflow your school wants to improve.
+            </p>
+          </div>
+          <ul className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {workflows.map(([title, href]) => (
+              <li key={href}>
+                <Link
+                  href={href}
+                  className="block h-full border border-border bg-background p-5 text-sm font-semibold text-foreground transition hover:border-brand/50 hover:text-brand"
+                >
+                  {title} <ArrowRight className="ml-1 inline h-4 w-4" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+      <section className="py-16 sm:py-20">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="max-w-3xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
+              Resources for school teams
+            </p>
+            <h2 className="mt-4 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Guidance for proprietors, principals, administrators, bursars, and teachers.
+            </h2>
+            <p className="mt-4 leading-7 text-muted">
+              School management affects different people in different ways.
+              Explore role-specific workflows and practical advice for the
+              responsibilities each school team carries.
+            </p>
+          </div>
+          <ul className="mt-8 flex flex-wrap gap-3">
+            {[
+              ["School owners and proprietors", "/solutions/school-owners"],
+              ["Principals", "/for-principals"],
+              ["Administrators", "/solutions/administrators"],
+              ["Bursars", "/for-bursars"],
+              ["Teachers", "/for-teachers"],
+            ].map(([title, href]) => (
+              <li key={href}>
+                <Link
+                  href={href}
+                  className="inline-flex items-center gap-2 border border-border bg-white px-4 py-3 text-sm font-semibold text-foreground hover:border-brand hover:text-brand"
+                >
+                  {title} <ArrowRight className="h-4 w-4" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+      <section className="border-y border-border bg-[#f6faff] py-16 sm:py-20">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="max-w-3xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
+              For different school communities
+            </p>
+            <h2 className="mt-4 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Browse school management resources by school type.
+            </h2>
+          </div>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {schoolTypes.map(({ href, title, text }) => (
+              <article key={href} className="border border-border bg-white p-5">
+                <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-muted">{text}</p>
+                <Link href={href} className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-brand hover:underline">
+                  Explore this school type <ArrowRight className="h-4 w-4" />
+                </Link>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+      <section className="py-16 sm:py-20">
+        <div className="mx-auto max-w-6xl px-6">
+          <div className="max-w-3xl">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">
+              Nigeria and West Africa
+            </p>
+            <h2 className="mt-4 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Explore school software information by country.
+            </h2>
+            <p className="mt-4 leading-7 text-muted">
+              Start with Nigeria, our priority market, or review the country
+              pages for Ghana, Sierra Leone, Liberia, and The Gambia.
+            </p>
+          </div>
+          <nav aria-label="SchoolBase country pages" className="mt-6">
+            <ul className="flex flex-wrap gap-3">
+              {countries.map(([country, href]) => (
+                <li key={href}>
+                  <Link href={href} className="inline-flex border border-border bg-white px-4 py-3 text-sm font-semibold text-brand hover:border-brand hover:underline">
+                    School management in {country}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
         </div>
       </section>
       <section className="bg-brand py-16 text-white sm:py-20">

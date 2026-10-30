@@ -1,6 +1,6 @@
 import { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowUpRight, CheckCircle2, Clock, TrendingUp, Users, Zap } from 'lucide-react'
+import { ArrowUpRight, Banknote, CheckCircle2, Clock, School, TrendingUp, Users, Zap } from 'lucide-react'
 
 export const metadata: Metadata = {
   title: 'Solutions for Schools | SchoolBase',
@@ -52,6 +52,30 @@ const solutions = [
       'Settings, access, and school records',
     ],
     description: 'Automate routine tasks and keep your school organized.',
+  },
+  {
+    title: 'For Principals',
+    icon: School,
+    href: '/for-principals',
+    benefits: [
+      'Review connected school operations',
+      'Follow academic and attendance records',
+      'Monitor fee and enrollment information',
+      'Coordinate staff and parent communication',
+    ],
+    description: 'Bring the information school leaders need into a clearer operating view.',
+  },
+  {
+    title: 'For Bursars',
+    icon: Banknote,
+    href: '/for-bursars',
+    benefits: [
+      'Manage fee schedules and invoices',
+      'Record payments and issue receipts',
+      'Follow balances and payment history',
+      'Review school accounting reports',
+    ],
+    description: 'Keep fee collection and financial records organized in connected workflows.',
   },
   {
     title: 'For Teachers',

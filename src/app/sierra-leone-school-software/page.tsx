@@ -4,9 +4,9 @@ import { CountrySoftwareDetails } from '@/components/country-software-details'
 import { PublicAudienceShell } from '@/components/public-audience-shell'
 import { westAfricanCountryAlternates } from '@/lib/site-seo'
 
-const title = 'School Management Software in Sierra Leone | SchoolBase'
+const title = 'School Management System in Sierra Leone | SchoolBase'
 const description =
-  'School management software for Sierra Leone schools. Organize termly results, report cards, attendance, parent access, and fee records in new leones.'
+  'School management software for Sierra Leone schools to connect student records, fee tracking, attendance, termly results, report cards, and parent access.'
 
 export const metadata: Metadata = {
   title,
@@ -29,7 +29,7 @@ export default function SierraLeonePage() {
     <>
       <PublicAudienceShell
         eyebrow="SchoolBase for Sierra Leone schools"
-        title="School management software for schools in Sierra Leone."
+        title="A school management system for schools in Sierra Leone."
         description="Connect school administration, termly academic records, fee tracking, attendance, and parent communication in one practical platform."
         proofLabel="Sierra Leone school operations"
         proofTitle="Clearer records for every school term"

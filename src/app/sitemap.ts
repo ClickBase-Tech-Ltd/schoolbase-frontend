@@ -32,6 +32,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'monthly',
       priority: 0.9,
     },
+    {
+      url: `${baseUrl}/staff-training`,
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
+      url: `${baseUrl}/schoolbase-login`,
+      changeFrequency: 'monthly',
+      priority: 0.6,
+    },
     ...docsOrder.map((slug) => ({
       url: `${baseUrl}/docs/${slug}`,
       changeFrequency: 'monthly' as const,

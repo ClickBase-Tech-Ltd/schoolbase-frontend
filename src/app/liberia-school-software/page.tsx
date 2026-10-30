@@ -4,9 +4,9 @@ import { CountrySoftwareDetails } from '@/components/country-software-details'
 import { PublicAudienceShell } from '@/components/public-audience-shell'
 import { westAfricanCountryAlternates } from '@/lib/site-seo'
 
-const title = 'School Management Software in Liberia | SchoolBase'
+const title = 'School Management System in Liberia | SchoolBase'
 const description =
-  'School software for Liberian schools to manage termly results, report cards, attendance, parent communication, and fee records in Liberian dollars.'
+  'School management software for Liberian schools to connect student records, fee tracking, attendance, termly results, report cards, and parent communication.'
 
 export const metadata: Metadata = {
   title,
@@ -29,7 +29,7 @@ export default function LiberiaPage() {
     <>
       <PublicAudienceShell
         eyebrow="SchoolBase for Liberia schools"
-        title="School management software for schools in Liberia."
+        title="A school management system for schools in Liberia."
         description="Bring student records, fees, termly results, attendance, and parent updates into one connected system for your school."
         proofLabel="Liberia school operations"
         proofTitle="A connected view of school activity"

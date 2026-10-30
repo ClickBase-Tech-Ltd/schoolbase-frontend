@@ -2,12 +2,12 @@ import type { Metadata } from 'next'
 import { BarChart3, BookOpen, CheckCircle2, GraduationCap, School, Users } from 'lucide-react'
 import { PublicProductShell } from '@/components/public-product-shell'
 export const metadata: Metadata = {
-	title: 'School Management Software for African Schools | SchoolBase',
-	description: 'School management software for West African schools: organize student records, admissions, fees, attendance, results, and parent communication.',
+	title: 'School Software for African Schools | SchoolBase',
+	description: 'Software for schools in Nigeria and West Africa to manage student records, admissions, fees, attendance, results, and parent communication in one connected school management platform.',
 	alternates: { canonical: 'https://schoolbase.live/school-management-software' },
 	openGraph: {
-		title: 'School Management Software for African Schools | SchoolBase',
-		description: 'Organize student records, admissions, fees, attendance, results, and parent communication in one school platform.',
+		title: 'School Software for African Schools | SchoolBase',
+		description: 'Software for schools in Nigeria and West Africa to manage student records, admissions, fees, attendance, results, and parent communication.',
 		url: 'https://schoolbase.live/school-management-software',
 		type: 'website',
 	},
@@ -15,8 +15,8 @@ export const metadata: Metadata = {
 export default function SchoolManagementSoftwarePage() {
 	return <PublicProductShell
 		eyebrow="School management platform"
-		title="School management software that connects your school's daily work."
-		description="SchoolBase brings administration, academics, fees, accounting, communication, admissions, teachers, parents, and reporting together in one practical platform."
+		title="Practical school software for connected school management."
+		description="SchoolBase gives schools one connected platform for administration, student records, admissions, fees, attendance, academics, results, accounting, and parent communication."
 		proofTitle="One school, one connected system"
 		sectionTitle="Give every part of your school a clearer place to work."
 		ctaTitle="Build a stronger operating system for your school."
@@ -39,6 +39,9 @@ export default function SchoolManagementSoftwarePage() {
 			{ href: '/docs/parents', label: 'Parent portal' },
 			{ href: '/docs/communication', label: 'School communication' },
 			{ href: '/docs/reports', label: 'Reports and broadsheets' },
+			{ href: '/blog/best-school-management-software', label: 'School software buying guide' },
+			{ href: '/nigeria-school-software', label: 'School software in Nigeria' },
+			{ href: '/ghana-school-software', label: 'School software in Ghana' },
 		]}
 	/>
 }

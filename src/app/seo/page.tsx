@@ -1,8 +1,5 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
-import { ContentSection, PublicContentShell } from "@/components/public-content-shell";
+import { permanentRedirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "SchoolBase Resources | School Management Software", description: "Explore SchoolBase pages for different school types and operational needs." };
-const pages = [["Private schools", "/school-management-software-for-private-schools", "School operations, fees, results, communication, and parent access in one platform."], ["Primary schools", "/school-management-software-for-primary-schools", "A practical starting point for primary school administration and academic work."], ["Secondary schools", "/school-management-software-for-secondary-schools", "Tools for classes, assessments, results, and communication with families."], ["Boarding schools", "/school-management-software-for-boarding-schools", "A connected view of school records and the work around them."], ["International schools", "/school-management-software-for-international-schools", "Flexible workflows for schools serving diverse communities."], ["Early childhood schools", "/school-management-software-for-early-childhood-schools", "Simple tools for early learning teams and parent communication."]];
-export default function SeoPage() { return <PublicContentShell eyebrow="Resources" title="Find the SchoolBase view that fits your school." description="Explore focused pages for school types and common operational needs. Every page connects back to the same SchoolBase platform."><ContentSection title="School management resources"><div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">{pages.map(([title, href, text]) => <Link key={href} href={href} className="group border border-border bg-white p-6 hover:border-brand/50 hover:shadow-lg"><h2 className="text-xl font-semibold text-foreground group-hover:text-brand">{title}</h2><p className="mt-3 leading-7 text-muted">{text}</p><span className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-brand">Explore page <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" /></span></Link>)}</div></ContentSection></PublicContentShell>; }
+export default function SeoPageRedirect() {
+  permanentRedirect("/guides");
+}

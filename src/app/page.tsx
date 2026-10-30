@@ -49,31 +49,37 @@ const features = [
     icon: Receipt,
     title: "Track every fee",
     text: "Send bills, record cash and bank payments, print receipts, and show parents their balance.",
+    href: "/school-fee-management-software",
   },
   {
     icon: MessageCircle,
-    title: "Reach parents instantly",
-    text: "Fee reminders and alerts through the school’s configured communication workflows.",
+    title: "Keep parents informed",
+    text: "Share fee reminders and school updates through the communication workflows configured by the school.",
+    href: "/parent-communication-software",
   },
   {
     icon: GraduationCap,
-    title: "Publish results in minutes",
-    text: "Enter marks, approve, and release to parents with one click. No more leaks or confusion.",
+    title: "Review and publish results",
+    text: "Enter, review, approve, and publish academic results through a controlled school workflow.",
+    href: "/results-publishing-software",
   },
   {
     icon: Globe,
     title: "Your school website included",
     text: "News, admissions, and contact — modern and mobile-friendly. No separate Wix bill.",
+    href: "/docs/admissions",
   },
   {
     icon: Bell,
-    title: "Attendance parents notice",
-    text: "When a child is absent, parents know right away.",
+    title: "Record student attendance",
+    text: "Keep attendance records organized and share relevant updates with parents through configured communication workflows.",
+    href: "/attendance-management-software",
   },
   {
     icon: Sparkles,
     title: "Practical onboarding",
     text: "We help your team configure the school records and workflows needed to get started.",
+    href: "/how-to-use-schoolbase",
   },
 ];
 
@@ -139,7 +145,7 @@ export default async function HomePage() {
         <div className="mx-auto grid max-w-7xl gap-14 px-6 py-16 sm:py-24 lg:grid-cols-[1.05fr_.95fr] lg:items-center lg:py-28">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">SchoolBase school management platform</p>
-            <h1 className="mt-5 max-w-3xl text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-6xl">Run the school. See the whole picture.</h1>
+            <h1 className="mt-5 max-w-3xl text-4xl font-bold leading-[1.08] tracking-tight text-foreground sm:text-6xl">One connected school management system for everyday operations.</h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-muted sm:text-xl">SchoolBase connects administration, teachers, parents, academics, fees, accounting, admissions, communication, and reporting in one practical system for everyday school operations.</p>
             <div className="mt-9 flex flex-wrap gap-3" id="start"><Button href="/signup">Start Your School <ArrowRight className="ml-2 inline h-4 w-4" /></Button><Button variant="secondary" href="/platform">Explore the Platform</Button></div>
             <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm"><span className="text-muted">Already using SchoolBase?</span><Link href="/login" className="font-semibold text-brand hover:text-brand-hover">School login</Link><Link href="/parent/login" className="font-semibold text-brand hover:text-brand-hover">Parent login</Link></div>
@@ -154,7 +160,31 @@ export default async function HomePage() {
 
       <section className="border-b border-border bg-white py-16 sm:py-20"><div className="mx-auto max-w-7xl px-6"><div className="grid gap-6 md:grid-cols-3"><div className="border-l-2 border-brand px-5"><Users className="h-5 w-5 text-brand" /><h2 className="mt-4 text-lg font-semibold text-foreground">One school record</h2><p className="mt-2 text-sm leading-7 text-muted">Students, guardians, staff, classes, and subjects stay connected.</p></div><div className="border-l-2 border-brand px-5"><WalletCards className="h-5 w-5 text-brand" /><h2 className="mt-4 text-lg font-semibold text-foreground">Clearer school finance</h2><p className="mt-2 text-sm leading-7 text-muted">Itemized fees, invoices, payments, receipts, and accounting activity in context.</p></div><div className="border-l-2 border-brand px-5"><MessageCircle className="h-5 w-5 text-brand" /><h2 className="mt-4 text-lg font-semibold text-foreground">Better visibility</h2><p className="mt-2 text-sm leading-7 text-muted">The right updates reach teachers, parents, and school teams when they need them.</p></div></div></div></section>
 
-      <section id="features" className="py-20 sm:py-24"><div className="mx-auto max-w-7xl px-6"><div className="flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">The SchoolBase system</p><h2 className="mt-4 text-3xl font-bold tracking-tight text-foreground sm:text-5xl">The work behind every school day.</h2></div><Link href="/platform" className="inline-flex items-center gap-2 text-sm font-semibold text-brand">View all platform areas <ArrowRight className="h-4 w-4" /></Link></div><div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{features.map(({ icon: Icon, title, text }) => <article key={title} className="border border-border bg-white p-6 transition hover:-translate-y-1 hover:border-brand/50 hover:shadow-lg"><div className="flex h-11 w-11 items-center justify-center bg-brand-light text-brand"><Icon className="h-5 w-5" /></div><h3 className="mt-5 text-lg font-semibold text-foreground">{title}</h3><p className="mt-2 text-sm leading-7 text-muted">{text}</p></article>)}</div></div></section>
+      <section id="features" className="py-20 sm:py-24"><div className="mx-auto max-w-7xl px-6"><div className="flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><p className="text-sm font-semibold uppercase tracking-[0.2em] text-brand">The SchoolBase system</p><h2 className="mt-4 text-3xl font-bold tracking-tight text-foreground sm:text-5xl">The work behind every school day.</h2></div><Link href="/platform" className="inline-flex items-center gap-2 text-sm font-semibold text-brand">View all platform areas <ArrowRight className="h-4 w-4" /></Link></div><div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{features.map(({ icon: Icon, title, text, href }) => <Link key={title} href={href} className="group border border-border bg-white p-6 transition hover:-translate-y-1 hover:border-brand/50 hover:shadow-lg"><div className="flex h-11 w-11 items-center justify-center bg-brand-light text-brand"><Icon className="h-5 w-5" /></div><h3 className="mt-5 text-lg font-semibold text-foreground group-hover:text-brand">{title}</h3><p className="mt-2 text-sm leading-7 text-muted">{text}</p><span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-brand">Explore this workflow <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" /></span></Link>)}</div></div></section>
+
+      <section className="border-y border-border bg-[#f6faff] py-14">
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-brand">SchoolBase across West Africa</p>
+            <h2 className="mt-2 text-2xl font-bold text-foreground">Explore school management by country.</h2>
+          </div>
+          <nav aria-label="SchoolBase country pages">
+            <ul className="flex flex-wrap gap-x-5 gap-y-3 text-sm font-semibold">
+              {[
+                ["Nigeria", "/nigeria-school-software"],
+                ["Ghana", "/ghana-school-software"],
+                ["Sierra Leone", "/sierra-leone-school-software"],
+                ["Liberia", "/liberia-school-software"],
+                ["The Gambia", "/gambia-school-software"],
+              ].map(([country, href]) => (
+                <li key={href}>
+                  <Link href={href} className="text-brand hover:underline">{country}</Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </div>
+      </section>
 
       <PublicSchoolReviews />
 
@@ -189,7 +219,7 @@ export default async function HomePage() {
       <section id="pricing" className="border-y border-border bg-white py-20">
         <div className="mx-auto max-w-6xl px-6">
           <h2 className="text-2xl font-bold text-foreground md:text-3xl">
-            One plan. Everything included.
+            Plans for your school.
           </h2>
           <p className="mt-3 max-w-3xl text-muted">SchoolBase plans are shown for {countryLabel}. Choose the operating level that fits your school and keep the core workflows together.</p>
           {plans.length ? <div className="mt-12 grid gap-6 md:grid-cols-3">
@@ -279,14 +309,14 @@ export default async function HomePage() {
             Ready before the new term?
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-brand-light">
-            Stop fee leakage. Give parents WhatsApp reminders and professional
-            receipts. Publish results without the end-of-term chaos.
+            Organize fee records, keep parents informed, and review results
+            through connected school workflows.
           </p>
           <Button
             href="/signup"
             className="mt-8 !bg-white !text-brand hover:!bg-brand-light"
           >
-            Book a 15-minute demo
+            Explore SchoolBase
           </Button>
         </div>
       </section>

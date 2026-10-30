@@ -5,19 +5,16 @@ import {
   BarChart3,
   CheckCircle2,
   Clock3,
-  CreditCard,
-  LayoutDashboard,
   ShieldCheck,
-  TrendingUp,
   Users,
   Zap,
 } from 'lucide-react'
 import Link from 'next/link'
 
 export const metadata: Metadata = {
-  title: 'School Owner Solutions | SchoolBase',
+  title: 'School Management Software for School Owners | SchoolBase',
   description:
-    'Complete financial control and visibility for school owners. Track fees, automate reminders, and grow your school with data-driven insights.',
+    'Help school owners and proprietors review fee activity, student records, academic reporting, and daily operations in one connected school management platform.',
   keywords: [
     'school owner software',
     'school financial management',
@@ -25,17 +22,14 @@ export const metadata: Metadata = {
     'school analytics',
   ],
   openGraph: {
-    title: 'School Owner Solutions | SchoolBase',
-    description: 'Run your school like a business with complete financial control',
+    title: 'School Management Software for School Owners | SchoolBase',
+    description:
+      'Review fee activity, student records, academic reporting, and daily school operations in connected workflows.',
+    url: 'https://schoolbase.live/solutions/school-owners',
+    type: 'website',
   },
+  alternates: { canonical: 'https://schoolbase.live/solutions/school-owners' },
 }
-
-const statCards = [
-  { label: 'Outstanding fees', value: '₦2.8M', sub: '4 collections need attention', href: '/admin/fees', icon: CreditCard },
-  { label: 'Active pupils', value: '1,246', sub: 'Across 18 classes', href: '/admin/students', icon: Users },
-  { label: 'Collections', value: '91%', sub: 'Live payment coverage', href: '/admin/fees', icon: TrendingUp },
-  { label: 'Operations', value: '24/7', sub: 'Parent and fee visibility', href: '/admin/website', icon: LayoutDashboard },
-]
 
 const featureCards = [
   { icon: Banknote, title: 'Real-time fee visibility', description: 'Track balances, payment status, and collection health in a single financial overview.' },
@@ -90,12 +84,12 @@ export default function SchoolOwnersPage() {
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {[
-                  { label: 'Fees', value: '91%', tone: 'bg-[#eaf4ff]' },
-                  { label: 'Students', value: '1,246', tone: 'bg-[#f1f7f4]' },
-                  { label: 'Parents', value: 'Live', tone: 'bg-[#fff7e8]' },
-                  { label: 'Results', value: 'Ready', tone: 'bg-[#f2efff]' },
-                  { label: 'Teams', value: '18', tone: 'bg-[#edf7f8]' },
-                  { label: 'Growth', value: '24/7', tone: 'bg-[#fff0f0]' },
+                  { label: 'Fees', value: 'Balances', tone: 'bg-[#eaf4ff]' },
+                  { label: 'Students', value: 'Records', tone: 'bg-[#f1f7f4]' },
+                  { label: 'Parents', value: 'Linked access', tone: 'bg-[#fff7e8]' },
+                  { label: 'Results', value: 'Reports', tone: 'bg-[#f2efff]' },
+                  { label: 'Teams', value: 'Role-based', tone: 'bg-[#edf7f8]' },
+                  { label: 'Growth', value: 'Operational view', tone: 'bg-[#fff0f0]' },
                 ].map((item) => (
                   <div key={item.label} className={`${item.tone} border border-black/5 p-4`}>
                     <p className="text-xs text-muted">{item.label}</p>

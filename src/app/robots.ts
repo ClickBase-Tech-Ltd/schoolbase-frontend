@@ -12,6 +12,7 @@ export default function robots(): MetadataRoute.Robots {
           '/features',
           '/about',
           '/investors',
+          '/schoolbase-login',
           '/contact',
           '/privacy',
           '/terms',

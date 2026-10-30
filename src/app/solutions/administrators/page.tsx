@@ -3,9 +3,7 @@ import {
   ArrowUpRight,
   BarChart3,
   CheckCircle2,
-  CreditCard,
   Database,
-  LayoutDashboard,
   Lock,
   RefreshCw,
   Users,
@@ -14,9 +12,9 @@ import {
 import Link from 'next/link'
 
 export const metadata: Metadata = {
-  title: 'Administrator Solutions | SchoolBase',
+  title: 'School Administration Software | SchoolBase',
   description:
-    'Centralize school operations with powerful admin tools. Manage data, automate workflows, and keep your school running smoothly.',
+    'Manage student records, staff roles, admissions, attendance, fees, and academic workflows with school administration software from SchoolBase.',
   keywords: [
     'school administration software',
     'school data management',
@@ -24,17 +22,14 @@ export const metadata: Metadata = {
     'school operations platform',
   ],
   openGraph: {
-    title: 'Administrator Solutions | SchoolBase',
-    description: 'Centralize and automate school operations',
+    title: 'School Administration Software | SchoolBase',
+    description:
+      'Manage student records, staff roles, admissions, attendance, fees, and academic workflows with SchoolBase.',
+    url: 'https://schoolbase.live/solutions/administrators',
+    type: 'website',
   },
+  alternates: { canonical: 'https://schoolbase.live/solutions/administrators' },
 }
-
-const statCards = [
-  { label: 'Outstanding fees', value: '₦3.1M', sub: '14 invoices need review', href: '/admin/fees', icon: CreditCard },
-  { label: 'Active pupils', value: '2,180', sub: 'Across all classes', href: '/admin/students', icon: Users },
-  { label: 'Tasks automated', value: '1,200+', sub: 'Workflow coverage', href: '/admin/settings', icon: RefreshCw },
-  { label: 'Operations', value: '87%', sub: 'School visibility score', href: '/admin', icon: LayoutDashboard },
-]
 
 const featureCards = [
   { icon: Database, title: 'Centralized data hub', description: 'Keep students, staff, fees, results, and attendance in one reliable system your team can trust.' },
@@ -89,12 +84,12 @@ export default function AdministratorsPage() {
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {[
-                  { label: 'Students', value: '2,180', tone: 'bg-[#eaf4ff]' },
-                  { label: 'Fees', value: '₦3.1M', tone: 'bg-[#f1f7f4]' },
-                  { label: 'Tasks', value: '1,200+', tone: 'bg-[#fff7e8]' },
-                  { label: 'Results', value: 'Live', tone: 'bg-[#f2efff]' },
-                  { label: 'Access', value: 'Secure', tone: 'bg-[#edf7f8]' },
-                  { label: 'Ops', value: '87%', tone: 'bg-[#fff0f0]' },
+                  { label: 'Students', value: 'Records', tone: 'bg-[#eaf4ff]' },
+                  { label: 'Fees', value: 'Invoices', tone: 'bg-[#f1f7f4]' },
+                  { label: 'Tasks', value: 'Workflows', tone: 'bg-[#fff7e8]' },
+                  { label: 'Results', value: 'Reports', tone: 'bg-[#f2efff]' },
+                  { label: 'Access', value: 'Role-aware', tone: 'bg-[#edf7f8]' },
+                  { label: 'Ops', value: 'Administration', tone: 'bg-[#fff0f0]' },
                 ].map((item) => (
                   <div key={item.label} className={`${item.tone} border border-black/5 p-4`}>
                     <p className="text-xs text-muted">{item.label}</p>

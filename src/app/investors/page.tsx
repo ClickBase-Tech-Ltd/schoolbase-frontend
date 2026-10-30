@@ -10,18 +10,45 @@ import {
   MessagesSquare,
   Wallet,
 } from "lucide-react";
+import { siteOgImage } from "@/lib/site-seo";
 
 export const metadata: Metadata = {
-  title: "Invest in the future of school operations | SchoolBase",
+  title: "SchoolBase Investors | African EdTech & School Software",
   description:
-    "Meet SchoolBase, a practical school operations platform built for West African schools. Connect with us about investment and strategic partnerships.",
+    "Discover SchoolBase, an Africa-focused education technology platform building connected school management software for Nigeria and West Africa. Investor and strategic partnership inquiries welcome.",
+  keywords: [
+    "SchoolBase investors",
+    "African edtech company",
+    "education technology Africa",
+    "school management software Africa",
+    "school management system Nigeria",
+    "school ERP Nigeria",
+    "West Africa education technology",
+    "education technology investment Africa",
+    "school operations platform",
+  ],
   alternates: { canonical: "https://schoolbase.live/investors" },
   openGraph: {
-    title: "SchoolBase | Investor and partner conversations",
+    title: "SchoolBase Investors | African EdTech & School Software",
     description:
-      "We are building practical, connected school operations software with schools across West Africa.",
+      "Discover SchoolBase, an Africa-focused education technology platform building connected school management software for Nigeria and West Africa. Investor and strategic partnership inquiries welcome.",
     url: "https://schoolbase.live/investors",
     type: "website",
+    images: [
+      {
+        url: siteOgImage,
+        width: 1200,
+        height: 630,
+        alt: "SchoolBase, connected school management software for African schools",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SchoolBase Investors | African EdTech & School Software",
+    description:
+      "Discover SchoolBase, an Africa-focused education technology platform building connected school management software for Nigeria and West Africa.",
+    images: [siteOgImage],
   },
 };
 
@@ -77,13 +104,18 @@ export default function InvestorsPage() {
         <div className="absolute -right-8 -top-16 h-[24rem] w-[24rem] rounded-full border border-white/10" />
         <div className="relative mx-auto grid max-w-6xl gap-14 px-6 py-20 sm:py-28 lg:grid-cols-[1.05fr_.95fr] lg:items-center">
           <div>
+            <p className="mb-5 text-sm font-semibold uppercase tracking-[0.2em] text-blue-100/75">
+              SchoolBase · African education technology
+            </p>
             <h1 className="max-w-3xl text-4xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
               Better-run schools build a stronger future.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-blue-100/85 sm:text-xl">
-              SchoolBase brings the essential work of running a school into one
-              practical platform—built for the realities of West African
-              schools, and shaped by the people who use it.
+              SchoolBase is an Africa-focused education technology platform
+              building connected school management software for schools in
+              Nigeria and across West Africa. It brings the essential work of
+              running a school into one practical platform, shaped by the
+              people who use it.
             </p>
             <div className="mt-9 flex flex-wrap gap-3">
               <a
