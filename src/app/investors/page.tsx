@@ -67,7 +67,7 @@ const principles = [
 ];
 
 const investorEmail =
-  "mailto:clickbasetechnologiesltd@gmail.com?subject=SchoolBase%20investment%20or%20partnership%20conversation";
+  "mailto:invest@clickbasegroup.com?subject=SchoolBase%20investment%20or%20partnership%20conversation";
 
 export default function InvestorsPage() {
   return (
