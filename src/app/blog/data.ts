@@ -22,6 +22,175 @@ export type BlogPost = {
 
 export const blogPosts: BlogPost[] = [
   {
+    slug: 'what-investors-should-look-for-in-african-edtech',
+    title: 'What Investors Should Look for in African EdTech Beyond Market Size',
+    description:
+      'A practical framework for evaluating African EdTech: real user adoption, implementation, retention, local fit, and responsible evidence.',
+    excerpt:
+      'A large education market is only a starting point. Investors should examine how a product fits daily work, earns adoption, and creates durable use.',
+    category: 'EdTech & Investment',
+    readingTime: '6 min read',
+    publishedAt: 'October 30, 2026',
+    keywords: [
+      'African EdTech investment',
+      'African EdTech startups',
+      'education technology Africa',
+      'EdTech adoption',
+      'school management software Africa',
+    ],
+    hero:
+      'Market size can open an investment conversation. Evidence that a product fits real education workflows is what makes the conversation worth continuing.',
+    authorName: 'SchoolBase Team',
+    authorRole: 'ClickBase Technologies Ltd',
+    sections: [
+      {
+        heading: 'Start with the problem users face every week',
+        body: [
+          'Education technology is most useful when it improves a recurring task for the people who teach, lead, administer, or support a school. A broad statement about digitization is not enough to show that a product solves a problem people will prioritize.',
+          'Ask which job is difficult today, who is responsible for it, how often it happens, and what the current workaround costs in time or coordination. Then look for evidence that users recognize the problem and are willing to change the way they work.',
+        ],
+        bullets: [
+          'Name the specific user and recurring workflow',
+          'Understand the current process before describing the software',
+          'Look for a measurable baseline rather than an assumed benefit',
+        ],
+      },
+      {
+        heading: 'Separate registrations from meaningful adoption',
+        body: [
+          'A sign-up, pilot, or demonstration is an early signal, not proof of durable use. Investors should ask what an active user or customer means for the product, which workflows are used repeatedly, and whether schools continue using the system after initial setup.',
+          'For a school platform, useful evidence may include completed administrative tasks, teacher participation in assigned workflows, parent access to published information, paid renewals, and support needs over time. The exact measures should match the product and be defined before results are presented.',
+        ],
+      },
+      {
+        heading: 'Treat implementation as part of the product',
+        body: [
+          'School software has to fit real calendars, staff responsibilities, records, devices, and connectivity. A product can have a long feature list and still fail to become part of a school’s routine if the setup is confusing or staff do not know what to do next.',
+          'Evaluate the onboarding path: what information a school must prepare, who helps configure it, how staff learn their roles, and how the team handles corrections after launch. A repeatable onboarding process is both a customer outcome and a business capability.',
+        ],
+        bullets: [
+          'Time from agreement to first useful workflow',
+          'Staff training and support required for launch',
+          'Common setup issues and how they are resolved',
+        ],
+      },
+      {
+        heading: 'Look for local fit and a sustainable business model',
+        body: [
+          'Education markets are not interchangeable. Buyers, budgets, school calendars, payment practices, language, and procurement can differ between countries and between school types. A credible growth case explains which segment the company serves first and how it will learn before expanding.',
+          'Review the full cost of acquiring, onboarding, and supporting a customer alongside the price and renewal pattern. If those figures are not yet known, a strong founder should say what is still being measured and how the next milestone will resolve the uncertainty.',
+        ],
+      },
+      {
+        heading: 'Ask for evidence that is clear about its limits',
+        body: [
+          'Good early-stage reporting distinguishes verified records from management estimates, paid customers from registrations, and targets from forecasts. It also explains the time period and definition behind each number.',
+          'That discipline does not make an early company less ambitious. It helps investors understand what has been demonstrated, what remains a hypothesis, and which milestone would make the next decision easier.',
+        ],
+      },
+      {
+        heading: 'A practical lens for school operations software',
+        body: [
+          'SchoolBase is a live school operations platform connecting administration, admissions, fees, attendance, results, and parent access. The company is focused on helping more schools adopt these workflows and making onboarding, continued use, and renewal repeatable.',
+          'For a concise overview of the company and product, see the SchoolBase investor overview. For a school-side checklist to compare products, read the guide to the best school management software.',
+        ],
+      },
+    ],
+    relatedPosts: [
+      'why-i-built-schoolbase',
+      'schoolbase-one-platform-for-the-entire-school',
+      'best-school-management-software',
+    ],
+  },
+  {
+    slug: 'school-management-software-implementation-checklist',
+    title: 'School Management Software Implementation: A Practical Checklist',
+    description:
+      'Plan school management software implementation with a practical checklist for workflows, records, staff training, launch, and measuring adoption.',
+    excerpt:
+      'A successful rollout is more than installing software. Prepare the records, people, and first workflow so the school can learn and improve as it goes.',
+    category: 'School Operations',
+    readingTime: '7 min read',
+    publishedAt: 'October 30, 2026',
+    keywords: [
+      'school management software implementation',
+      'school software implementation',
+      'school management system onboarding',
+      'school digital transformation',
+      'school staff software training',
+    ],
+    hero:
+      'A school management system is most useful when the people, records, and responsibilities behind a workflow are ready to use it.',
+    authorName: 'SchoolBase Team',
+    authorRole: 'School operations',
+    sections: [
+      {
+        heading: 'Choose a clear reason to begin',
+        body: [
+          'Before choosing modules or moving records, identify the school task that most needs improvement. It might be keeping student information current, recording fee activity, taking attendance, preparing results, or sharing approved information with parents.',
+          'Describe the current process and its pain points in practical terms. A specific starting point helps the school select the right people, prepare the right records, and judge whether the change is helping.',
+        ],
+        bullets: [
+          'Name the workflow and the people involved',
+          'Record how the task is currently completed',
+          'Choose one or two observable measures for improvement',
+        ],
+      },
+      {
+        heading: 'Assign owners and agree how the work should happen',
+        body: [
+          'Software does not decide who approves a result, confirms a payment, or corrects a student record. The school should agree who is responsible for each step and who can review or approve changes.',
+          'Map the handoffs between administrators, teachers, finance staff, and parents. This gives the implementation team a shared picture of what the system needs to support and where school policy still applies.',
+        ],
+      },
+      {
+        heading: 'Prepare and check the records before importing them',
+        body: [
+          'Gather only the information needed for the selected workflow and check it for duplicates, missing fields, inconsistent names, and outdated details. Decide who can access sensitive records and how corrections will be reviewed.',
+          'Keep a copy of the source records and have the responsible school staff verify a sample after setup. Data imported into a new system still needs human review; moving it does not automatically make it accurate.',
+        ],
+      },
+      {
+        heading: 'Start with one workflow and a small pilot',
+        body: [
+          'A school does not have to switch every process at once. Start with one class, team, or recurring job where the requirements are understood. Test the full path from the first action to the expected result, including common corrections and approvals.',
+          'For example, a school might pilot attendance capture with one group, or prepare a fee schedule and check that invoices and recorded payments can be reviewed as expected. Keep the scope small enough that staff can raise issues and receive support promptly.',
+        ],
+      },
+      {
+        heading: 'Train people for the work they actually do',
+        body: [
+          'Training is easier to apply when it follows a real task and the responsibilities of each role. Show staff where to begin, how to check their work, what to do when something is wrong, and who can help.',
+          'Give users a simple reference they can return to after the session. Schedule time for questions during the first use rather than treating training as complete once a presentation ends.',
+        ],
+      },
+      {
+        heading: 'Review the rollout and improve the next step',
+        body: [
+          'After launch, review whether the workflow is being completed, where staff need help, and what corrections are recurring. Compare the results with the baseline the school recorded before implementation.',
+          'Use those observations to adjust the setup or training before expanding to another workflow. A deliberate cycle of prepare, test, learn, and improve is more dependable than activating features without checking whether they fit.',
+        ],
+        bullets: [
+          'Check completion and review of the chosen workflow',
+          'Track recurring questions, errors, and support needs',
+          'Decide what to refine before expanding the rollout',
+        ],
+      },
+      {
+        heading: 'Use a buying checklist alongside the rollout plan',
+        body: [
+          'Before selecting a provider, ask how the product supports the school’s actual tasks, what staff must prepare, what onboarding and support include, and how the school can export or correct its records. Compare those answers with the school’s budget and responsibilities.',
+          'The SchoolBase platform connects workflows for administration, admissions, academics, fees, accounting, teachers, and parents. Explore the platform and its practical guides to see whether those workflows fit your school.',
+        ],
+      },
+    ],
+    relatedPosts: [
+      'best-school-management-software',
+      'digital-transformation-in-schools',
+      'schoolbase-one-platform-for-the-entire-school',
+    ],
+  },
+  {
     slug: 'schoolbase-one-platform-for-the-entire-school',
     title: 'SchoolBase: One Platform for the Entire School',
     description:

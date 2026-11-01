@@ -104,8 +104,8 @@ export function LoginForm({ redirectTo, teacherLoginRequested = false, attendanc
         redirectUrl = "/schoolbase-admin";
         console.log('Platform admin login detected, redirecting to /schoolbase-admin');
       } else if (sessionRole === "SCHOOL_ADMIN") {
-        redirectUrl = "/admin?onboarding=1";
-        console.log('School admin login detected, redirecting to /admin?onboarding=1');
+        redirectUrl = redirectTo === "/admin" ? "/admin?onboarding=1" : redirectTo;
+        console.log(`School admin login detected, redirecting to ${redirectUrl}`);
       } else if (sessionRole === "BURSAR") {
         redirectUrl = "/accounting";
         console.log('Bursar login detected, redirecting to /accounting');

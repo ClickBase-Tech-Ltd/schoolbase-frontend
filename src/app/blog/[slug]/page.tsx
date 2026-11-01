@@ -7,6 +7,7 @@ import { ContextualAdSlot } from '@/components/login-page-ad-slot'
 
 const INTERNAL_LINKS = {
   'schoolbase platform': '/platform',
+  'investor overview': '/investors',
   'best school management software': '/blog/best-school-management-software',
   'parent communication software': '/blog/parent-communication-software',
   'parent communication': '/blog/parent-communication-software',

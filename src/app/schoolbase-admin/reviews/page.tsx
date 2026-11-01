@@ -18,7 +18,7 @@ type ModerationReview = {
   moderatedAt: string | null;
   moderationNote: string | null;
   school: { name: string; logoUrl: string | null };
-  submittedBy: { name: string; email: string } | null;
+  submittedBy: { name: string; email: string; role: string } | null;
   moderatedBy: { name: string } | null;
 };
 
@@ -145,7 +145,7 @@ export default function ReviewsModerationPage() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="font-semibold text-foreground">{review.school.name}</h2>
-                <p className="mt-1 text-xs text-muted">Submitted by {review.submittedBy?.name || "Former administrator"} · {new Date(review.createdAt).toLocaleString()}</p>
+                <p className="mt-1 text-xs text-muted">Submitted by {review.submittedBy?.name || "Former administrator"}{review.submittedBy?.role === "PLATFORM_ADMIN" ? " (SchoolBase staff, on behalf of the school)" : ""} · {new Date(review.createdAt).toLocaleString()}</p>
                 <div className="mt-3 flex items-center gap-2">
                   <span className="flex gap-0.5 text-amber-500" aria-label={`${review.rating} out of 5 stars`}>{[1, 2, 3, 4, 5].map((value) => <Star key={value} className={`h-4 w-4 ${value <= review.rating ? "fill-current" : ""}`} aria-hidden="true" />)}</span>
                   <span className="text-xs font-semibold text-muted">{review.status}</span>

@@ -108,7 +108,7 @@ export async function proxy(request: NextRequest) {
     if (isApiRequest) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const login = new URL(loginForPath(pathname), request.url);
-    login.searchParams.set('next', pathname);
+    login.searchParams.set('next', `${pathname}${request.nextUrl.search}`);
     const response = NextResponse.redirect(login);
     for (const cookieName of SESSION_COOKIE_NAMES) response.cookies.delete(cookieName);
     return response;
@@ -118,7 +118,7 @@ export async function proxy(request: NextRequest) {
     if (isApiRequest) return NextResponse.json({ error: 'Forbidden: role is not authorized for this resource' }, { status: 403 });
 
     const login = new URL(loginForPath(pathname), request.url);
-    login.searchParams.set('next', pathname);
+    login.searchParams.set('next', `${pathname}${request.nextUrl.search}`);
     const response = NextResponse.redirect(login);
     for (const cookieName of SESSION_COOKIE_NAMES) response.cookies.delete(cookieName);
     return response;

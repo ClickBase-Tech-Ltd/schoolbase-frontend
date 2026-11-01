@@ -26,6 +26,9 @@ export function SchoolBaseReviewForm({ onSubmitted }: { onSubmitted?: () => void
   const [publishConsent, setPublishConsent] = useState(false);
   const [schoolNameConsent, setSchoolNameConsent] = useState(false);
   const [schoolLogoConsent, setSchoolLogoConsent] = useState(false);
+  const [assistedSubmission, setAssistedSubmission] = useState(false);
+  const [consentSource, setConsentSource] = useState("");
+  const [schoolRepresentativeConsentConfirmed, setSchoolRepresentativeConsentConfirmed] = useState(false);
   const [review, setReview] = useState<Review | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -38,6 +41,7 @@ export function SchoolBaseReviewForm({ onSubmitted }: { onSubmitted?: () => void
       .then(async (response) => {
         const data = await response.json().catch(() => null);
         if (!response.ok) throw new Error(data?.error || "Unable to load your review.");
+        if (active) setAssistedSubmission(data?.assistedSubmission === true);
         if (active && data?.review) {
           const existing = data.review as Review;
           setReview(existing);
@@ -76,13 +80,31 @@ export function SchoolBaseReviewForm({ onSubmitted }: { onSubmitted?: () => void
       setError("Choose a rating from 1 to 5 stars.");
       return;
     }
+    if (assistedSubmission && !schoolRepresentativeConsentConfirmed) {
+      setError("Confirm that the school representative authorized this assisted submission.");
+      return;
+    }
+    if (assistedSubmission && !consentSource) {
+      setError("Choose where the school representative provided permission.");
+      return;
+    }
     setSaving(true);
     try {
       const response = await fetch(`${getBackendUrl()}/api/reviews/mine`, {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating, reviewText, publishConsent, schoolNameConsent, schoolLogoConsent }),
+        body: JSON.stringify({
+          rating,
+          reviewText,
+          publishConsent,
+          schoolNameConsent,
+          schoolLogoConsent,
+          ...(assistedSubmission ? {
+            schoolRepresentativeConsentConfirmed,
+            consentSource,
+          } : {}),
+        }),
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) throw new Error(data?.error || "Unable to submit your review.");
@@ -100,8 +122,8 @@ export function SchoolBaseReviewForm({ onSubmitted }: { onSubmitted?: () => void
     <section aria-labelledby="schoolbase-review-heading" className="space-y-2">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-brand">Your feedback</p>
-          <h2 id="schoolbase-review-heading" className="mt-0.5 text-lg font-semibold leading-6 text-foreground">Share your SchoolBase experience</h2>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-brand">{assistedSubmission ? "School feedback" : "Your feedback"}</p>
+          <h2 id="schoolbase-review-heading" className="mt-0.5 text-lg font-semibold leading-6 text-foreground">{assistedSubmission ? "Record the school’s SchoolBase experience" : "Share your SchoolBase experience"}</h2>
           <p className="mt-1 max-w-2xl text-xs leading-4 text-muted">What is working for your school? Do not include student, parent, fee, or academic information.</p>
         </div>
         {review ? <span className="border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground">{statusLabel[review.status]}</span> : null}
@@ -112,6 +134,30 @@ export function SchoolBaseReviewForm({ onSubmitted }: { onSubmitted?: () => void
       ) : (
         <form onSubmit={(event) => void submitReview(event)} className="mt-2 grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(240px,.85fr)]">
           <div className="space-y-2">
+            {assistedSubmission ? (
+              <fieldset className="space-y-2 border border-amber-300 bg-amber-50 p-2.5">
+                <legend className="px-1 text-xs font-semibold text-amber-950">Submitting on the school’s behalf</legend>
+                <p className="text-xs leading-4 text-amber-950">Only continue if the school representative sent or approved this feedback and explicitly authorized the publication options selected below.</p>
+                <label className="block text-xs font-medium text-amber-950" htmlFor="schoolbase-review-consent-source">
+                  Where did the school provide permission?
+                  <select
+                    id="schoolbase-review-consent-source"
+                    value={consentSource}
+                    onChange={(event) => setConsentSource(event.target.value)}
+                    required
+                    className="mt-1 block min-h-8 w-full border border-amber-400 bg-white px-2 text-xs text-foreground"
+                  >
+                    <option value="">Select a source</option>
+                    <option value="SUPPORT_TICKET">Support ticket</option>
+                    <option value="WHATSAPP">WhatsApp</option>
+                  </select>
+                </label>
+                <label className="flex items-start gap-1.5 text-xs leading-4 text-amber-950">
+                  <input type="checkbox" checked={schoolRepresentativeConsentConfirmed} onChange={(event) => setSchoolRepresentativeConsentConfirmed(event.target.checked)} required className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-brand focus-visible:ring-2 focus-visible:ring-brand" />
+                  <span>I confirm the school representative authorized us to submit this feedback and the publication choices above.</span>
+                </label>
+              </fieldset>
+            ) : null}
             <fieldset>
               <legend className="text-xs font-medium text-foreground">Your rating <span className="text-rose-700">*</span></legend>
               <div className="mt-1 flex gap-0.5" role="radiogroup" aria-label="Rate SchoolBase from 1 to 5 stars">
@@ -153,15 +199,15 @@ export function SchoolBaseReviewForm({ onSubmitted }: { onSubmitted?: () => void
               <legend className="text-xs font-medium text-foreground">Publication permission</legend>
               <label className="flex items-start gap-1.5 text-xs leading-4 text-foreground">
                 <input type="checkbox" checked={publishConsent} onChange={(event) => setPublishConsent(event.target.checked)} className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-brand focus-visible:ring-2 focus-visible:ring-brand" />
-                <span>I give SchoolBase permission to publish this review after moderation.</span>
+                <span>{assistedSubmission ? "The school representative authorizes SchoolBase to publish this review after moderation." : "I give SchoolBase permission to publish this review after moderation."}</span>
               </label>
               <label className="flex items-start gap-1.5 pl-5 text-xs leading-4 text-foreground">
                 <input type="checkbox" checked={schoolNameConsent} disabled={!publishConsent} onChange={(event) => setSchoolNameConsent(event.target.checked)} className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-brand focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50" />
-                <span>Show our school name with the review.</span>
+                <span>{assistedSubmission ? "Show the school name with the review." : "Show our school name with the review."}</span>
               </label>
               <label className="flex items-start gap-1.5 pl-5 text-xs leading-4 text-foreground">
                 <input type="checkbox" checked={schoolLogoConsent} disabled={!publishConsent} onChange={(event) => setSchoolLogoConsent(event.target.checked)} className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-brand focus-visible:ring-2 focus-visible:ring-brand disabled:opacity-50" />
-                <span>Show our school logo with the review.</span>
+                <span>{assistedSubmission ? "Show the school logo with the review." : "Show our school logo with the review."}</span>
               </label>
               <p className="pl-5 text-[10px] leading-3 text-muted">Private unless you grant publication permission. You can change this later.</p>
             </fieldset>
@@ -169,7 +215,7 @@ export function SchoolBaseReviewForm({ onSubmitted }: { onSubmitted?: () => void
             {error ? <p role="alert" className="text-sm text-rose-700">{error}</p> : null}
             {message ? <p role="status" className="flex items-center gap-2 text-sm text-emerald-700"><CheckCircle2 className="h-4 w-4" />{message}</p> : null}
             <button type="submit" disabled={saving || rating < 1} className="inline-flex min-h-8 items-center gap-2 bg-brand px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{saving ? "Submitting…" : review ? "Update review" : "Submit feedback"}
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{saving ? "Submitting…" : assistedSubmission ? (review ? "Update school review" : "Submit for the school") : review ? "Update review" : "Submit feedback"}
             </button>
           </div>
 

@@ -17,6 +17,10 @@ export default async function LoginPage({
   const { next, signup, reset } = await searchParams;
   const teacherLoginRequested = next === "/teacher";
   const attendanceLoginRequested = next === "/staff/attendance";
+  const adminDestination = typeof next === "string"
+    && (next === "/admin" || next.startsWith("/admin/") || next.startsWith("/admin?"))
+    ? next
+    : "/admin";
 
   return (
     <main className="min-h-screen bg-background px-3 py-4 sm:px-8 sm:py-10">
@@ -76,7 +80,7 @@ export default async function LoginPage({
 
               <p className="mt-2 text-sm text-muted">Sign in to manage your school.</p>
 
-              <LoginForm redirectTo={teacherLoginRequested ? "/teacher" : "/admin"} teacherLoginRequested={teacherLoginRequested} attendanceLoginRequested={attendanceLoginRequested} />
+              <LoginForm redirectTo={teacherLoginRequested ? "/teacher" : attendanceLoginRequested ? "/staff/attendance" : adminDestination} teacherLoginRequested={teacherLoginRequested} attendanceLoginRequested={attendanceLoginRequested} />
             </div>
           </div>
         </section>
