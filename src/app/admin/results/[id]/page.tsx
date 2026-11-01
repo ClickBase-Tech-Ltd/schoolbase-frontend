@@ -39,6 +39,7 @@ interface Assessment {
     testScore: number | null;
     examScore: number | null;
     totalScore: number | null;
+    scores?: string | null;
     grade: string | null;
     classPosition?: number | null;
     lockedAt?: string | null;
@@ -86,6 +87,93 @@ interface Assessment {
 interface SubjectScore {
   subjectId: string;
   totalScore: number | null;
+  partialScores: Array<{ name: string; score: number; maxScore: number }>;
+}
+
+interface ScoreComponent {
+  id: string;
+  name: string;
+  maxScore: number;
+  sortOrder?: number;
+}
+
+function getAssessmentComponents(componentData?: string | null): ScoreComponent[] {
+  if (componentData) {
+    try {
+      const parsed: unknown = JSON.parse(componentData);
+      if (
+        parsed &&
+        typeof parsed === "object" &&
+        "components" in parsed &&
+        Array.isArray(parsed.components)
+      ) {
+        const components = parsed.components.filter(
+          (component): component is ScoreComponent =>
+            !!component &&
+            typeof component === "object" &&
+            "id" in component &&
+            typeof component.id === "string" &&
+            "name" in component &&
+            typeof component.name === "string" &&
+            "maxScore" in component &&
+            typeof component.maxScore === "number"
+        );
+        if (components.length > 0) {
+          return [...components].sort(
+            (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+          );
+        }
+      }
+    } catch {
+      // Fall back to the standard score components for legacy assessments.
+    }
+  }
+
+  return [
+    { id: "ca", name: "CA", maxScore: 20, sortOrder: 1 },
+    { id: "test", name: "Test", maxScore: 20, sortOrder: 2 },
+    { id: "exam", name: "Exam", maxScore: 60, sortOrder: 3 },
+  ];
+}
+
+function getPartialScores(
+  result: Assessment["results"][number],
+  components: ScoreComponent[]
+): Array<{ name: string; score: number; maxScore: number }> {
+  let savedScores: Record<string, unknown> = {};
+  if (result.scores) {
+    try {
+      const parsed: unknown = JSON.parse(result.scores);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        savedScores = parsed as Record<string, unknown>;
+      }
+    } catch {
+      savedScores = {};
+    }
+  }
+
+  const rawScores = [result.caScore, result.testScore, result.examScore];
+  return components.flatMap((component, index) => {
+    const savedScore = savedScores[component.id];
+    const id = component.id.toLowerCase();
+    const name = component.name.toLowerCase();
+    const rawIndex =
+      id.includes("ca") || name.includes("ca") || name.includes("continuous")
+        ? 0
+        : id.includes("test") || name.includes("test")
+          ? 1
+          : id.includes("exam") || name.includes("exam")
+            ? 2
+            : index;
+    const score =
+      typeof savedScore === "number" && Number.isFinite(savedScore)
+        ? savedScore
+        : rawScores[rawIndex];
+
+    return typeof score === "number" && Number.isFinite(score)
+      ? [{ name: component.name, score, maxScore: component.maxScore }]
+      : [];
+  });
 }
 
 interface PupilBroadsheetRow {
@@ -172,6 +260,7 @@ export default function AssessmentDetailPage({
   useEffect(() => {
     if (!assessment) return;
 
+    const components = getAssessmentComponents(assessment.componentData);
     const inputValues: Record<string, string> = {};
     assessment.thirdTermHistory?.entries.forEach((entry) => {
       entry.terms.forEach((termRow) => {
@@ -251,6 +340,7 @@ export default function AssessmentDetailPage({
               return {
                 subjectId: subject.subjectId,
                 totalScore: result ? resolveResultTotal(result) : null,
+                partialScores: result ? getPartialScores(result, components) : [],
               };
             });
 
@@ -493,6 +583,15 @@ export default function AssessmentDetailPage({
     isInactive: pupil.isActive === false || pupil.status?.trim().toUpperCase() === 'INACTIVE',
   }));
   const isConfigured = Boolean(assessment.componentData);
+  const assessmentComponents = getAssessmentComponents(assessment.componentData);
+  const rowsWithScores = assessment.results.filter(
+    (result) =>
+      resolveResultTotal(result) !== null ||
+      getPartialScores(result, assessmentComponents).length > 0
+  ).length;
+  const rowsWithCompleteScores = assessment.results.filter(
+    (result) => resolveResultTotal(result) !== null
+  ).length;
 
   const deriveWorkflowState = (assessment: Assessment) => {
     if (!isConfigured) return 'DRAFT';
@@ -746,9 +845,20 @@ export default function AssessmentDetailPage({
             <div>
               <h2 className="text-lg font-semibold">Assessment Scores</h2>
               <p className="text-sm text-muted">
-                Saved pupil results are displayed grouped by class. Totals and grades reflect stored assessment results, not editable inputs.
+                Saved pupil results are displayed grouped by class. Partial component marks are shown even when a final total is not yet available.
               </p>
             </div>
+          </div>
+
+          <div className="rounded-lg border border-border bg-surface p-4 text-sm">
+            <p className="font-medium text-foreground">
+              {rowsWithScores} of {assessment.results.length} result rows contain marks; {rowsWithCompleteScores} have a complete total.
+            </p>
+            {rowsWithScores > rowsWithCompleteScores && (
+              <p className="mt-1 text-muted">
+                Incomplete component marks are shown in the subject columns. A total and statistics are calculated only after all required components are entered.
+              </p>
+            )}
           </div>
 
           {assessment.term?.sortOrder === 3 && (
@@ -934,7 +1044,20 @@ export default function AssessmentDetailPage({
                         <td className="px-3 py-2 text-muted sm:px-4">{row.admissionNo ?? '—'}</td>
                         {row.subjectScores.map((score) => (
                           <td key={score.subjectId} className="px-3 py-2 text-center sm:px-4">
-                            {score.totalScore !== null ? Math.round(score.totalScore) : '—'}
+                            {score.totalScore !== null ? (
+                              Math.round(score.totalScore)
+                            ) : score.partialScores.length > 0 ? (
+                              <span
+                                className="inline-block max-w-48 text-left text-xs text-amber-800"
+                                title={score.partialScores.map((part) => `${part.name}: ${part.score}/${part.maxScore}`).join(", ")}
+                              >
+                                Partial: {score.partialScores
+                                  .map((part) => `${part.name} ${part.score}/${part.maxScore}`)
+                                  .join(" · ")}
+                              </span>
+                            ) : (
+                              '—'
+                            )}
                           </td>
                         ))}
                         <td className="px-3 py-2 text-center font-semibold sm:px-4">

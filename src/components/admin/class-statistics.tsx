@@ -22,6 +22,7 @@ interface ClassStats {
   assessmentId: string;
   totalStudents: number;
   totalResults: number;
+  scoredResults: number;
   statistics: {
     highestScore: number;
     lowestScore: number;
@@ -84,6 +85,7 @@ export function ClassStatistics({ assessmentId, schoolId }: ClassStatisticsProps
   }
 
   const { statistics } = stats;
+  const hasCompleteScores = stats.scoredResults > 0;
 
   return (
     <section className="space-y-4">
@@ -116,12 +118,18 @@ export function ClassStatistics({ assessmentId, schoolId }: ClassStatisticsProps
         </Button>
       </div>
 
+      {stats.scoredResults < stats.totalResults && (
+        <div className="border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          Statistics use complete scores only: {stats.scoredResults} of {stats.totalResults} result rows currently have all required components. Rows without a complete total are excluded from totals and grade statistics.
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: 'Average', value: statistics.averageScore.toFixed(1), sub: 'Class average' },
-          { label: 'Pass Rate', value: `${statistics.passRate.toFixed(1)}%`, sub: `${statistics.passCount} passed` },
+          { label: 'Average', value: hasCompleteScores ? statistics.averageScore.toFixed(1) : '—', sub: 'Class average' },
+          { label: 'Pass Rate', value: hasCompleteScores ? `${statistics.passRate.toFixed(1)}%` : '—', sub: `${statistics.passCount} passed` },
           { label: 'Students', value: stats.totalStudents, sub: 'Distinct pupils' },
-          { label: 'Median', value: statistics.medianScore.toFixed(1), sub: 'Middle score' },
+          { label: 'Median', value: hasCompleteScores ? statistics.medianScore.toFixed(1) : '—', sub: 'Middle score' },
         ].map((stat) => (
           <article key={stat.label} className="border border-border bg-surface p-4">
             <p className="text-[11px] font-bold uppercase tracking-[.14em] text-muted">{stat.label}</p>
@@ -134,19 +142,19 @@ export function ClassStatistics({ assessmentId, schoolId }: ClassStatisticsProps
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(360px,1.1fr)]">
         <div className="border border-border bg-surface p-4">
           <p className="text-[11px] font-bold uppercase tracking-[.14em] text-muted">Score Range</p>
-          <p className="mt-2 text-3xl font-semibold text-foreground">{(statistics.highestScore - statistics.lowestScore).toFixed(1)}</p>
+          <p className="mt-2 text-3xl font-semibold text-foreground">{hasCompleteScores ? (statistics.highestScore - statistics.lowestScore).toFixed(1) : '—'}</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <div className="border-l-4 border-l-brand bg-brand-light/20 p-3">
               <p className="text-[11px] font-bold uppercase tracking-[.14em] text-muted">High</p>
-              <p className="mt-2 text-lg font-semibold text-foreground">{statistics.highestScore.toFixed(1)}</p>
+              <p className="mt-2 text-lg font-semibold text-foreground">{hasCompleteScores ? statistics.highestScore.toFixed(1) : '—'}</p>
             </div>
             <div className="border-l-4 border-l-brand bg-brand-light/20 p-3">
               <p className="text-[11px] font-bold uppercase tracking-[.14em] text-muted">Low</p>
-              <p className="mt-2 text-lg font-semibold text-foreground">{statistics.lowestScore.toFixed(1)}</p>
+              <p className="mt-2 text-lg font-semibold text-foreground">{hasCompleteScores ? statistics.lowestScore.toFixed(1) : '—'}</p>
             </div>
             <div className="border-l-4 border-l-brand bg-brand-light/20 p-3">
               <p className="text-[11px] font-bold uppercase tracking-[.14em] text-muted">Avg</p>
-              <p className="mt-2 text-lg font-semibold text-foreground">{statistics.averageScore.toFixed(1)}</p>
+              <p className="mt-2 text-lg font-semibold text-foreground">{hasCompleteScores ? statistics.averageScore.toFixed(1) : '—'}</p>
             </div>
           </div>
         </div>
@@ -157,7 +165,7 @@ export function ClassStatistics({ assessmentId, schoolId }: ClassStatisticsProps
               <p className="text-[11px] font-bold uppercase tracking-[.14em] text-muted">Assessment breakdown</p>
               <h2 className="mt-1 text-lg font-semibold text-foreground">Grade Distribution</h2>
             </div>
-            <span className="border border-border bg-background px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[.12em] text-muted">{stats.totalResults} entries</span>
+            <span className="border border-border bg-background px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[.12em] text-muted">{stats.scoredResults} complete scores</span>
           </div>
 
           <div className="space-y-3">
@@ -166,7 +174,7 @@ export function ClassStatistics({ assessmentId, schoolId }: ClassStatisticsProps
               .map(([grade, count]) => {
                 const maxGradeCount = Math.max(...Object.values(statistics.gradeDistribution), 0);
                 const percentageOfMax = maxGradeCount > 0 ? (count / maxGradeCount) * 100 : 0;
-                const totalPercentage = stats.totalResults > 0 ? (count / stats.totalResults) * 100 : 0;
+                const totalPercentage = stats.scoredResults > 0 ? (count / stats.scoredResults) * 100 : 0;
                 return (
                   <div key={grade}>
                     <div className="mb-1 flex items-center justify-between">

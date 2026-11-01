@@ -604,7 +604,7 @@ export default function ResultsPageClient({ assessments, sessions = [] }: { asse
                 <tr>
                     <th className="px-3 py-1.5 font-medium sm:px-4">Assessment</th>
                     <th className="px-3 py-1.5 font-medium sm:px-4">Term</th>
-                    <th className="px-3 py-1.5 font-medium sm:px-4 text-center">Entries</th>
+                    <th className="px-3 py-1.5 font-medium sm:px-4 text-center">Records</th>
                     <th className="px-3 py-1.5 font-medium sm:px-4">Status</th>
                     <th className="px-3 py-1.5 font-medium sm:px-4">Actions</th>
                 </tr>
