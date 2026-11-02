@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, Sparkles, X } from "lucide-react";
 
-type ModalType = "error" | "success";
+type ModalType = "error" | "success" | "confirmation";
 
 interface ErrorModalProps {
   isOpen: boolean;
@@ -48,8 +48,10 @@ export function ErrorModal({
   if (!isOpen) return null;
 
   const isSuccess = type === "success";
+  const isConfirmation = type === "confirmation";
   const defaultTitle = isSuccess ? "All set" : "Something went wrong";
   const Icon = isSuccess ? CheckCircle2 : AlertCircle;
+  const statusLabel = isSuccess ? "Success" : isConfirmation ? "Confirm" : "Notice";
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-[2px]">
@@ -76,11 +78,17 @@ export function ErrorModal({
               <div className="flex items-center gap-2">
                 <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand">SchoolBase</p>
                 <span className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${isSuccess ? 'bg-emerald-100 text-success' : 'bg-brand/10 text-brand'}`}>
-                  {isSuccess ? 'Success' : 'Notice'}
+                  {statusLabel}
                 </span>
               </div>
               <h2 className="mt-1 text-xl font-semibold tracking-tight text-foreground">{title || defaultTitle}</h2>
-              <p className="mt-1 text-sm text-muted">{isSuccess ? "Your update has been processed successfully." : "Please review the details below and continue when you are ready."}</p>
+              <p className="mt-1 text-sm text-muted">
+                {isSuccess
+                  ? "Your update has been processed successfully."
+                  : isConfirmation
+                    ? "Please review this action before continuing."
+                    : "Please review the details below and continue when you are ready."}
+              </p>
             </div>
             <button
               type="button"

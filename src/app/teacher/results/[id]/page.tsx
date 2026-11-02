@@ -32,6 +32,8 @@ interface Assessment {
   name: string;
   phase: string;
   status: string;
+  termId: string;
+  classes: Array<{ id: string; name: string }>;
   isLocked?: boolean;
   canEdit?: boolean;
   results: AssessmentResult[];
@@ -160,6 +162,7 @@ export default function TeacherAssessmentDetailPage({
     <div className="mx-auto max-w-6xl space-y-6 px-3 py-6 sm:px-6 lg:px-8">
       <TeacherPageHeader icon={FileText} title={assessment.name} description={`Assessment workspace · ${assessment.phase} phase${assessment.subjects?.length ? ` · ${assessment.subjects.length} subjects` : ""}`} count={resultStatusLabel(assessment.status as "DRAFT" | "APPROVED" | "PUBLISHED")}>
         {canEdit && <Link href={`/teacher/results/${id}/subjects`} className="inline-flex items-center gap-2 rounded-md border border-brand/30 bg-brand-light px-4 py-2.5 text-sm font-semibold text-brand hover:border-brand/50"><PenSquare className="h-4 w-4" /> Enter scores</Link>}
+        {assessment.classes.map((classInfo) => <Link key={classInfo.id} href={`/teacher/report-card-sections/${encodeURIComponent(assessment.termId)}/${encodeURIComponent(classInfo.id)}`} className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground hover:border-brand hover:text-brand">Report sections · {classInfo.name}</Link>)}
         <Link href={`/teacher/results/${id}/reports`} className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground hover:border-brand hover:text-brand"><FileText className="h-4 w-4" /> Reports</Link>
       </TeacherPageHeader>
 

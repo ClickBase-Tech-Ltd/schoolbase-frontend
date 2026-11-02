@@ -80,6 +80,24 @@ interface ReportCardData {
   teacherRemark?: string | null;
   principalRemark?: string | null;
   publishedAt?: string | null;
+  reportCardSections?: {
+    affective?: Record<string, string>;
+    psychomotor?: Record<string, string>;
+    teacherCommentsEnabled?: boolean;
+    principalCommentsEnabled?: boolean;
+    termPrincipalRemark?: string | null;
+    attendance?: {
+      present: number;
+      late: number;
+      absent: number;
+      excused: number;
+      recordedDays: number;
+      classRecordedDays: number;
+      percentage: number | null;
+      coverageComplete: boolean;
+      unavailableReason: string | null;
+    };
+  };
   gradingScale?: Array<{
     grade: string;
     minScore: number;
@@ -218,6 +236,7 @@ export function WaecReportCard({
           teacherRemark,
           principalRemark: data.principalRemark ?? null,
           publishedAt: data.publishedAt ?? null,
+          reportCardSections: data.reportCardSections,
           statistics: {
             passRate,
           },

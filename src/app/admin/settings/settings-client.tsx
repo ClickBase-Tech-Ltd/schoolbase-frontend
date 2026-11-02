@@ -540,6 +540,20 @@ export default function SettingsPageClient({
       </div>
       </header>
 
+      <section className="flex flex-col gap-4 border border-border bg-surface p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="font-semibold text-foreground">Report-card and results options</h2>
+          <p className="mt-1 text-sm text-muted">Configure optional report-card sections and school-wide defaults alongside your assessment workflow.</p>
+        </div>
+        <Link
+          href="/admin/results/settings"
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-border bg-background px-4 py-2.5 text-sm font-semibold text-brand transition hover:border-brand hover:bg-brand-light"
+        >
+          <FileText className="h-4 w-4" />
+          Open Results Settings
+        </Link>
+      </section>
+
       <div className="flex flex-wrap items-center gap-3 border-b border-border pb-5">
         <span className="text-sm font-semibold text-foreground">Integration status</span>
         <Badge variant={status?.paystack?.effective ? "success" : "default"}>

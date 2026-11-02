@@ -33,6 +33,12 @@ interface Assessment {
     } | null;
   };
   classId?: string | null;
+  class?: {
+    id: string;
+    name: string;
+    arm?: string | null;
+    phase: string;
+  } | null;
   results: Array<{
     pupilId: string;
     caScore: number | null;
@@ -574,6 +580,23 @@ export default function AssessmentDetailPage({
     );
   }
 
+  const reportSectionsClassNames = new Map<string, string>();
+  assessment.results.forEach((result) => {
+    if (result.pupil.class?.id && result.pupil.class.phase === assessment.phase) {
+      reportSectionsClassNames.set(
+        result.pupil.class.id,
+        `${result.pupil.class.name}${result.pupil.class.arm ? ` ${result.pupil.class.arm}` : ""}`,
+      );
+    }
+  });
+  if (assessment.class?.phase === assessment.phase && !reportSectionsClassNames.has(assessment.class.id)) {
+    reportSectionsClassNames.set(
+      assessment.class.id,
+      `${assessment.class.name}${assessment.class.arm ? ` ${assessment.class.arm}` : ""}`,
+    );
+  }
+  const reportSectionsClasses = Array.from(reportSectionsClassNames, ([classId, name]) => ({ classId, name }));
+  const reportSectionsTermId = assessment.term.id;
   const pupils = Array.from(
     new Map(assessment.results.map((r) => [r.pupil.id, r.pupil])).values()
   );
@@ -774,7 +797,18 @@ export default function AssessmentDetailPage({
 
           {/* Assessment Actions Panel */}
           <div>
-            <h2 className="text-lg font-semibold mb-4">Assessment Management</h2>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold">Assessment Management</h2>
+              {reportSectionsTermId ? reportSectionsClasses.map(({ classId, name }) => (
+                <Link
+                  key={classId}
+                  href={`/admin/report-card-sections/${encodeURIComponent(reportSectionsTermId)}/${encodeURIComponent(classId)}`}
+                  className="inline-flex items-center gap-2 rounded-md border border-brand/30 bg-brand-light px-4 py-2 text-sm font-semibold text-brand hover:border-brand/50"
+                >
+                  Report-card sections · {name}
+                </Link>
+              )) : null}
+            </div>
             <AssessmentActionsPanel
               assessmentId={id}
               status={assessment.status}

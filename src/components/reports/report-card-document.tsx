@@ -46,6 +46,24 @@ interface ReportCardData {
   teacherRemark?: string | null;
   principalRemark?: string | null;
   publishedAt?: string | null;
+  reportCardSections?: {
+    affective?: Record<string, string>;
+    psychomotor?: Record<string, string>;
+    teacherCommentsEnabled?: boolean;
+    principalCommentsEnabled?: boolean;
+    termPrincipalRemark?: string | null;
+    attendance?: {
+      present: number;
+      late: number;
+      absent: number;
+      excused: number;
+      recordedDays: number;
+      classRecordedDays: number;
+      percentage: number | null;
+      coverageComplete: boolean;
+      unavailableReason: string | null;
+    };
+  };
   statistics?: {
     highestScore?: number;
     lowestScore?: number;
@@ -155,7 +173,13 @@ export function ReportCardDocument({ reportCard, photoUrl, className }: ReportCa
   const teacherRemark = reportCard.teacherRemark ?? null;
   // Principal comment prefers the resolved Signatory on the reportCard,
   // falling back to configured school principal comment or the report's principal remark.
-  const principalComment = (reportCard as any).signatory?.comment ?? schoolConfig?.principalComment ?? reportCard.principalRemark ?? null;
+  const principalComment = reportCard.reportCardSections?.principalCommentsEnabled
+    ? reportCard.reportCardSections.termPrincipalRemark
+      ?? (reportCard as any).signatory?.comment
+      ?? schoolConfig?.principalComment
+      ?? reportCard.principalRemark
+      ?? null
+    : (reportCard as any).signatory?.comment ?? schoolConfig?.principalComment ?? reportCard.principalRemark ?? null;
   const publishedDateLabel = reportCard.publishedAt
     ? new Date(reportCard.publishedAt).toLocaleDateString('en-NG', {
         day: 'numeric',
@@ -223,6 +247,16 @@ export function ReportCardDocument({ reportCard, photoUrl, className }: ReportCa
               <span><span className="font-semibold text-gray-900">Average:</span> {averageScore.toFixed(1)}</span>
               <span><span className="font-semibold text-gray-900">Subjects:</span> {totalSubjects}</span>
               <span><span className="font-semibold text-gray-900">Pass Rate:</span> {passRate.toFixed(0)}%</span>
+              {reportCard.reportCardSections?.attendance ? (
+                <span>
+                  <span className="font-semibold text-gray-900">Attendance:</span>{" "}
+                  {reportCard.reportCardSections.attendance.percentage !== null
+                    ? `${reportCard.reportCardSections.attendance.percentage}% (${reportCard.reportCardSections.attendance.present + reportCard.reportCardSections.attendance.late}/${reportCard.reportCardSections.attendance.present + reportCard.reportCardSections.attendance.late + reportCard.reportCardSections.attendance.absent} days)`
+                    : reportCard.reportCardSections.attendance.classRecordedDays === 0
+                      ? "No records"
+                      : "Incomplete records"}
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
@@ -266,6 +300,57 @@ export function ReportCardDocument({ reportCard, photoUrl, className }: ReportCa
             </table>
           </div>
         </div>
+
+        {reportCard.reportCardSections && (
+          reportCard.reportCardSections.affective ||
+          reportCard.reportCardSections.psychomotor ||
+          (reportCard.reportCardSections.attendance?.classRecordedDays ?? 0) > 0
+        ) ? (
+          <section className="mb-6">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.2em] text-gray-900">Personal Development & Attendance</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {reportCard.reportCardSections.affective ? (
+                <div className="rounded border border-gray-300 p-3">
+                  <h3 className="mb-2 text-[10px] font-bold uppercase text-gray-800">Affective Development</h3>
+                  {Object.keys(reportCard.reportCardSections.affective).length ? <dl className="space-y-1 text-[11px]">
+                    {Object.entries(reportCard.reportCardSections.affective).map(([indicator, rating]) => (
+                      <div key={indicator} className="flex justify-between gap-3">
+                        <dt className="text-gray-700">{indicator}</dt>
+                        <dd className="font-semibold capitalize text-gray-900">{rating.replace(/_/g, " ").toLowerCase()}</dd>
+                      </div>
+                    ))}
+                  </dl> : <p className="text-[11px] text-gray-600">Not assessed</p>}
+                </div>
+              ) : null}
+              {reportCard.reportCardSections.psychomotor ? (
+                <div className="rounded border border-gray-300 p-3">
+                  <h3 className="mb-2 text-[10px] font-bold uppercase text-gray-800">Psychomotor Skills</h3>
+                  {Object.keys(reportCard.reportCardSections.psychomotor).length ? <dl className="space-y-1 text-[11px]">
+                    {Object.entries(reportCard.reportCardSections.psychomotor).map(([indicator, rating]) => (
+                      <div key={indicator} className="flex justify-between gap-3">
+                        <dt className="text-gray-700">{indicator}</dt>
+                        <dd className="font-semibold capitalize text-gray-900">{rating.replace(/_/g, " ").toLowerCase()}</dd>
+                      </div>
+                    ))}
+                  </dl> : <p className="text-[11px] text-gray-600">Not assessed</p>}
+                </div>
+              ) : null}
+              {reportCard.reportCardSections.attendance && reportCard.reportCardSections.attendance.classRecordedDays > 0 ? (
+                <div className="rounded border border-gray-300 p-3">
+                  <h3 className="mb-2 text-[10px] font-bold uppercase text-gray-800">Attendance</h3>
+                  <p className="text-[11px] text-gray-800">
+                    {reportCard.reportCardSections.attendance.percentage !== null
+                      ? `${reportCard.reportCardSections.attendance.percentage}% attendance (${reportCard.reportCardSections.attendance.present + reportCard.reportCardSections.attendance.late} of ${reportCard.reportCardSections.attendance.present + reportCard.reportCardSections.attendance.late + reportCard.reportCardSections.attendance.absent} recorded school days)`
+                      : `${reportCard.reportCardSections.attendance.recordedDays} pupil attendance records across ${reportCard.reportCardSections.attendance.classRecordedDays} class attendance days`}
+                  </p>
+                  {reportCard.reportCardSections.attendance.unavailableReason ? (
+                    <p className="mt-1 text-[10px] text-amber-800">{reportCard.reportCardSections.attendance.unavailableReason}</p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
 
         {term.sortOrder === 3 && reportCard.thirdTermHistory?.entries?.length ? (
           <div className="mb-6">

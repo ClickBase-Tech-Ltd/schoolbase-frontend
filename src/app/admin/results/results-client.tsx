@@ -15,6 +15,7 @@ import {
   PlusCircle,
   TrendingUp,
   GraduationCap,
+  Settings2,
 } from "lucide-react";
 import Link from "next/link";
 import { PublishButton } from "@/components/admin/publish-button";
@@ -452,6 +453,14 @@ export default function ResultsPageClient({ assessments, sessions = [] }: { asse
             >
               <KeyRound className="h-4 w-4" />
               Pin
+            </Button>
+            <Button
+              variant="primary"
+              href="/admin/results/settings"
+              className="h-auto w-full border border-border bg-background px-3 py-2.5 text-xs font-semibold text-brand sm:w-auto sm:px-4 sm:text-sm"
+            >
+              <Settings2 className="h-4 w-4" />
+              Results settings
             </Button>
             <Button
               variant="primary"
