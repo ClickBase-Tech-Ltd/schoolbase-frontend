@@ -50,6 +50,7 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
   const [phone, setPhone] = useState('');
   const [jobTitle, setJobTitle] = useState('');
   const [department, setDepartment] = useState('');
+  const [accountRole, setAccountRole] = useState('STAFF');
   const [classification, setClassification] = useState<'ACADEMIC' | 'NON_ACADEMIC'>('NON_ACADEMIC');
   const [employmentType, setEmploymentType] = useState<'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'TEMPORARY'>('FULL_TIME');
   const [startDate, setStartDate] = useState('');
@@ -64,6 +65,7 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
   const [subjects, setSubjects] = useState<Array<{ id: string; name: string }>>([]);
   const [classIds, setClassIds] = useState<string[]>([]);
   const [subjectIds, setSubjectIds] = useState<string[]>([]);
+  const [assignmentOptionsLoaded, setAssignmentOptionsLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +98,7 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
         setPhone(profile.phone || '');
         setJobTitle(profile.jobTitle);
         setDepartment(profile.department || '');
+        setAccountRole(profile.user.role);
         setClassification(profile.classification);
         setEmploymentType(profile.employmentType);
         setStartDate(new Date(profile.startDate).toISOString().slice(0, 10));
@@ -110,7 +113,7 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
   }, [employeeId, notice]);
 
   useEffect(() => {
-    if (employee?.user.role !== 'TEACHER') return;
+    if (accountRole !== 'TEACHER') return;
     let active = true;
     fetch(`${getBackendUrl()}/api/admin/staff?mode=registration-options`, { credentials: 'include', cache: 'no-store' })
       .then(async (response) => {
@@ -119,18 +122,24 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
         if (active) {
           setClasses(data.classes || []);
           setSubjects(data.subjects || []);
+          setAssignmentOptionsLoaded(true);
         }
       })
       .catch((loadError: unknown) => { if (active) setError(loadError instanceof Error ? loadError.message : 'Unable to load teacher assignments.'); });
     return () => { active = false; };
-  }, [employee?.user.role]);
+  }, [accountRole]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (accountRole === 'TEACHER' && !assignmentOptionsLoaded) {
+      setError('Wait for the school classes and subjects to load before saving teacher assignments.');
+      return;
+    }
     if (newPassword && newPassword !== confirmNewPassword) {
       setError('The new password and confirmation do not match.');
       return;
     }
+    const roleChanged = employee?.user.role !== accountRole;
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -141,8 +150,9 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
         body: (() => {
           const formData = new FormData();
           const values: Record<string, string> = { firstName, middleName, lastName, phone, jobTitle, department, classification, employmentType, startDate, emergencyContactName, emergencyContactPhone, reason };
+          if (employee && ['STAFF', 'TEACHER', 'BURSAR'].includes(employee.user.role)) values.role = accountRole;
           if (newPassword) values.password = newPassword;
-          if (employee?.user.role === 'TEACHER') {
+          if (accountRole === 'TEACHER') {
             values.classIds = JSON.stringify(classIds);
             values.subjectIds = JSON.stringify(subjectIds);
           }
@@ -154,7 +164,9 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.error || 'Unable to update staff profile.');
       setEmployee((current) => current ? { ...current, ...data.employee } : current);
-      setNotice('Profile updated and history recorded.');
+      setNotice(roleChanged
+        ? 'Profile updated. The staff member must sign in again for their new account access to take effect.'
+        : 'Profile updated and history recorded.');
       setReason('');
       setPhotoFile(null);
       setNewPassword('');
@@ -226,48 +238,27 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
             </div>
           </section>
 
-          {employee.user.role === 'TEACHER' ? <section className="space-y-4 border border-border bg-surface p-4 sm:p-6"><div><h2 className="text-lg font-semibold text-foreground">Teaching assignments</h2><p className="mt-1 text-sm text-muted">Assignments are school-scoped and saved with this profile update.</p></div><div className="grid gap-4 sm:grid-cols-2"><fieldset className="border border-border bg-background p-3"><legend className="px-1 text-sm font-semibold text-foreground">Classes</legend><div className="max-h-48 space-y-2 overflow-y-auto">{classes.map((item) => <label key={item.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={classIds.includes(item.id)} onChange={(event) => setClassIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} /><span>{item.name}{item.arm ? ` ${item.arm}` : ''}</span></label>)}</div></fieldset><fieldset className="border border-border bg-background p-3"><legend className="px-1 text-sm font-semibold text-foreground">Subjects</legend><div className="max-h-48 space-y-2 overflow-y-auto">{subjects.map((item) => <label key={item.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={subjectIds.includes(item.id)} onChange={(event) => setSubjectIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} /><span>{item.name}</span></label>)}</div></fieldset></div></section> : null}
+          {accountRole === 'TEACHER' ? <section className="space-y-4 border border-border bg-surface p-4 sm:p-6"><div><h2 className="text-lg font-semibold text-foreground">Teaching assignments</h2><p className="mt-1 text-sm text-muted">Choose the classes and subjects this teacher is responsible for.</p></div>{!assignmentOptionsLoaded ? <p className="text-sm text-muted">Loading the school’s classes and subjects…</p> : <div className="grid gap-4 sm:grid-cols-2"><fieldset className="border border-border bg-background p-3"><legend className="px-1 text-sm font-semibold text-foreground">Classes</legend><div className="max-h-48 space-y-2 overflow-y-auto">{classes.length ? classes.map((item) => <label key={item.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={classIds.includes(item.id)} onChange={(event) => setClassIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} /><span>{item.name}{item.arm ? ` ${item.arm}` : ''}</span></label>) : <p className="text-sm text-muted">No classes have been set up yet.</p>}</div></fieldset><fieldset className="border border-border bg-background p-3"><legend className="px-1 text-sm font-semibold text-foreground">Subjects</legend><div className="max-h-48 space-y-2 overflow-y-auto">{subjects.length ? subjects.map((item) => <label key={item.id} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={subjectIds.includes(item.id)} onChange={(event) => setSubjectIds((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} /><span>{item.name}</span></label>) : <p className="text-sm text-muted">No subjects have been set up yet.</p>}</div></fieldset></div>}</section> : null}
 
-          {employee.user.role === 'TEACHER' || employee.user.role === 'BURSAR' ? (
+          {['STAFF', 'TEACHER', 'BURSAR'].includes(employee.user.role) ? (
             <section className="space-y-3 border border-border bg-surface p-4">
               <div>
                 <h2 className="text-base font-semibold text-foreground">Account access</h2>
-                <p className="mt-1 text-xs text-muted">Set a temporary password if needed. Leave blank to keep the current password.</p>
+                <p className="mt-1 text-xs text-muted">Choose the staff member’s school account role. Role changes require the staff member to sign in again.</p>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <label className={labelClass}>
-                  New temporary password
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    minLength={8}
-                    maxLength={128}
-                    value={newPassword}
-                    onChange={(event) => setNewPassword(event.target.value)}
-                    className={fieldClass}
-                    placeholder="At least 8 characters"
-                  />
-                </label>
-                <label className={labelClass}>
-                  Confirm temporary password
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    minLength={8}
-                    maxLength={128}
-                    value={confirmNewPassword}
-                    onChange={(event) => setConfirmNewPassword(event.target.value)}
-                    className={fieldClass}
-                    placeholder="Confirm password"
-                  />
-                </label>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <label className={labelClass}>Account role<select value={accountRole} onChange={(event) => { const nextRole = event.target.value; setAccountRole(nextRole); setAssignmentOptionsLoaded(false); setClassification(nextRole === 'TEACHER' ? 'ACADEMIC' : 'NON_ACADEMIC'); if (nextRole !== 'TEACHER') { setClassIds([]); setSubjectIds([]); } }} className={fieldClass}><option value="STAFF">Staff</option><option value="TEACHER">Teacher</option><option value="BURSAR">Bursar</option></select></label>
+                {accountRole === 'TEACHER' || accountRole === 'BURSAR' ? <>
+                  <label className={labelClass}>New temporary password<input type="password" autoComplete="new-password" minLength={8} maxLength={128} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className={fieldClass} placeholder="At least 8 characters" /></label>
+                  <label className={labelClass}>Confirm temporary password<input type="password" autoComplete="new-password" minLength={8} maxLength={128} value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} className={fieldClass} placeholder="Confirm password" /></label>
+                </> : null}
               </div>
-              <p className="text-xs text-muted">Passwords are not shown again. Share temporary passwords privately.</p>
+              {accountRole === 'TEACHER' || accountRole === 'BURSAR' ? <p className="text-xs text-muted">Leave the password fields blank to keep the current password. Passwords are not shown again; share temporary passwords privately.</p> : null}
             </section>
           ) : null}
 
           <section className="space-y-4 border border-border bg-surface p-4 sm:p-6">
-            <div><h2 className="text-lg font-semibold text-foreground">Employment details</h2><p className="mt-1 text-sm text-muted">Current status: {employee.employmentStatus}. Change account access from the directory.</p></div>
+            <div><h2 className="text-lg font-semibold text-foreground">Employment details</h2><p className="mt-1 text-sm text-muted">Current status: {employee.employmentStatus}. Account role changes are available above for staff, teacher, and bursar accounts.</p></div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <label className={labelClass}>Job title<input required maxLength={120} value={jobTitle} onChange={(event) => setJobTitle(event.target.value)} className={fieldClass} /></label>
               <label className={labelClass}>Department<input maxLength={120} value={department} onChange={(event) => setDepartment(event.target.value)} className={fieldClass} /></label>

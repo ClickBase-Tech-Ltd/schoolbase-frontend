@@ -7,6 +7,8 @@ async function fetchSchoolFromAPI(schoolId: string, role: string) {
   try {
     const url = role === "TEACHER"
       ? buildApiUrl("/teacher/school")
+      : role === "STAFF"
+        ? buildApiUrl("/staff/school")
       : buildApiUrl(`/admin/school/${encodeURIComponent(schoolId)}`);
     const cookieStore = await cookies();
     const sessionCookie =
@@ -31,7 +33,8 @@ async function fetchSchoolFromAPI(schoolId: string, role: string) {
       return null;
     }
 
-    return await response.json();
+    const data = await response.json();
+    return role === "STAFF" ? data?.school ?? null : data;
   } catch (error) {
     console.error(`Error fetching school ${schoolId}:`, error);
     return null;
