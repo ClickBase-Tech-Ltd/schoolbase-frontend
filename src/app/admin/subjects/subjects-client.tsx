@@ -10,6 +10,7 @@ import {
   AlertCircle,
   ArrowLeft,
   BookOpen,
+  Check,
   CheckCircle2,
   Edit2,
   Layers,
@@ -98,6 +99,7 @@ export default function SubjectsPageClient({
   const [selectedSubject, setSelectedSubject] = useState<any | null>(null);
   const [subjectName, setSubjectName] = useState("");
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+  const [classSearchQuery, setClassSearchQuery] = useState("");
   const [subjects, setSubjects] = useState(initialSubjects);
   const [subjectClasses, setSubjectClasses] = useState(initialSubjectClasses);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -115,21 +117,6 @@ export default function SubjectsPageClient({
   const subjectsWithoutClasses = subjects.filter(
     (subject) => !subjectClasses.some((assignment) => assignment.subjectId === subject.id),
   ).length;
-
-  const classColumns = useMemo(() => {
-    const columns: any[][] = [];
-    const itemsPerColumn = 10;
-
-    initialClasses.forEach((classItem, index) => {
-      const columnIndex = Math.floor(index / itemsPerColumn);
-      if (!columns[columnIndex]) {
-        columns[columnIndex] = [];
-      }
-      columns[columnIndex].push(classItem);
-    });
-
-    return columns;
-  }, [initialClasses]);
 
   const filteredSubjects = useMemo(() => {
     if (!searchQuery.trim()) return subjects;
@@ -157,12 +144,14 @@ export default function SubjectsPageClient({
     if (subject) {
       setSelectedSubject(subject);
       setSubjectName(subject.name);
+      setClassSearchQuery("");
       setSelectedClassIds(
         subjectClasses.filter((sc) => sc.subjectId === subject.id).map((sc) => sc.classId),
       );
     } else {
       setSelectedSubject(null);
       setSubjectName("");
+      setClassSearchQuery("");
       setSelectedClassIds([]);
     }
     setError(null);
@@ -542,12 +531,21 @@ export default function SubjectsPageClient({
         </section>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-md border border-border bg-surface shadow-[0_16px_50px_rgba(10,102,194,0.16)]">
-            <div className="border-b border-border/70 bg-brand/10 px-4 py-4 sm:px-6 sm:py-5">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4 py-6">
+          <style>{`
+            @keyframes subject_modal_enter { from { transform: translateX(36px) scale(.98); opacity: 0 } to { transform: translateX(0) scale(1); opacity: 1 } }
+          `}</style>
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="subject-modal-title"
+            className="w-full max-w-2xl overflow-hidden border border-border bg-surface shadow-[0_16px_50px_rgba(10,102,194,0.16)]"
+            style={{ animation: "subject_modal_enter 320ms cubic-bezier(.2,.9,.2,1)" }}
+          >
+            <div className="border-b border-border/70 bg-brand/10 px-5 py-5 sm:px-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl font-bold text-foreground">
+                  <h2 id="subject-modal-title" className="text-2xl font-bold text-foreground">
                     {selectedSubject ? "Edit subject" : "Add new subject"}
                   </h2>
                   <p className="mt-1 text-sm text-muted">
@@ -557,25 +555,15 @@ export default function SubjectsPageClient({
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  {selectedSubject && (
-                    <button
-                      type="button"
-                      onClick={handleDelete}
-                      title="Delete subject"
-                      className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:bg-surface focus:outline-none focus:ring-2 focus:ring-brand/30"
-                      aria-label="Delete subject"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={() => {
                       playCloseTone();
                       setIsOpen(false);
                     }}
+                    disabled={loading}
                     title="Close modal"
-                    className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-background text-foreground transition-colors hover:bg-surface focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    className="flex h-8 w-8 items-center justify-center border border-border bg-surface text-foreground transition-colors hover:bg-background focus:outline-none focus:ring-2 focus:ring-brand/30 disabled:opacity-50"
                     aria-label="Close modal"
                   >
                     <X className="h-4 w-4" />
@@ -584,85 +572,136 @@ export default function SubjectsPageClient({
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="max-h-[calc(90vh-160px)] overflow-y-auto space-y-5 px-4 py-4 sm:px-6 sm:py-6">
+            <form onSubmit={handleSubmit} className="max-h-[calc(90vh-100px)] space-y-5 overflow-y-auto px-5 py-5 sm:px-6 sm:py-6">
               {error && (
-                <div className="rounded-lg border border-error/20 bg-error/10 p-4">
+                <div role="alert" className="border border-error/20 bg-error/10 p-4">
                   <p className="text-sm text-error">{error}</p>
                 </div>
               )}
 
-              <div className="grid gap-4 lg:grid-cols-[minmax(220px,0.7fr)_minmax(0,1.3fr)]">
-                <div className="space-y-4">
-                  <label className="text-sm font-medium block">
-                    Subject name
-                    <input
-                      name="name"
-                      value={subjectName}
-                      onChange={(event) => setSubjectName(event.target.value)}
-                      required
-                      placeholder="Mathematics"
-                      className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
-                    />
-                  </label>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="text-sm font-medium">
-                    <span>Assign classes</span>
-                    <div className="mt-1 rounded-lg border border-border bg-background p-3">
-                      {initialClasses.length === 0 ? (
-                        <p className="text-sm text-muted">No classes available</p>
-                      ) : (
-                        <div className="max-h-[320px] space-y-3 overflow-y-auto pr-1">
-                          <div className="grid gap-3 md:grid-cols-2">
-                            {classColumns.map((columnClasses, columnIndex) => (
-                              <div key={`class-column-${columnIndex}`} className="space-y-2">
-                                {columnClasses.map((classItem) => {
-                                  const isSelected = selectedClassIds.includes(classItem.id);
-                                  return (
-                                    <label
-                                      key={classItem.id}
-                                      className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2 transition hover:bg-background"
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        name="classIds"
-                                        value={classItem.id}
-                                        checked={isSelected}
-                                        onChange={() => handleClassToggle(classItem.id)}
-                                        className="h-4 w-4"
-                                      />
-                                      <span className="text-sm">
-                                        {classItem.name}
-                                        {classItem.arm ? ` ${classItem.arm}` : ""}
-                                      </span>
-                                    </label>
-                                  );
-                                })}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
+              <div>
+                <label htmlFor="subject-name" className="mb-2 block text-sm font-medium text-foreground">
+                  Subject name
+                </label>
+                <input
+                  id="subject-name"
+                  name="name"
+                  value={subjectName}
+                  onChange={(event) => setSubjectName(event.target.value)}
+                  required
+                  placeholder="Mathematics"
+                  className="w-full rounded-lg border border-border bg-background px-4 py-2.5 text-sm text-foreground placeholder-muted focus:outline-none focus:ring-2 focus:ring-brand"
+                />
               </div>
 
-              <div className="flex items-end justify-end pt-4 border-t border-border">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  title={selectedSubject ? "Save changes" : "Add subject"}
-                  aria-label={selectedSubject ? "Save changes" : "Add subject"}
-                  className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand/90 disabled:opacity-50"
-                >
-                  {loading ? "Saving..." : selectedSubject ? "Save changes" : "Add subject"}
-                </button>
+              <section aria-labelledby="assign-classes-label">
+                <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+                  <div>
+                    <h3 id="assign-classes-label" className="text-sm font-medium text-foreground">Assign classes</h3>
+                    <p className="mt-1 text-xs text-muted">Choose every class that studies this subject.</p>
+                  </div>
+                  <span className="w-fit border border-border bg-background px-3 py-1.5 text-xs font-semibold text-muted">
+                    {selectedClassIds.length} selected
+                  </span>
+                </div>
+                <div className="mt-3 border border-border bg-background p-3 sm:p-4">
+                  {initialClasses.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted">Create a class before assigning subjects.</p>
+                  ) : (
+                    <>
+                      <label className="relative block">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                        <input
+                          type="search"
+                          value={classSearchQuery}
+                          onChange={(event) => setClassSearchQuery(event.target.value)}
+                          placeholder="Find a class"
+                          aria-label="Find a class"
+                          className="w-full border border-border bg-surface py-2 pl-9 pr-3 text-sm text-foreground placeholder-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                        />
+                      </label>
+                      <div className="mt-3 max-h-[min(42vh,340px)] overflow-y-auto pr-1">
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {initialClasses
+                            .filter((classItem) =>
+                              `${classItem.name} ${classItem.arm ?? ""}`.toLowerCase().includes(classSearchQuery.trim().toLowerCase()),
+                            )
+                            .map((classItem) => {
+                              const isSelected = selectedClassIds.includes(classItem.id);
+                              return (
+                                <label
+                                  key={classItem.id}
+                                  className={`flex min-h-11 cursor-pointer items-center gap-3 border px-3 py-2.5 transition-colors ${
+                                    isSelected
+                                      ? "border-brand/40 bg-brand-light/50"
+                                      : "border-border bg-surface hover:border-brand/30"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    name="classIds"
+                                    value={classItem.id}
+                                    checked={isSelected}
+                                    onChange={() => handleClassToggle(classItem.id)}
+                                    className="h-4 w-4 shrink-0 accent-brand"
+                                  />
+                                  <span className="min-w-0 flex-1 text-sm font-medium text-foreground">
+                                    {classItem.name}
+                                    {classItem.arm ? <span className="ml-1 text-muted">{classItem.arm}</span> : null}
+                                  </span>
+                                  {isSelected && <Check className="h-4 w-4 shrink-0 text-brand" aria-hidden="true" />}
+                                </label>
+                              );
+                            })}
+                        </div>
+                        {initialClasses.every((classItem) =>
+                          !`${classItem.name} ${classItem.arm ?? ""}`.toLowerCase().includes(classSearchQuery.trim().toLowerCase()),
+                        ) && (
+                          <p className="py-8 text-center text-sm text-muted">No classes match that search.</p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </section>
+
+              <div className="flex flex-col-reverse justify-between gap-3 border-t border-border pt-4 sm:flex-row sm:items-center">
+                <div>
+                  {selectedSubject && (
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      disabled={loading}
+                      className="inline-flex items-center gap-2 border border-error/20 bg-error/10 px-4 py-2 text-sm font-medium text-error transition-colors hover:bg-error/20 disabled:opacity-50"
+                    >
+                      <Trash2 className="h-4 w-4" /> Delete subject
+                    </button>
+                  )}
+                </div>
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playCloseTone();
+                      setIsOpen(false);
+                    }}
+                    disabled={loading}
+                    className="border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-background disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    title={selectedSubject ? "Save changes" : "Add subject"}
+                    className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {loading ? "Saving..." : selectedSubject ? "Save changes" : "Add subject"}
+                  </button>
+                </div>
               </div>
             </form>
-          </div>
+          </section>
         </div>
       )}
       {deleteModalOpen && (
