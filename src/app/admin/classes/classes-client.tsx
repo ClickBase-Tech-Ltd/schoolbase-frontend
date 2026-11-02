@@ -1,6 +1,7 @@
 "use client";
 
 import { getBackendUrl } from "@/lib/backend-url";
+import Link from "next/link";
 
 
 
@@ -11,16 +12,18 @@ import { ErrorModal } from "@/components/ui/error-modal";
 import { UserGuide } from "@/components/ui/user-guide";
 import SubscriptionModal from "@/components/subscription-modal";
 import AdminSkeleton from "@/components/ui/skeleton";
-import { BookOpen, Users, Plus, Edit2, Search, School, AlertCircle, Trash2, LayoutGrid, ArrowUpRight, X } from "lucide-react";
+import AcademicsTabs from "../academics-tabs";
+import { BookOpen, Users, Plus, Edit2, Search, School, AlertCircle, Trash2, LayoutGrid, ArrowUpRight, X, Check, Loader2 } from "lucide-react";
 
 const CLASS_GUIDE = {
-  title: "Classes Management",
-  overview: "Manage school classes by phase (Early Years, Primary, Secondary) and arm (A, B, C). Classes organize students for fee invoicing and result publishing.",
+  title: "Classes & Curriculum",
+  overview: "Manage class groups and the subjects taught in each one. Teacher-to-class and teacher-to-subject allocations remain in Staff.",
   steps: [
     "Click 'Add class' to create a new class",
     "Enter class name (e.g., 'JSS 1', 'Primary 4'), phase, and arm if applicable",
     "Click 'Create' to save the class",
     "Classes appear in the list, color-coded by phase",
+    "Choose 'Subjects' beside a class to build its curriculum",
     "Click 'Edit' to modify class details or 'Delete' to remove a class"
   ],
   commonTasks: [
@@ -94,6 +97,9 @@ function getPhaseColor(phase: string): { bg: string; text: string; icon: string;
   }
 }
 
+type CurriculumSubject = { id: string; name: string };
+type CurriculumAssignment = { classId: string; subjectId: string };
+
 export default function ClassesPageClient({ classes: initialClasses }: { classes: any[] }) {
   const [classes, setClasses] = useState<any[]>(initialClasses || []);
   const [loading, setLoading] = useState(true);
@@ -118,6 +124,14 @@ export default function ClassesPageClient({ classes: initialClasses }: { classes
   const [deletingClassName, setDeletingClassName] = useState("");
   const [deleteAnimateState, setDeleteAnimateState] = useState<"enter" | "exit">("enter");
   const [isDeleting, setIsDeleting] = useState(false);
+  const [curriculumClass, setCurriculumClass] = useState<any | null>(null);
+  const [curriculumSubjects, setCurriculumSubjects] = useState<CurriculumSubject[]>([]);
+  const [curriculumSubjectIds, setCurriculumSubjectIds] = useState<string[]>([]);
+  const [curriculumLoading, setCurriculumLoading] = useState(false);
+  const [curriculumDataLoaded, setCurriculumDataLoaded] = useState(false);
+  const [curriculumSaving, setCurriculumSaving] = useState(false);
+  const [curriculumError, setCurriculumError] = useState<string | null>(null);
+  const [curriculumSearch, setCurriculumSearch] = useState("");
 
   useEffect(() => {
     if (isSearchOpen && searchInputRef.current) {
@@ -234,6 +248,106 @@ export default function ClassesPageClient({ classes: initialClasses }: { classes
     }
     setIsOpen(true);
     playOpenTone();
+  };
+
+  const openCurriculumEditor = async (classItem: any) => {
+    setCurriculumClass(classItem);
+    setCurriculumSubjectIds([]);
+    setCurriculumError(null);
+    setCurriculumSearch("");
+    setCurriculumDataLoaded(false);
+    setCurriculumLoading(true);
+    try {
+      const response = await fetch(`${getBackendUrl()}/api/admin/subjects/data`, {
+        credentials: "include",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = (await response.json().catch(() => null)) as {
+        error?: string;
+        subjects?: CurriculumSubject[];
+        subjectClasses?: CurriculumAssignment[];
+      } | null;
+      if (!response.ok) {
+        throw new Error(data?.error || "Could not load subjects for this class.");
+      }
+      setCurriculumSubjects(data?.subjects || []);
+      setCurriculumDataLoaded(true);
+      setCurriculumSubjectIds(
+        (data?.subjectClasses || [])
+          .filter((assignment) => assignment.classId === classItem.id)
+          .map((assignment: any) => assignment.subjectId),
+      );
+    } catch (err) {
+      setCurriculumError(err instanceof Error ? err.message : "Could not load subjects for this class.");
+    } finally {
+      setCurriculumLoading(false);
+    }
+  };
+
+  const saveCurriculum = async () => {
+    if (!curriculumClass) return;
+    setCurriculumSaving(true);
+    setCurriculumError(null);
+    try {
+      const response = await fetch(
+        `${getBackendUrl()}/api/admin/classes/${curriculumClass.id}/subjects`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subjectIds: curriculumSubjectIds }),
+        },
+      );
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(result?.error || "Could not save this class curriculum.");
+      }
+
+      const [classesResponse, subjectsResponse] = await Promise.all([
+        fetch(`${getBackendUrl()}/api/admin/classes/data`, {
+          credentials: "include",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+        }),
+        fetch(`${getBackendUrl()}/api/admin/subjects/data`, {
+          credentials: "include",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+        }),
+      ]);
+      if (!classesResponse.ok || !subjectsResponse.ok) {
+        throw new Error("Curriculum was saved, but refreshed data could not be loaded. Close and reopen this editor to verify.");
+      }
+
+      const [classesData, subjectsData] = await Promise.all([
+        classesResponse.json() as Promise<{
+          classes?: Array<{
+            id: string;
+            name: string;
+            phase?: string;
+            arm?: string | null;
+            _count?: { pupils?: number; subjectClasses?: number };
+          }>;
+        }>,
+        subjectsResponse.json() as Promise<{
+          subjects?: CurriculumSubject[];
+          subjectClasses?: CurriculumAssignment[];
+        }>,
+      ]);
+      setClasses(classesData.classes || []);
+      setCurriculumSubjects(subjectsData.subjects || []);
+      setCurriculumSubjectIds(
+        (subjectsData.subjectClasses || [])
+          .filter((assignment) => assignment.classId === curriculumClass.id)
+          .map((assignment: any) => assignment.subjectId),
+      );
+      setCurriculumClass(null);
+    } catch (err) {
+      setCurriculumError(err instanceof Error ? err.message : "Could not save this class curriculum.");
+    } finally {
+      setCurriculumSaving(false);
+    }
   };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -369,10 +483,10 @@ export default function ClassesPageClient({ classes: initialClasses }: { classes
             <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
               <div>
                 <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.16em] text-brand">
-                  <LayoutGrid className="h-4 w-4" /> School structure
+                  <LayoutGrid className="h-4 w-4" /> Academic setup
                 </div>
-                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Classes</h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Organize grade groups, sections, pupils, and subjects from one central workspace.</p>
+                <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Classes &amp; subjects</h1>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Build your school structure and define the subjects each class studies. Teacher allocations remain in Staff.</p>
               </div>
               <div className="relative flex flex-wrap items-center gap-3">
                 <div className={`overflow-hidden transition-all duration-300 ease-out ${isSearchOpen ? "w-64 opacity-100" : "w-0 opacity-0"}`}>
@@ -395,6 +509,8 @@ export default function ClassesPageClient({ classes: initialClasses }: { classes
             </div>
           </header>
 
+          <AcademicsTabs activeView="classes" />
+
           {error && (
             <div className="rounded-lg border border-error/20 bg-error/10 p-4">
               <p className="text-sm text-error">Error: {error}</p>
@@ -416,9 +532,9 @@ export default function ClassesPageClient({ classes: initialClasses }: { classes
             />
             <ClassStat
               icon={<School size={18} />}
-              label="Total Subjects"
+              label="Subject links"
               value={String(classes.reduce((sum, c) => sum + (c._count?.subjectClasses ?? 0), 0))}
-              detail="Assigned to classes"
+              detail="Curriculum assignments"
             />
             <ClassStat
               icon={<LayoutGrid size={18} />}
@@ -497,6 +613,14 @@ export default function ClassesPageClient({ classes: initialClasses }: { classes
                         <td className="px-3 py-2 text-right">
                           <div className="flex items-center gap-2 justify-end">
                             <button
+                              type="button"
+                              onClick={() => void openCurriculumEditor(classItem)}
+                              className="inline-flex items-center gap-2 border border-brand/30 bg-brand-light/50 px-3 py-1.5 text-sm font-medium text-brand transition-colors hover:bg-brand-light"
+                            >
+                              <BookOpen className="h-3.5 w-3.5" />
+                              Subjects
+                            </button>
+                            <button
                               onClick={() => openModal(classItem)}
                               className="inline-flex items-center gap-2 border border-border bg-surface px-3 py-1.5 text-sm font-medium transition-colors hover:border-brand/40 hover:bg-brand-light"
                             >
@@ -531,10 +655,9 @@ export default function ClassesPageClient({ classes: initialClasses }: { classes
                 filteredClasses.map((classItem) => {
                   const colors = getPhaseColor(classItem.phase);
                   return (
-                    <button
+                    <div
                       key={classItem.id}
-                      onClick={() => openModal(classItem)}
-                      className="block w-full border border-border bg-background p-4 text-left transition-all hover:border-brand/40 hover:bg-brand-light/20"
+                      className="border border-border bg-background p-4 transition-all hover:border-brand/40"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex-1 min-w-0">
@@ -553,7 +676,23 @@ export default function ClassesPageClient({ classes: initialClasses }: { classes
                           <p className="text-sm font-bold text-foreground">{classItem._count?.pupils ?? 0}</p>
                         </div>
                       </div>
-                    </button>
+                      <div className="mt-4 flex gap-2 border-t border-border pt-3">
+                        <button
+                          type="button"
+                          onClick={() => void openCurriculumEditor(classItem)}
+                          className="inline-flex flex-1 items-center justify-center gap-2 border border-brand/30 bg-brand-light/50 px-3 py-2 text-sm font-semibold text-brand"
+                        >
+                          <BookOpen className="h-4 w-4" /> Manage subjects
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openModal(classItem)}
+                          className="inline-flex items-center justify-center gap-2 border border-border px-3 py-2 text-sm font-medium text-foreground"
+                        >
+                          <Edit2 className="h-4 w-4" /> Edit
+                        </button>
+                      </div>
+                    </div>
                   );
                 })
               ) : (
@@ -563,6 +702,165 @@ export default function ClassesPageClient({ classes: initialClasses }: { classes
               )}
             </div>
           </div>
+
+          {curriculumClass && (
+            <div
+              className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget && !curriculumSaving) setCurriculumClass(null);
+              }}
+            >
+              <section
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="curriculum-dialog-title"
+                className="flex max-h-[min(90vh,760px)] w-full max-w-2xl flex-col overflow-hidden border border-border bg-surface shadow-2xl"
+              >
+                <header className="border-b border-border bg-brand/5 px-5 py-5 sm:px-7">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-brand/20 bg-brand/10 text-brand">
+                        <BookOpen className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-[.14em] text-brand">Class curriculum</p>
+                        <h2 id="curriculum-dialog-title" className="mt-1 text-xl font-semibold text-foreground">
+                          Subjects for {curriculumClass.name}
+                        </h2>
+                        <p className="mt-1 text-sm text-muted">
+                          Select the subjects pupils in this class should study.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label="Close curriculum editor"
+                      disabled={curriculumSaving}
+                      onClick={() => setCurriculumClass(null)}
+                      className="flex h-9 w-9 shrink-0 items-center justify-center border border-border text-muted transition hover:bg-background hover:text-foreground disabled:opacity-50"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                    <span className="border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground">
+                      {curriculumSubjectIds.length} selected
+                    </span>
+                    <label className="relative w-full sm:max-w-xs">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                      <input
+                        type="search"
+                        value={curriculumSearch}
+                        onChange={(event) => setCurriculumSearch(event.target.value)}
+                        placeholder="Find a subject"
+                        aria-label="Find a subject"
+                        className="w-full border border-border bg-background py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
+                      />
+                    </label>
+                  </div>
+                </header>
+
+                <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7">
+                  {curriculumError && (
+                    <div role="alert" className="mb-4 border border-error/20 bg-error/10 p-3 text-sm text-error">
+                      {curriculumError}
+                    </div>
+                  )}
+                  {curriculumLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-14 text-sm text-muted" role="status">
+                      <Loader2 className="h-5 w-5 animate-spin text-brand" />
+                      Loading curriculum subjects…
+                    </div>
+                  ) : !curriculumDataLoaded ? (
+                    <div className="py-10 text-center">
+                      <p className="text-sm text-muted">The curriculum could not be loaded.</p>
+                      <button
+                        type="button"
+                        onClick={() => void openCurriculumEditor(curriculumClass)}
+                        className="mt-3 border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-background"
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  ) : curriculumSubjects.length === 0 ? (
+                    <div className="border border-dashed border-border bg-background px-5 py-10 text-center">
+                      <BookOpen className="mx-auto h-8 w-8 text-muted" />
+                      <h3 className="mt-3 font-semibold text-foreground">No subjects created yet</h3>
+                      <p className="mt-1 text-sm text-muted">Create subjects first, then assign them to this class.</p>
+                      <Link
+                        href="/admin/academics?view=subjects"
+                        onClick={() => setCurriculumClass(null)}
+                        className="mt-4 inline-flex items-center gap-2 bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+                      >
+                        Go to subjects <ArrowUpRight className="h-4 w-4" />
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {curriculumSubjects
+                        .filter((subject) => subject.name.toLowerCase().includes(curriculumSearch.trim().toLowerCase()))
+                        .map((subject) => {
+                          const isSelected = curriculumSubjectIds.includes(subject.id);
+                          return (
+                            <label
+                              key={subject.id}
+                              className={`flex cursor-pointer items-center justify-between gap-4 border px-4 py-3 transition-colors ${
+                                isSelected
+                                  ? "border-brand/40 bg-brand-light/50"
+                                  : "border-border bg-background hover:border-brand/30"
+                              }`}
+                            >
+                              <span className="flex min-w-0 items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => setCurriculumSubjectIds((current) =>
+                                    isSelected
+                                      ? current.filter((id) => id !== subject.id)
+                                      : [...current, subject.id],
+                                  )}
+                                  className="h-4 w-4 accent-brand"
+                                />
+                                <span className="truncate text-sm font-medium text-foreground">{subject.name}</span>
+                              </span>
+                              {isSelected && <Check className="h-4 w-4 shrink-0 text-brand" aria-hidden="true" />}
+                            </label>
+                          );
+                        })}
+                      {curriculumSubjects.every((subject) =>
+                        !subject.name.toLowerCase().includes(curriculumSearch.trim().toLowerCase()),
+                      ) && (
+                        <p className="py-8 text-center text-sm text-muted">No subjects match that search.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <footer className="flex flex-col-reverse justify-between gap-3 border-t border-border bg-background px-5 py-4 sm:flex-row sm:items-center sm:px-7">
+                  <p className="text-xs text-muted">Changes are saved together, so the class curriculum stays consistent.</p>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      disabled={curriculumSaving}
+                      onClick={() => setCurriculumClass(null)}
+                      className="border border-border px-4 py-2 text-sm font-semibold text-foreground transition hover:bg-surface disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!curriculumDataLoaded || curriculumLoading || curriculumSaving || curriculumSubjects.length === 0}
+                      onClick={() => void saveCurriculum()}
+                      className="inline-flex items-center justify-center gap-2 bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {curriculumSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+                      {curriculumSaving ? "Saving…" : "Save curriculum"}
+                    </button>
+                  </div>
+                </footer>
+              </section>
+            </div>
+          )}
 
           {/* Delete Confirmation Modal */}
           {deleteModalOpen && (

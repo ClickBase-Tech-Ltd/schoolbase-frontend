@@ -2,11 +2,23 @@
 
 import Link from "next/link";
 import { useMemo, useState, useRef, useEffect } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { UserGuide } from "@/components/ui/user-guide";
 import { getBackendUrl } from "@/lib/backend-url";
-import { Search, Trash2, X, Check, AlertCircle, Edit2, BookOpen, Plus, ChevronRight } from "lucide-react";
+import AcademicsTabs from "../academics-tabs";
+import {
+  AlertCircle,
+  ArrowLeft,
+  BookOpen,
+  CheckCircle2,
+  Edit2,
+  Layers,
+  Plus,
+  Search,
+  Trash2,
+  UserRound,
+  X,
+} from "lucide-react";
 
 const SUBJECTS_GUIDE = {
   title: "Subjects Management",
@@ -16,6 +28,7 @@ const SUBJECTS_GUIDE = {
     "Enter the subject name (e.g., Mathematics, English, Science)",
     "Select which classes will study this subject",
     "Click 'Create' to save the subject",
+    "For a class-first workflow, open Classes and choose 'Subjects' beside the class",
     "Assign teachers to subjects from the Teachers page"
   ],
   commonTasks: [
@@ -93,13 +106,15 @@ export default function SubjectsPageClient({
   const [deleteAnimateState, setDeleteAnimateState] = useState<"enter" | "exit">("enter");
 
   useEffect(() => {
-    if (isSearchOpen && searchInputRef.current) {
-      searchInputRef.current.focus();
-    }
+    if (isSearchOpen) searchInputRef.current?.focus();
   }, [isSearchOpen]);
 
   const activeSubjectCount = subjects.length;
   const activeClassCount = initialClasses.length;
+  const totalSubjectClassLinks = subjectClasses.length;
+  const subjectsWithoutClasses = subjects.filter(
+    (subject) => !subjectClasses.some((assignment) => assignment.subjectId === subject.id),
+  ).length;
 
   const classColumns = useMemo(() => {
     const columns: any[][] = [];
@@ -191,54 +206,34 @@ export default function SubjectsPageClient({
 
       const savedSubject = await subjectResponse.json();
       const subjectId = savedSubject.id;
-
-      // Handle class assignments
-      if (selectedSubject) {
-        // Remove old assignments
-        const oldClassIds = subjectClasses
-          .filter((sc) => sc.subjectId === selectedSubject.id)
-          .map((sc) => sc.classId);
-
-        for (const classId of oldClassIds) {
-          if (!selectedClassIds.includes(classId)) {
-            await fetch(`${backendUrl}/api/admin/class-subjects/${classId}/${subjectId}`, {
-              method: 'DELETE',
-              credentials: 'include',
-            });
-          }
-        }
-
-        // Add new assignments
-        for (const classId of selectedClassIds) {
-          if (!oldClassIds.includes(classId)) {
-            await fetch(`${backendUrl}/api/admin/class-subjects/${classId}/${subjectId}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'include',
-            });
-          }
-        }
-      } else {
-        // Add all new class assignments
-        for (const classId of selectedClassIds) {
-          await fetch(`${backendUrl}/api/admin/class-subjects/${classId}/${subjectId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-          });
-        }
+      if (!selectedSubject) {
+        setSelectedSubject(savedSubject);
       }
 
-      // Refresh data
+      const assignmentResponse = await fetch(
+        `${backendUrl}/api/admin/subjects/${subjectId}/classes`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ classIds: selectedClassIds }),
+          credentials: "include",
+        },
+      );
+      if (!assignmentResponse.ok) {
+        const errorData = await assignmentResponse.json().catch(() => null);
+        throw new Error(errorData?.error || "Failed to save subject class assignments");
+      }
+
       const dataResponse = await fetch(`${backendUrl}/api/admin/subjects/data`, {
         credentials: 'include',
+        cache: "no-store",
       });
-
-      if (dataResponse.ok) {
-        const data = await dataResponse.json();
-        setSubjects(data.subjects);
-        setSubjectClasses(data.subjectClasses);
+      if (!dataResponse.ok) {
+        throw new Error("Subject was saved, but updated curriculum data could not be refreshed.");
       }
+      const data = await dataResponse.json();
+      setSubjects(data.subjects || []);
+      setSubjectClasses(data.subjectClasses || []);
 
       setIsOpen(false);
       setError(null);
@@ -326,141 +321,225 @@ export default function SubjectsPageClient({
     <>
       <main className="min-h-screen pb-12">
       <div className="mx-auto max-w-7xl space-y-6 px-0 py-4 sm:px-8 sm:py-8 lg:px-12">
-      <header className="relative overflow-hidden border border-border bg-surface px-6 pb-7 pt-10 sm:px-8 sm:pb-8 sm:pt-12">
-        <div className="absolute right-0 top-0 h-full w-1/3 bg-brand-light/40 [clip-path:polygon(35%_0,100%_0,100%_100%,0_100%)]" />
-        <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.16em] text-brand"><BookOpen className="h-4 w-4" /> Academic operations</div>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Subjects</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Manage curriculum subjects, class assignments, and teacher coverage.</p>
-        </div>
-
-        <div className="flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:items-center">
-          <div className="hidden border border-border bg-background px-3 py-2 text-sm text-muted sm:block">
-            {activeSubjectCount} subject{activeSubjectCount === 1 ? "" : "s"} · {activeClassCount} class{activeClassCount === 1 ? "" : "es"}
+        <header className="relative overflow-hidden border border-border bg-surface px-6 pb-7 pt-8 sm:px-8 sm:pb-8 sm:pt-10">
+          <div className="absolute right-0 top-0 h-full w-1/3 bg-brand-light/40 [clip-path:polygon(35%_0,100%_0,100%_100%,0_100%)]" />
+          <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+            <div className="min-w-0">
+              <Link
+                href="/admin/academics?view=classes"
+                className="mb-5 inline-flex items-center gap-2 border border-border bg-background px-3 py-2 text-sm font-semibold text-muted transition hover:border-brand/40 hover:bg-brand-light hover:text-brand"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to Classes
+              </Link>
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.16em] text-brand">
+                <BookOpen className="h-4 w-4" /> Academic setup
+              </div>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                Classes &amp; subjects
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
+                Build your curriculum by connecting subjects to the classes that study them. Teacher allocations stay in Staff.
+              </p>
+            </div>
+            <div className="relative flex flex-wrap items-center gap-3">
+              <div className={`overflow-hidden transition-all duration-300 ease-out ${isSearchOpen ? "w-64 opacity-100" : "w-0 opacity-0"}`}>
+                <input
+                  ref={searchInputRef}
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search subjects..."
+                  aria-label="Search subjects, classes, and teachers"
+                  tabIndex={isSearchOpen ? 0 : -1}
+                  className="w-full border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder-muted outline-none transition focus:border-brand"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSearchOpen((open) => !open)}
+                aria-expanded={isSearchOpen}
+                aria-label={isSearchOpen ? "Close search" : "Search subjects"}
+                title={isSearchOpen ? "Close search" : "Search subjects"}
+                className="inline-flex items-center gap-2 border border-border bg-background px-4 py-2.5 text-sm font-semibold text-brand transition hover:bg-brand-light"
+              >
+                <Search className="h-4 w-4" />
+                <span className="hidden sm:inline">{isSearchOpen ? "Close" : "Search"}</span>
+              </button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => openSubjectModal()}
+                className="inline-flex items-center justify-center gap-2 border border-brand bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-hover"
+              >
+                <Plus className="h-4 w-4" /> Add subject
+              </Button>
+            </div>
           </div>
-          {/* Animated Search Panel - slides out on same line */}
-          <div className={`overflow-hidden transition-all duration-300 ease-out flex-shrink-0 ${isSearchOpen ? "w-72 opacity-100 translate-x-0" : "w-0 opacity-0 translate-x-full"}`}>
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search subjects, classes, or teachers..."
-              className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm text-foreground placeholder-muted focus:outline-none focus:ring-2 focus:ring-brand"
-            />
+        </header>
+
+        <AcademicsTabs activeView="subjects" />
+
+        {error && (
+          <div role="alert" className="border border-error/20 bg-error/10 p-4 text-sm text-error">
+            {error}
           </div>
-          <Button
-            type="button"
-            variant="primary"
-            onClick={() => setIsSearchOpen((open) => !open)}
-            aria-label={isSearchOpen ? "Close search" : "Search subjects"}
-            title={isSearchOpen ? "Close search" : "Search subjects"}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-brand bg-brand p-0 text-sm font-semibold text-white transition hover:bg-brand-hover sm:h-auto sm:w-auto sm:gap-2 sm:px-3 sm:py-2"
-          >
-            <Search className="h-4 w-4" />
-            <span className="hidden sm:inline">{isSearchOpen ? "Close" : "Search"}</span>
-          </Button>
-          <button
-            type="button"
-            onClick={() => openSubjectModal()}
-            className="inline-flex items-center gap-2 rounded-md border border-brand bg-brand px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-hover"
-          >
-            <Plus className="h-4 w-4" /> Add subject
-          </button>
-        </div>
-      </div>
-      </header>
+        )}
 
-      <div className="overflow-hidden border border-border bg-surface">
-        {/* Desktop Table */}
-        <table className="hidden sm:table w-full text-left text-sm">
-          <thead className="border-b border-border bg-background text-muted">
-            <tr>
-              <th className="px-4 py-2 font-medium">Subject</th>
-              <th className="px-4 py-2 font-medium">Classes</th>
-              <th className="px-4 py-2 font-medium">Teachers</th>
-              <th className="px-4 py-2 font-medium">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredSubjects.length > 0 ? (
-              filteredSubjects.map((subject) => {
-                const assignedClasses = iconSubjectCount(subject);
-                const teacherNames = teacherListForSubject(subject);
-                return (
-                  <tr key={subject.id} className="border-t border-border hover:bg-background/50 transition-colors">
-                    <td className="px-4 py-2 font-medium text-foreground">{subject.name}</td>
-                    <td className="px-4 py-2 text-sm text-muted">
-                      {assignedClasses > 0 ? `${assignedClasses} class${assignedClasses === 1 ? "" : "es"}` : "No classes"}
-                    </td>
-                    <td className="px-4 py-2 text-sm text-muted">
-                      {teacherNames.length > 0 ? teacherNames.join(", ") : "No teachers assigned"}
-                    </td>
-                    <td className="px-4 py-2">
-                      <div className="flex items-center gap-2 justify-end">
-                        <button
-                          type="button"
-                          onClick={() => openSubjectModal(subject)}
-                          aria-label="Edit subject"
-                          className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:bg-surface focus:outline-none focus:ring-2 focus:ring-brand/30"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openDeleteModal(subject)}
-                          aria-label="Delete subject"
-                          className="flex h-8 w-8 items-center justify-center rounded-md border border-error/20 bg-error/10 text-error transition-colors hover:bg-error/20"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            ) : (
-              <tr>
-                <td colSpan={4} className="px-4 py-4 text-center text-sm text-muted">
-                  No subjects found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <SubjectStat icon={<BookOpen size={18} />} label="Subjects" value={activeSubjectCount} detail="In your curriculum" />
+          <SubjectStat icon={<Layers size={18} />} label="Classes" value={activeClassCount} detail="Available to assign" />
+          <SubjectStat icon={<CheckCircle2 size={18} />} label="Curriculum links" value={totalSubjectClassLinks} detail="Subject-to-class assignments" />
+          <SubjectStat icon={<UserRound size={18} />} label="Need class links" value={subjectsWithoutClasses} detail="Subjects not assigned to a class" />
+        </section>
 
-        {/* Mobile List */}
-        <div className="sm:hidden space-y-2 p-4">
-          {filteredSubjects.length > 0 ? (
-            filteredSubjects.map((subject) => {
+        <section className="overflow-hidden border border-border bg-surface">
+          <div className="flex flex-col justify-between gap-3 border-b border-border bg-background px-4 py-4 sm:flex-row sm:items-center sm:px-5">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[.14em] text-muted">Subject directory</p>
+              <p className="mt-1 text-sm text-foreground">
+                Showing {filteredSubjects.length} of {activeSubjectCount} subject{activeSubjectCount === 1 ? "" : "s"}
+              </p>
+            </div>
+            <p className="text-xs text-muted">Select Edit to manage the classes connected to a subject.</p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="hidden w-full text-left text-sm sm:table">
+              <thead className="border-b border-border/70 bg-surface text-[11px] font-bold uppercase tracking-[.12em] text-muted">
+                <tr>
+                  <th className="px-5 py-3">Subject</th>
+                  <th className="px-4 py-3">Class coverage</th>
+                  <th className="px-4 py-3">Teacher coverage</th>
+                  <th className="px-5 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filteredSubjects.map((subject) => {
+                  const assignments = subjectClasses.filter((sc) => sc.subjectId === subject.id);
+                  const teacherNames = teacherListForSubject(subject);
+                  return (
+                    <tr key={subject.id} className="transition-colors hover:bg-brand-light/20">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center border border-brand/20 bg-brand/10 text-brand">
+                            <BookOpen className="h-4 w-4" />
+                          </span>
+                          <span className="font-semibold text-foreground">{subject.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        {assignments.length ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {assignments.slice(0, 3).map((assignment) => (
+                              <span key={assignment.classId} className="border border-border bg-background px-2 py-1 text-xs text-foreground">
+                                {assignment.class?.name ?? initialClasses.find((item) => item.id === assignment.classId)?.name ?? "Class"}
+                              </span>
+                            ))}
+                            {assignments.length > 3 && (
+                              <span className="px-1 py-1 text-xs font-medium text-muted">+{assignments.length - 3} more</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700">Not assigned</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-muted">
+                        {teacherNames.length ? teacherNames.join(", ") : "Managed in Staff"}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openSubjectModal(subject)}
+                            className="inline-flex items-center gap-2 border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground transition hover:border-brand/40 hover:bg-brand-light"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" /> Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openDeleteModal(subject)}
+                            aria-label={`Delete ${subject.name}`}
+                            className="flex h-9 w-9 items-center justify-center border border-error/20 bg-error/10 text-error transition hover:bg-error/20"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="space-y-3 p-4 sm:hidden">
+            {filteredSubjects.map((subject) => {
               const assignedClasses = iconSubjectCount(subject);
+              const teacherNames = teacherListForSubject(subject);
               return (
-                <button
-                  key={subject.id}
-                  onClick={() => openSubjectModal(subject)}
-                    className="block w-full text-left border border-border bg-surface px-4 py-3 hover:bg-background/50 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{subject.name}</p>
+                <article key={subject.id} className="border border-border bg-background p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center border border-brand/20 bg-brand/10 text-brand">
+                        <BookOpen className="h-4 w-4" />
+                      </span>
+                      <h2 className="truncate text-sm font-semibold text-foreground">{subject.name}</h2>
                     </div>
-                    <div className="flex-shrink-0 text-right ml-2">
-                      <p className="text-xs text-muted">
-                        {assignedClasses} class{assignedClasses === 1 ? "" : "es"}
-                      </p>
-                    </div>
+                    <span className="shrink-0 border border-border bg-surface px-2 py-1 text-xs font-medium text-muted">
+                      {assignedClasses} {assignedClasses === 1 ? "class" : "classes"}
+                    </span>
                   </div>
-                </button>
+                  <p className="mt-3 text-xs text-muted">
+                    {teacherNames.length ? teacherNames.join(", ") : "Teacher assignments are managed in Staff"}
+                  </p>
+                  <div className="mt-4 flex gap-2 border-t border-border pt-3">
+                    <button
+                      type="button"
+                      onClick={() => openSubjectModal(subject)}
+                      className="inline-flex flex-1 items-center justify-center gap-2 border border-brand/30 bg-brand-light/50 px-3 py-2 text-sm font-semibold text-brand"
+                    >
+                      <Edit2 className="h-4 w-4" /> Edit subject
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openDeleteModal(subject)}
+                      aria-label={`Delete ${subject.name}`}
+                      className="inline-flex items-center justify-center border border-error/20 bg-error/10 px-3 py-2 text-error"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </article>
               );
-            })
-          ) : (
-            <div className="text-center text-sm text-muted py-4">
-              No subjects found.
+            })}
+          </div>
+
+          {filteredSubjects.length === 0 && (
+            <div className="px-6 py-14 text-center">
+              <span className="mx-auto flex h-12 w-12 items-center justify-center border border-brand/20 bg-brand/10 text-brand">
+                <BookOpen className="h-5 w-5" />
+              </span>
+              <h2 className="mt-4 text-base font-semibold text-foreground">
+                {searchQuery ? "No matching subjects" : "No subjects yet"}
+              </h2>
+              <p className="mx-auto mt-1 max-w-md text-sm text-muted">
+                {searchQuery
+                  ? "Try a different search, or clear the search field to see every subject."
+                  : "Create your school's subjects, then connect each one to the classes that study it."}
+              </p>
+              {!searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => openSubjectModal()}
+                  className="mt-5 inline-flex items-center gap-2 bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-hover"
+                >
+                  <Plus className="h-4 w-4" /> Add your first subject
+                </button>
+              )}
             </div>
           )}
-        </div>
-      </div>
+        </section>
 
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -657,6 +736,29 @@ export default function SubjectsPageClient({
       </main>
       <UserGuide guide={SUBJECTS_GUIDE} />
     </>
+  );
+}
+
+function SubjectStat({
+  icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: number;
+  detail: string;
+}) {
+  return (
+    <div className="border border-border bg-surface p-5">
+      <div className="mb-4 flex items-center gap-2 text-brand">
+        {icon}
+        <span className="text-xs font-bold uppercase tracking-[.12em] text-muted">{label}</span>
+      </div>
+      <div className="text-3xl font-semibold text-foreground">{value}</div>
+      <div className="mt-1 text-xs text-muted">{detail}</div>
+    </div>
   );
 }
 

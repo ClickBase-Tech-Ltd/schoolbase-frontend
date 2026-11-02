@@ -13,9 +13,8 @@ const baseNav = [
   { href: "/admin/fees", label: "Fees", icon: "CreditCard" },
   { href: "/admin/id-cards", label: "ID Cards", icon: "WalletCards", badge: "New" },
   { href: "/admin/students", label: "Students", icon: "Users" },
-  { href: "/admin/classes", label: "Classes", icon: "Layers" },
+  { href: "/admin/academics", label: "Academics", icon: "BookOpen" },
   { href: "/admin/staff", label: "Staff", icon: "Users" },
-  { href: "/admin/subjects", label: "Subjects", icon: "BookOpen" },
   { href: "/admin/results", label: "Results", icon: "GraduationCap" },
   {
     href: "/admin/competition",

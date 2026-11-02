@@ -1,5 +1,5 @@
-import ClassesPageClient from "./classes-client";
+import { redirect } from "next/navigation";
 
 export default function AdminClassesPage() {
-  return <ClassesPageClient classes={[]} />;
+  redirect("/admin/academics?view=classes");
 }
