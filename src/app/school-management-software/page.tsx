@@ -2,12 +2,12 @@ import type { Metadata } from 'next'
 import { BarChart3, BookOpen, CheckCircle2, GraduationCap, School, Users } from 'lucide-react'
 import { PublicProductShell } from '@/components/public-product-shell'
 export const metadata: Metadata = {
-	title: 'School Software for African Schools | SchoolBase',
-	description: 'Software for schools in Nigeria and West Africa to manage student records, admissions, fees, attendance, results, and parent communication in one connected school management platform.',
+	title: 'School Management Software | SchoolBase',
+	description: 'School management software for Nigerian and West African schools to manage student records, admissions, fees, attendance, results, and parent communication.',
 	alternates: { canonical: 'https://schoolbase.live/school-management-software' },
 	openGraph: {
-		title: 'School Software for African Schools | SchoolBase',
-		description: 'Software for schools in Nigeria and West Africa to manage student records, admissions, fees, attendance, results, and parent communication.',
+		title: 'School Management Software | SchoolBase',
+		description: 'School management software for Nigerian and West African schools to manage student records, admissions, fees, attendance, results, and parent communication.',
 		url: 'https://schoolbase.live/school-management-software',
 		type: 'website',
 	},
@@ -15,8 +15,8 @@ export const metadata: Metadata = {
 export default function SchoolManagementSoftwarePage() {
 	return <PublicProductShell
 		eyebrow="School management platform"
-		title="Practical school software for connected school management."
-		description="SchoolBase gives schools one connected platform for administration, student records, admissions, fees, attendance, academics, results, accounting, and parent communication."
+		title="School management software for connected school operations."
+		description="SchoolBase connects administration, student records, admissions, fees, attendance, academics, results, accounting, and parent communication in one practical system for schools in Nigeria and West Africa."
 		proofTitle="One school, one connected system"
 		sectionTitle="Give every part of your school a clearer place to work."
 		ctaTitle="Build a stronger operating system for your school."

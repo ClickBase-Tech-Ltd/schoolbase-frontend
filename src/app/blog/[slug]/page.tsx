@@ -245,6 +245,44 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
                     ))}
                   </ul>
                 ) : null}
+                {section.scorecard ? (
+                  <div className="mt-8">
+                    <p className="mb-3 text-sm font-semibold text-foreground">
+                      Copy this scorecard for each product you evaluate.
+                    </p>
+                    <div className="overflow-x-auto border border-border bg-white">
+                      <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+                        <thead className="bg-brand-light text-foreground">
+                          <tr>
+                            <th scope="col" className="border-b border-border p-3 font-semibold">Criterion</th>
+                            <th scope="col" className="border-b border-border p-3 font-semibold">Weight</th>
+                            <th scope="col" className="border-b border-border p-3 font-semibold">Evidence to check</th>
+                            <th scope="col" className="border-b border-border p-3 font-semibold">Score (1–5)</th>
+                            <th scope="col" className="border-b border-border p-3 font-semibold">Weighted points</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {section.scorecard.map((item) => (
+                            <tr key={item.criterion} className="align-top even:bg-background">
+                              <th scope="row" className="border-b border-border p-3 font-semibold text-foreground">{item.criterion}</th>
+                              <td className="border-b border-border p-3 text-foreground">{item.weight}%</td>
+                              <td className="border-b border-border p-3 leading-6 text-muted">{item.evidence}</td>
+                              <td className="border-b border-border p-3 text-muted">_____</td>
+                              <td className="border-b border-border p-3 text-muted">_____</td>
+                            </tr>
+                          ))}
+                          <tr className="font-semibold text-foreground">
+                            <th scope="row" className="p-3">Total</th>
+                            <td className="p-3">100%</td>
+                            <td className="p-3 text-muted">Maximum weighted score: 100</td>
+                            <td className="p-3">—</td>
+                            <td className="p-3">_____ / 100</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
           </section>

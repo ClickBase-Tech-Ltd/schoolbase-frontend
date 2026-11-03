@@ -16,6 +16,11 @@ export type BlogPost = {
     heading: string
     body: string[]
     bullets?: string[]
+    scorecard?: Array<{
+      criterion: string
+      weight: number
+      evidence: string
+    }>
   }>
   relatedPosts: string[]
 }
@@ -243,9 +248,9 @@ export const blogPosts: BlogPost[] = [
     excerpt:
       'Use these practical questions to compare school management systems against your real workflows, staff needs, data responsibilities, and budget.',
     category: 'Software Overview',
-    readingTime: '7 min read',
+    readingTime: '9 min read',
     publishedAt: 'June 27, 2026',
-    updatedAt: 'October 29, 2026',
+    updatedAt: 'November 3, 2026',
     keywords: [
       'best school management software',
       'school management platform',
@@ -305,14 +310,42 @@ export const blogPosts: BlogPost[] = [
       {
         heading: 'Score each product against the same criteria',
         body: [
-          'Use a short scorecard to compare shortlisted systems fairly. Give each criterion a weight based on importance to your school, then score each vendor after seeing the workflow demonstrated. Record unanswered questions instead of assuming a feature will work as needed.',
-          'The best fit is the option that meets the school’s essential needs, is understandable to its users, and has costs and responsibilities the school can sustain.',
+          'First list the school’s non-negotiable requirements. Keep those as pass-or-fail checks so a high score in another area cannot hide a critical gap. For products that meet the essentials, use the same weighted scorecard and evidence standard.',
+          'Score each criterion from 1 to 5 after a demonstration or trial: 1 means it does not meet the need, 3 means it partly meets the need or needs a workaround, and 5 means the school verified that it meets the need in a realistic workflow. Leave a score blank when you do not have evidence, and follow up rather than treating an unknown as a pass.',
+          'For each row, calculate weighted points as criterion weight multiplied by the score, divided by 5. Add the weighted points for a total out of 100. Copy the scorecard for each product, record evidence and unanswered questions, and compare totals only after every product has been assessed against the same tasks.',
+          'A score helps structure a decision; it is not proof that a product is right for the school. Review the must-haves, evidence, total cost, and implementation plan together before choosing.',
         ],
-        bullets: [
-          'Workflow fit and ease of use',
-          'Access controls and data handling',
-          'Local pricing, payment, and support arrangements',
-          'Implementation effort and ongoing cost',
+        scorecard: [
+          {
+            criterion: 'Workflow fit',
+            weight: 25,
+            evidence: 'Can the team complete a priority task from start to finish, including review and correction?',
+          },
+          {
+            criterion: 'Ease of use and role fit',
+            weight: 15,
+            evidence: 'Can the staff and families who need it complete their steps on the devices they use?',
+          },
+          {
+            criterion: 'Data access and continuity',
+            weight: 20,
+            evidence: 'Can the provider explain access controls, account protection, backups, history, and data export?',
+          },
+          {
+            criterion: 'Local cost and terms',
+            weight: 15,
+            evidence: 'Is the first-year cost, currency, renewal, and any extra charge clear in writing?',
+          },
+          {
+            criterion: 'Setup, training, and support',
+            weight: 15,
+            evidence: 'Are setup responsibilities, training, support channels, and response expectations clear?',
+          },
+          {
+            criterion: 'Reports and data portability',
+            weight: 10,
+            evidence: 'Can the school produce a useful report and export records in a format it can use?',
+          },
         ],
       },
       {
