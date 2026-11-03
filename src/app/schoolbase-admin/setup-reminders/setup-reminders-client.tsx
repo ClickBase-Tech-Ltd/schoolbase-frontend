@@ -33,6 +33,45 @@ interface Props {
   initialEmailLogs: EmailLog[];
 }
 
+const REQUIRED_SETUP_KEYS = [
+  'hasSchoolProfile',
+  'hasStaff',
+  'hasStudents',
+  'hasFees',
+  'hasAnnouncement',
+  'hasAssessment',
+  'hasSchoolLogo',
+  'hasPrincipalInfo',
+  'hasPrincipalSignature',
+  'hasSchoolStamp',
+];
+
+function normalizeSetupStatus(status?: any) {
+  const setupItems = status?.setupItems && typeof status.setupItems === 'object' ? status.setupItems : {};
+  const requiredCompleted = REQUIRED_SETUP_KEYS.filter((key) => Boolean(setupItems[key])).length;
+  const requiredTotal = REQUIRED_SETUP_KEYS.length;
+  const checklistTotal = Object.keys(setupItems).length || requiredTotal;
+  const completionPercent = Number.isFinite(Number(status?.completionPercent ?? status?.completionPercentage))
+    ? Number(status?.completionPercent ?? status?.completionPercentage)
+    : 0;
+
+  return {
+    isComplete: Boolean(status?.isComplete),
+    completionPercent,
+    incompleteTasks: Array.isArray(status?.incompleteTasks)
+      ? status.incompleteTasks
+      : Array.isArray(status?.requiredIncompleteItems)
+        ? status.requiredIncompleteItems
+        : Array.isArray(status?.missingItems)
+          ? status.missingItems
+          : [],
+    requiredCompleted,
+    requiredTotal,
+    checklistTotal,
+    statusUnavailable: status == null,
+  };
+}
+
 export default function SetupRemindersClient({
   initialSchools = [],
   initialEmailLogs = [],
@@ -61,83 +100,39 @@ export default function SetupRemindersClient({
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [schoolsRes, logsRes] = await Promise.all([
+        const [schoolsRes, logsRes, setupStatusesRes] = await Promise.all([
           fetch(`/schoolbase-admin/api/schools?limit=500`, {
             credentials: "include",
           }),
           fetch(`/schoolbase-admin/api/email-logs?emailType=SETUP_COMPLETION_REMINDER&limit=500`, {
             credentials: "include",
           }),
+          fetch(`/schoolbase-admin/api/schools/setup-statuses`, {
+            credentials: "include",
+          }),
         ]);
-        
+
         if (!schoolsRes.ok) {
           console.error('Schools fetch failed:', schoolsRes.status, await schoolsRes.text());
           setPageLoading(false);
           return;
         }
-        
+
         const schoolsData = await schoolsRes.json();
         const logsData = logsRes.ok ? await logsRes.json() : { logs: [] };
-        
-        setSchools(schoolsData.schools || []);
-        setEmailLogs(logsData.logs || []);
-        
-        // Load setup status for each school
-        if (schoolsData.schools && schoolsData.schools.length > 0) {
-          const statuses: Record<string, any> = {};
-          for (const school of schoolsData.schools) {
-            try {
-              const statusRes = await fetch(`/api/admin/school/${school.id}/setup-status`, {
-                credentials: "include",
-              });
-              if (statusRes.ok) {
-                const statusData = await statusRes.json();
-                // Map backend field names to frontend field names
-                const setupItems = statusData.setupItems ?? {};
-                const requiredKeys = [
-                  "hasSchoolProfile",
-                  "hasStaff",
-                  "hasStudents",
-                  "hasFees",
-                  "hasAnnouncement",
-                  "hasAssessment",
-                  "hasSchoolLogo",
-                  "hasPrincipalInfo",
-                  "hasPrincipalSignature",
-                  "hasSchoolStamp",
-                ];
-                const requiredTotal = requiredKeys.length;
-                const requiredCompleted = requiredKeys.filter((key) => Boolean(setupItems[key])).length;
-                const checklistTotal = Object.keys(setupItems).length || requiredTotal;
+        const statusesData = setupStatusesRes.ok ? await setupStatusesRes.json() : { setupStatuses: {} };
 
-                statuses[school.id] = {
-                  isComplete: statusData.isComplete,
-                  completionPercent: statusData.completionPercentage || Math.round((requiredCompleted / requiredTotal) * 100),
-                  incompleteTasks: statusData.incompleteItems || [],
-                  requiredCompleted,
-                  requiredTotal,
-                  checklistTotal,
-                };
-              } else {
-                // Default status if endpoint fails
-                statuses[school.id] = {
-                  isComplete: false,
-                  completionPercent: 0,
-                  incompleteTasks: [],
-                };
-              }
-            } catch (err) {
-              console.error(`Failed to load setup status for school ${school.id}:`, err);
-              statuses[school.id] = {
-                isComplete: false,
-                completionPercent: 0,
-                incompleteTasks: [],
-              };
-            }
-          }
-          setSetupStatuses(statuses);
+        const nextSchools = Array.isArray(schoolsData.schools) ? schoolsData.schools : [];
+        const nextStatuses: Record<string, any> = {};
+
+        for (const school of nextSchools) {
+          const status = statusesData?.setupStatuses?.[school.id];
+          nextStatuses[school.id] = normalizeSetupStatus(status);
         }
-        
+
+        setSchools(nextSchools);
+        setSetupStatuses(nextStatuses);
+        setEmailLogs(logsData.logs || []);
         setPageLoading(false);
       } catch (err) {
         console.error("Error loading data:", err);
@@ -419,8 +414,7 @@ export default function SetupRemindersClient({
                 </tr>
               ) : (
                 paginatedSchools.map((school) => {
-                  const status = setupStatuses[school.id];
-                  if (!status) return null;
+                  const status = setupStatuses[school.id] ?? { isComplete: false, completionPercent: 0, incompleteTasks: [], requiredCompleted: 0, requiredTotal: 0, checklistTotal: 0, statusUnavailable: true };
 
                   return (
                     <tr
@@ -436,29 +430,37 @@ export default function SetupRemindersClient({
                         </Link>
                       </td>
                       <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-24 h-2 rounded-full bg-border overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${
-                                status.completionPercent === 100
-                                  ? "bg-emerald-500"
-                                  : "bg-amber-500"
-                              }`}
-                              style={{
-                                width: `${status.completionPercent}%`,
-                              }}
-                            />
-                          </div>
-                          <span className="text-xs font-semibold text-foreground min-w-8">
-                            {status.completionPercent}%
-                          </span>
-                        </div>
-                        <div className="mt-1 text-[11px] text-muted">
-                          {status.requiredCompleted ?? 0}/{status.requiredTotal ?? 0} required complete · {status.checklistTotal ?? status.requiredTotal ?? 0} total checklist
-                        </div>
+                        {status.statusUnavailable ? (
+                          <div className="text-sm text-muted">Status unavailable</div>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <div className="w-24 h-2 rounded-full bg-border overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    status.completionPercent === 100
+                                      ? "bg-emerald-500"
+                                      : "bg-amber-500"
+                                  }`}
+                                  style={{
+                                    width: `${status.completionPercent}%`,
+                                  }}
+                                />
+                              </div>
+                              <span className="text-xs font-semibold text-foreground min-w-8">
+                                {status.completionPercent}%
+                              </span>
+                            </div>
+                            <div className="mt-1 text-[11px] text-muted">
+                              {status.requiredCompleted ?? 0}/{status.requiredTotal ?? 0} required complete · {status.checklistTotal ?? status.requiredTotal ?? 0} total checklist
+                            </div>
+                          </>
+                        )}
                       </td>
                       <td className="px-4 py-4">
-                        {(!status.incompleteTasks || status.incompleteTasks.length === 0) ? (
+                        {status.statusUnavailable ? (
+                          <span className="text-sm text-muted">Unavailable</span>
+                        ) : (!status.incompleteTasks || status.incompleteTasks.length === 0) ? (
                           <span className="inline-flex rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
                             ✓ Ready
                           </span>
