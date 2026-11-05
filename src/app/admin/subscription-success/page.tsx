@@ -8,6 +8,8 @@ interface SubscriptionVerificationResponse {
   message?: string;
   error?: string;
   reference?: string;
+  receiptPaymentId?: string;
+  receiptEmailStatus?: "SENT" | "FAILED";
   school?: {
     name?: string;
     plan?: string;
@@ -108,6 +110,14 @@ async function ActivateSchoolServer({ reference, transactionId }: { reference: s
         </div>
       </div>
 
+      {verificationData.receiptEmailStatus === "FAILED" ? (
+        <p role="status" className="mt-5 border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Your payment is confirmed, but we could not email the receipt. Download it below or contact SchoolBase support.
+        </p>
+      ) : verificationData.receiptEmailStatus === "SENT" ? (
+        <p className="mt-5 text-sm text-emerald-800">The official payment receipt has been emailed to your school.</p>
+      ) : null}
+
       <div className="mt-8 grid gap-3 sm:grid-cols-2">
         <Button href="/admin" className="w-full">
           Go to Dashboard
@@ -116,6 +126,14 @@ async function ActivateSchoolServer({ reference, transactionId }: { reference: s
           Manage Subscription
         </Button>
       </div>
+      {verificationData.receiptPaymentId ? (
+        <a
+          href={`/api/admin/subscription/receipts/${encodeURIComponent(verificationData.receiptPaymentId)}`}
+          className="mt-5 inline-flex w-full items-center justify-center border border-brand px-4 py-3 text-sm font-semibold text-brand transition hover:bg-brand-light"
+        >
+          Download official payment receipt (PDF)
+        </a>
+      ) : null}
     </div>
   );
 }

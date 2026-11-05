@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect, useTransition, useRef, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Download, Plus, TrendingUp } from "lucide-react";
+import { Download, FileText, Mail, Plus, TrendingUp } from "lucide-react";
 import Image from "next/image";
 import { setSchoolPlanAction, approveSchoolSubscriptionAction, rejectSchoolSubscriptionAction } from "../actions";
 import { Badge } from "@/components/ui/badge";
@@ -152,6 +152,7 @@ export default function SubscriptionsPageClient({
   const [planOptions, setPlanOptions] = useState(DEFAULT_PLAN_OPTIONS);
   const [isPending, startTransition] = useTransition();
   const [savingCustomPayment, setSavingCustomPayment] = useState(false);
+  const [sendingReceiptId, setSendingReceiptId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<SubscriptionFeedback | null>(null);
   const [loadErrorDismissed, setLoadErrorDismissed] = useState(false);
   const [customSchoolId, setCustomSchoolId] = useState("");
@@ -466,6 +467,7 @@ export default function SubscriptionsPageClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           schoolName: formData.get("schoolName"),
+          schoolEmail: formData.get("schoolEmail"),
           schoolId: formData.get("schoolId"),
           plan: formData.get("plan"),
           amount: Number(formData.get("amount")),
@@ -476,7 +478,7 @@ export default function SubscriptionsPageClient({
           billingAction: formData.get("billingAction"),
         }),
       });
-      const data: { payment?: SubscriptionPaymentRecord; message?: string; subscriptionApplied?: boolean } | null = await response.json().catch(() => null);
+      const data: { payment?: SubscriptionPaymentRecord; message?: string; subscriptionApplied?: boolean; receiptEmailStatus?: "SENT" | "FAILED" | "NOT_SENT"; receiptEmailMessage?: string | null } | null = await response.json().catch(() => null);
       const payment = data?.payment;
       if (!response.ok || !payment) {
         throw new Error(data?.message || "Could not record this payment.");
@@ -488,8 +490,10 @@ export default function SubscriptionsPageClient({
         type: "success",
         title: data.subscriptionApplied ? "Payment recorded and subscription applied" : "Payment recorded",
         message: data.subscriptionApplied
-          ? "The confirmed payment has been recorded and the school subscription updated."
-          : "The confirmed payment has been added to the revenue report without changing school access.",
+          ? data.receiptEmailStatus === "SENT"
+            ? "The confirmed payment has been recorded, the school subscription updated, and the official PDF receipt emailed."
+            : `The confirmed payment and subscription update were saved, but receipt email delivery failed${data.receiptEmailMessage ? `: ${data.receiptEmailMessage}` : ". Use Email receipt in the payment history to retry."}`
+          : "The confirmed payment has been added to the revenue report without changing school access. Historical record-only payments are not emailed automatically.",
       });
       if (data.subscriptionApplied) router.refresh();
       form.reset();
@@ -503,6 +507,32 @@ export default function SubscriptionsPageClient({
       });
     } finally {
       setSavingCustomPayment(false);
+    }
+  };
+
+  const handleSendReceipt = async (payment: SubscriptionPaymentRecord) => {
+    setFeedback(null);
+    setSendingReceiptId(payment.id);
+    try {
+      const response = await fetch(
+        `/schoolbase-admin/api/subscription-payments/${encodeURIComponent(payment.id)}/receipt`,
+        { method: "POST", credentials: "include" },
+      );
+      const data: { message?: string } | null = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.message || "Could not email this payment receipt.");
+      setFeedback({
+        type: "success",
+        title: "Receipt emailed",
+        message: data?.message || "The official PDF receipt was emailed to the school and SchoolBase billing contacts.",
+      });
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        title: "Could not email receipt",
+        message: error instanceof Error ? error.message : "Could not email this payment receipt.",
+      });
+    } finally {
+      setSendingReceiptId(null);
     }
   };
 
@@ -891,7 +921,7 @@ export default function SubscriptionsPageClient({
                 <h3 className="text-base font-semibold text-foreground">Record a custom or historical payment</h3>
               </div>
               <p className="mb-4 text-sm leading-6 text-muted">
-                Record confirmed payments or historical receipts. For a newly verified transfer, you can atomically record the receipt and apply a new 90-day term, renewal, or upgrade. Leave the action as “Record only” for historical receipts that must not change school access.
+                Record confirmed payments or historical receipts. For a newly verified transfer, you can atomically record the receipt and apply a new one-term subscription, renewal, or upgrade. Leave the action as “Record only” for historical receipts that must not change school access.
               </p>
               <form onSubmit={handleCustomPaymentSubmit} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -918,6 +948,10 @@ export default function SubscriptionsPageClient({
                     <input required name="schoolName" value={customSchoolName} onChange={(event) => setCustomSchoolName(event.target.value)} maxLength={160} className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm" placeholder="Enter school name" />
                   </label>
                   <label className="text-sm font-medium text-foreground">
+                    School receipt email <span className="font-normal text-muted">(optional)</span>
+                    <input name="schoolEmail" type="email" maxLength={254} className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm" placeholder="billing@school.edu" />
+                  </label>
+                  <label className="text-sm font-medium text-foreground">
                     Amount received
                     <input required name="amount" type="number" min="0.01" step="0.01" className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm" placeholder="0.00" />
                   </label>
@@ -934,7 +968,7 @@ export default function SubscriptionsPageClient({
                     Subscription action
                     <select name="billingAction" defaultValue="RECORD_ONLY" className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm">
                       <option value="RECORD_ONLY">Record only — do not change access</option>
-                      <option value="NEW">Apply new 90-day subscription</option>
+                      <option value="NEW">Apply new one-term subscription</option>
                       <option value="RENEWAL">Apply renewal — preserve remaining days</option>
                       <option value="UPGRADE">Apply upgrade — preserve current expiry</option>
                     </select>
@@ -1086,6 +1120,7 @@ export default function SubscriptionsPageClient({
                     <th className="px-3 py-2 font-medium">Method</th>
                     <th className="px-3 py-2 font-medium">Reference</th>
                     <th className="px-3 py-2 font-medium">Date</th>
+                    <th className="px-3 py-2 font-medium">Receipt</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1123,6 +1158,26 @@ export default function SubscriptionsPageClient({
                       <td className="px-3 py-2 text-xs text-muted">{payment.reference || "—"}</td>
                       <td className="px-3 py-2 text-xs text-muted">
                         {new Date(payment.createdAt).toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <a
+                            href={`/schoolbase-admin/api/subscription-payments/${encodeURIComponent(payment.id)}/receipt`}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-semibold text-brand hover:bg-brand-light"
+                            aria-label={`Download receipt for ${payment.schoolName}`}
+                          >
+                            <FileText className="h-3.5 w-3.5" /> PDF
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => void handleSendReceipt(payment)}
+                            disabled={sendingReceiptId === payment.id}
+                            className="inline-flex items-center gap-1.5 rounded-md bg-brand px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+                          >
+                            <Mail className="h-3.5 w-3.5" />
+                            {sendingReceiptId === payment.id ? "Sending…" : payment.schoolEmail ? "Email" : "Email copy"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

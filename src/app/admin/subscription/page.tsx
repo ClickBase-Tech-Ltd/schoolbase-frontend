@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Calendar, CreditCard, RefreshCw, TrendingUp, AlertCircle, CheckCircle, Clock } from "lucide-react";
+import { Calendar, CreditCard, RefreshCw, TrendingUp, AlertCircle, CheckCircle, Clock, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { UserGuide, type PageHelpGuide } from "@/components/ui/user-guide";
 import AdminSkeleton from "@/components/ui/skeleton";
@@ -18,6 +18,18 @@ interface SubscriptionStatus {
   message: string;
   canRenew: boolean;
   canUpgrade: boolean;
+}
+
+interface SubscriptionReceipt {
+  id: string;
+  receiptNumber: string;
+  plan: string;
+  amountMinor: number;
+  currency: string;
+  method: string;
+  reference: string;
+  paidAt: string;
+  applicationStatus: string | null;
 }
 
 const planDetails: Record<string, { description: string; price: string; accent: string }> = {
@@ -153,6 +165,8 @@ export default function SubscriptionPage() {
   const [currency, setCurrency] = useState("");
   const [checkoutAvailable, setCheckoutAvailable] = useState(false);
   const [paymentProvider, setPaymentProvider] = useState<string | null>(null);
+  const [receipts, setReceipts] = useState<SubscriptionReceipt[]>([]);
+  const [receiptError, setReceiptError] = useState<string | null>(null);
   const [countryPlans, setCountryPlans] = useState<Record<string, { amountMinor: number; priceLabel: string }>>({
     starter: { amountMinor: 0, priceLabel: "Pricing unavailable" },
     standard: { amountMinor: 0, priceLabel: "Pricing unavailable" },
@@ -195,6 +209,22 @@ export default function SubscriptionPage() {
 
         console.log('[Subscription] Data loaded:', data);
         setSubscription(data);
+
+        try {
+          const receiptsResponse = await fetch("/api/admin/subscription/receipts", {
+            credentials: "include",
+            cache: "no-store",
+          });
+          const receiptsData = await receiptsResponse.json().catch(() => null);
+          if (!receiptsResponse.ok) {
+            throw new Error(receiptsData?.error || "Could not load subscription receipts.");
+          }
+          setReceipts(Array.isArray(receiptsData?.receipts) ? receiptsData.receipts : []);
+          setReceiptError(null);
+        } catch (receiptLoadError) {
+          console.error("[Subscription] Receipt history could not be loaded:", receiptLoadError);
+          setReceiptError(receiptLoadError instanceof Error ? receiptLoadError.message : "Could not load subscription receipts.");
+        }
 
         const resolvedCountryCode = typeof data?.country === 'string' ? data.country : '';
         const pricingResponse = resolvedCountryCode
@@ -530,6 +560,47 @@ export default function SubscriptionPage() {
           .
         </p>
       </div>
+
+      <section className="border border-border bg-surface p-6 md:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Subscription payment receipts</h2>
+            <p className="mt-1 text-sm text-muted">Download official receipts for confirmed payments made by your school.</p>
+          </div>
+          <span className="rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">
+            {receipts.length} receipt{receipts.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        {receiptError ? (
+          <p role="alert" className="mt-4 border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">{receiptError}</p>
+        ) : receipts.length ? (
+          <div className="mt-4 divide-y divide-border border-y border-border">
+            {receipts.map((receipt) => (
+              <div key={receipt.id} className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold text-foreground">{receipt.plan} · {receipt.currency} {(receipt.amountMinor / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                  <p className="mt-1 text-xs text-muted">
+                    {receipt.receiptNumber} · {new Date(receipt.paidAt).toLocaleDateString()} · {receipt.method.replace(/_/g, " ")}
+                  </p>
+                  {receipt.applicationStatus === "REVIEW_REQUIRED" ? (
+                    <p className="mt-1 text-xs text-amber-800">Payment confirmed; subscription application is under review.</p>
+                  ) : null}
+                </div>
+                <a
+                  href={`/api/admin/subscription/receipts/${encodeURIComponent(receipt.id)}`}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 border border-border px-3 py-2 text-sm font-semibold text-brand transition hover:bg-brand-light"
+                >
+                  <Download className="h-4 w-4" /> Download PDF
+                </a>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-4 border border-dashed border-border bg-background px-4 py-6 text-center text-sm text-muted">
+            No confirmed subscription payment receipts are available yet. Receipts for successful payments will appear here.
+          </p>
+        )}
+      </section>
 
       {/* Help & Guide */}
       <UserGuide guide={HELP_GUIDE} />
