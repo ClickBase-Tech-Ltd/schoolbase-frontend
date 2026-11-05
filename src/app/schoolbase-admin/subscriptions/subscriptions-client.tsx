@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { getBackendUrl } from "@/lib/backend-url";
 import { resolveSchoolAssetUrl } from "@/lib/asset-urls";
 import { playCloseTone, playOpenTone } from "@/lib/sounds";
+import { ErrorModal } from "@/components/ui/error-modal";
 import { Pagination } from "@/components/ui/pagination";
 import type { School } from "@prisma/client";
 
@@ -83,6 +84,12 @@ const PAYMENT_MONTHS = [
   ["09", "September"], ["10", "October"], ["11", "November"], ["12", "December"],
 ] as const;
 
+type SubscriptionFeedback = {
+  type: "error" | "success";
+  title: string;
+  message: string;
+};
+
 function formatMinorAmount(amount: number, currency = "NGN") {
   const normalizedCurrency = /^[A-Z]{3}$/.test(currency) ? currency : "NGN";
   try {
@@ -141,8 +148,8 @@ export default function SubscriptionsPageClient({
   const [planOptions, setPlanOptions] = useState(DEFAULT_PLAN_OPTIONS);
   const [isPending, startTransition] = useTransition();
   const [savingCustomPayment, setSavingCustomPayment] = useState(false);
-  const [customPaymentError, setCustomPaymentError] = useState<string | null>(null);
-  const [customPaymentSuccess, setCustomPaymentSuccess] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<SubscriptionFeedback | null>(null);
+  const [loadErrorDismissed, setLoadErrorDismissed] = useState(false);
   const [customSchoolId, setCustomSchoolId] = useState("");
   const [customSchoolName, setCustomSchoolName] = useState("");
 
@@ -164,6 +171,7 @@ export default function SubscriptionsPageClient({
   }, []);
 
   const handleSetExpiry = async (schoolId: string, expiresAt: string) => {
+    setFeedback(null);
     try {
       setSavingExpiry(true);
       const backendUrl = getBackendUrl();
@@ -188,8 +196,20 @@ export default function SubscriptionsPageClient({
             : school,
         ),
       );
+      setFeedback({
+        type: "success",
+        title: "Subscription expiry updated",
+        message: "The school subscription expiry date has been saved.",
+      });
+      return true;
     } catch (error) {
       console.error("Failed to save expiry date:", error);
+      setFeedback({
+        type: "error",
+        title: "Could not update subscription expiry",
+        message: error instanceof Error ? error.message : "Failed to save expiry date.",
+      });
+      return false;
     } finally {
       setSavingExpiry(false);
     }
@@ -210,6 +230,7 @@ export default function SubscriptionsPageClient({
   };
 
   const handleSetPlan = async (formData: FormData) => {
+    setFeedback(null);
     startTransition(async () => {
       try {
         const result = await setSchoolPlanAction(formData);
@@ -220,13 +241,24 @@ export default function SubscriptionsPageClient({
             ),
           );
         }
+        setFeedback({
+          type: "success",
+          title: "Subscription plan updated",
+          message: "The school’s subscription plan has been updated.",
+        });
       } catch (error) {
         console.error("Failed to set plan:", error);
+        setFeedback({
+          type: "error",
+          title: "Could not update subscription plan",
+          message: error instanceof Error ? error.message : "Failed to set plan.",
+        });
       }
     });
   };
 
   const handleApproveSubscription = async (formData: FormData) => {
+    setFeedback(null);
     startTransition(async () => {
       try {
         const result = await approveSchoolSubscriptionAction(formData);
@@ -241,13 +273,24 @@ export default function SubscriptionsPageClient({
             [result.school.id]: result.school.plan || current[result.school.id] || "STARTER",
           }));
         }
+        setFeedback({
+          type: "success",
+          title: "Subscription approved",
+          message: "The school subscription has been approved.",
+        });
       } catch (error) {
         console.error("Failed to approve subscription:", error);
+        setFeedback({
+          type: "error",
+          title: "Could not approve subscription",
+          message: error instanceof Error ? error.message : "Failed to approve subscription.",
+        });
       }
     });
   };
 
   const handleRejectSubscription = async (formData: FormData) => {
+    setFeedback(null);
     startTransition(async () => {
       try {
         const result = await rejectSchoolSubscriptionAction(formData);
@@ -258,8 +301,18 @@ export default function SubscriptionsPageClient({
             ),
           );
         }
+        setFeedback({
+          type: "success",
+          title: "Subscription request rejected",
+          message: "The school subscription request has been rejected.",
+        });
       } catch (error) {
         console.error("Failed to reject subscription:", error);
+        setFeedback({
+          type: "error",
+          title: "Could not reject subscription",
+          message: error instanceof Error ? error.message : "Failed to reject subscription.",
+        });
       }
     });
   };
@@ -397,8 +450,7 @@ export default function SubscriptionsPageClient({
 
   const handleCustomPaymentSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setCustomPaymentError(null);
-    setCustomPaymentSuccess(null);
+    setFeedback(null);
     setSavingCustomPayment(true);
     const form = event.currentTarget;
     const formData = new FormData(form);
@@ -427,12 +479,20 @@ export default function SubscriptionsPageClient({
 
       setManuallyAddedPayments((current) => [payment, ...current]);
       setPaymentPage(1);
-      setCustomPaymentSuccess("Custom subscription payment added to the revenue report.");
+      setFeedback({
+        type: "success",
+        title: "Payment recorded",
+        message: "The confirmed subscription payment has been added to the revenue report.",
+      });
       form.reset();
       setCustomSchoolId("");
       setCustomSchoolName("");
     } catch (error) {
-      setCustomPaymentError(error instanceof Error ? error.message : "Could not record this payment.");
+      setFeedback({
+        type: "error",
+        title: "Could not record payment",
+        message: error instanceof Error ? error.message : "Could not record this payment.",
+      });
     } finally {
       setSavingCustomPayment(false);
     }
@@ -507,6 +567,17 @@ export default function SubscriptionsPageClient({
 
   return (
     <div className="w-full space-y-6">
+      <ErrorModal
+        isOpen={Boolean(feedback || (loadError && !loadErrorDismissed))}
+        onClose={() => {
+          setFeedback(null);
+          setLoadErrorDismissed(true);
+        }}
+        title={feedback?.title || "Subscription data could not be loaded"}
+        message={feedback?.message || loadError || ""}
+        type={feedback?.type || "error"}
+        confirmLabel={feedback?.type === "success" ? "Done" : "Okay"}
+      />
       <style>{`@media print { @page { size: A4 landscape; margin: 14mm; } body * { visibility: hidden !important; } .subscription-revenue-print, .subscription-revenue-print * { visibility: visible !important; } .subscription-revenue-print { display: block !important; position: absolute; inset: 0 auto auto 0; width: 100%; background: #fff; color: #0f172a; z-index: 9999; font-size: 10px; } .no-print { display: none !important; } .subscription-revenue-print thead { display: table-header-group; } .subscription-revenue-print tr { break-inside: avoid; } }`}</style>
       <style>{`@keyframes support-page-pulse { 0%,100% { opacity: 1; box-shadow: 0 0 0 0 rgb(10 102 194 / .4) } 50% { opacity: .55; box-shadow: 0 0 0 7px rgb(10 102 194 / 0) } } @keyframes support-page-scan { from { transform: translateX(-100%) } to { transform: translateX(100%) } } .support-page-hero { position: relative; overflow: hidden; } .support-page-scan { position: absolute; inset: 0 auto 0 0; width: 33%; background: linear-gradient(to right, transparent, rgb(10 102 194 / .10), transparent); animation: support-page-scan 3.2s linear infinite; pointer-events: none; } .support-page-pulse { animation: support-page-pulse 0.9s ease-in-out infinite; }`}</style>
 
@@ -592,12 +663,6 @@ export default function SubscriptionsPageClient({
           )}
         </div>
       </div>
-
-      {loadError ? (
-        <div role="alert" className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          Subscription data could not be loaded: {loadError}
-        </div>
-      ) : null}
 
       {activeTab === "subscriptions" && (
         <div className="grid gap-3 border border-border bg-surface p-4 sm:grid-cols-3">
@@ -886,8 +951,6 @@ export default function SubscriptionsPageClient({
                     <input name="reference" maxLength={120} className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm" placeholder="Receipt or transaction reference" />
                   </label>
                 </div>
-                {customPaymentError ? <p role="alert" className="border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800">{customPaymentError}</p> : null}
-                {customPaymentSuccess ? <p role="status" className="border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800">{customPaymentSuccess}</p> : null}
                 <button type="submit" disabled={savingCustomPayment || Boolean(loadError)} className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50">
                   <Plus className="h-4 w-4" />
                   {savingCustomPayment ? "Recording payment…" : "Add payment record"}
@@ -1247,6 +1310,7 @@ export default function SubscriptionsPageClient({
                         <ActionDropdown
                           onCancel={() =>
                             startTransition(async () => {
+                              setFeedback(null);
                               try {
                                 const formData = new FormData();
                                 formData.set("schoolId", school.id);
@@ -1256,8 +1320,18 @@ export default function SubscriptionsPageClient({
                                     current.map((s) => (s.id === result.school.id ? { ...s, ...result.school } : s)),
                                   );
                                 }
+                                setFeedback({
+                                  type: "success",
+                                  title: "Subscription cancelled",
+                                  message: "The school subscription has been cancelled.",
+                                });
                               } catch (error) {
                                 console.error("Failed to cancel subscription:", error);
+                                setFeedback({
+                                  type: "error",
+                                  title: "Could not cancel subscription",
+                                  message: error instanceof Error ? error.message : "Failed to cancel subscription.",
+                                });
                               }
                             })
                           }
@@ -1463,8 +1537,8 @@ export default function SubscriptionsPageClient({
                 onClick={async () => {
                   if (!editingExpiryId || !editingExpiryValue) return;
                   playOpenTone();
-                  await handleSetExpiry(editingExpiryId, editingExpiryValue);
-                  closeExpiryModal();
+                  const saved = await handleSetExpiry(editingExpiryId, editingExpiryValue);
+                  if (saved) closeExpiryModal();
                 }}
                 disabled={savingExpiry || !editingExpiryValue}
                 className="rounded-none bg-brand px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
