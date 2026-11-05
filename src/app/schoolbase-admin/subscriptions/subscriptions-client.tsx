@@ -3,7 +3,7 @@
 import { useMemo, useState, useEffect, useTransition, useRef, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Download, FileText, Mail, Plus, TrendingUp } from "lucide-react";
+import { Download, FileText, Info, Mail, Plus, TrendingUp } from "lucide-react";
 import Image from "next/image";
 import { setSchoolPlanAction, approveSchoolSubscriptionAction, rejectSchoolSubscriptionAction } from "../actions";
 import { Badge } from "@/components/ui/badge";
@@ -788,13 +788,25 @@ export default function SubscriptionsPageClient({
               );
             })}
             <div className="border border-border bg-surface p-5">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted">Paid-plan accounts</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted">Paid-plan accounts</p>
+                <details className="group relative">
+                  <summary
+                    aria-label="Historical revenue information"
+                    className="flex h-5 w-5 cursor-pointer list-none items-center justify-center rounded-full text-muted outline-none transition hover:bg-brand/10 hover:text-brand focus-visible:ring-2 focus-visible:ring-brand [&::-webkit-details-marker]:hidden"
+                  >
+                    <Info className="h-3.5 w-3.5" aria-hidden="true" />
+                  </summary>
+                  <div className="absolute right-0 top-full z-30 mt-2 hidden w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-border bg-white p-3 text-left normal-case tracking-normal text-foreground shadow-lg group-open:block group-hover:block group-focus-within:block">
+                    <p className="text-xs font-semibold text-foreground">Historical revenue note</p>
+                    <p className="mt-1.5 text-xs leading-5 text-muted">
+                      Assigned schools are included in current plan counts and catalog-value estimates. Historical cash revenue is reported only when the ledger contains the actual payment amount and date.
+                    </p>
+                  </div>
+                </details>
+              </div>
               <p className="mt-2 text-3xl font-bold text-foreground">{initialSubscriptions.length}</p>
               <p className="mt-1 text-sm text-muted">Includes expired, suspended, or cancelled accounts</p>
-            </div>
-            <div className="border border-amber-200 bg-amber-50 p-5">
-              <p className="text-xs font-semibold uppercase tracking-wider text-amber-800">Historical revenue note</p>
-            <p className="mt-2 text-sm leading-6 text-amber-900">Assigned schools now appear in current plan counts and catalog-value estimates. Historical cash revenue is shown only when its actual payment amount and date exist in the ledger.</p>
             </div>
           </div>
           <div className="overflow-hidden border border-border bg-surface">
