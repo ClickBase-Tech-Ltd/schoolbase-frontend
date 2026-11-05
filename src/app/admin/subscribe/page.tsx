@@ -25,6 +25,23 @@ interface SchoolBillingProfile {
   country: string;
   currency: string;
   plan: string;
+  subscriptionExpiresAt: string | null;
+}
+
+type BillingIntent = "NEW" | "RENEWAL" | "UPGRADE";
+
+const PLAN_RANK: Record<string, number> = {
+  STARTER: 1,
+  GROWTH: 2,
+  ENTERPRISE: 3,
+};
+
+function formatAmount(amountMinor: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amountMinor / 100);
+  } catch {
+    return `${currency} ${(amountMinor / 100).toFixed(2)}`;
+  }
 }
 
 function isValidEmail(email: string): boolean {
@@ -88,8 +105,8 @@ const HELP_GUIDE: PageHelpGuide = {
     "Review the features and pricing of each plan.",
     "Choose the plan that best fits your school's size and requirements.",
     "Click 'Subscribe Now' to proceed with payment.",
-    "Complete the payment process using Paystack.",
-    "Your subscription activates immediately after successful payment.",
+    "Review whether you are starting, renewing, or upgrading, then complete checkout with the available payment provider.",
+    "Your subscription or upgrade is applied for one term only after successful payment verification.",
   ],
   commonTasks: [
     {
@@ -118,8 +135,8 @@ const HELP_GUIDE: PageHelpGuide = {
       tips: [
         "Go to your Subscription page anytime",
         "Click 'Upgrade Plan' to view higher tiers",
-        "Complete the upgrade payment",
-        "Your new plan features activate immediately",
+        "Review the prorated amount for the remaining days",
+        "After payment, the higher plan activates without changing the existing expiry date",
       ],
     },
   ],
@@ -130,15 +147,15 @@ const HELP_GUIDE: PageHelpGuide = {
     },
     {
       question: "How long does a subscription last?",
-      answer: "Each subscription is billed for a full term from the payment date. You can renew at the start of the next term, and you'll receive reminders before renewal.",
+      answer: "Each paid subscription lasts one term. Renewals made before expiry preserve the remaining time and add one term; overdue renewals start a new term from the payment date.",
     },
     {
       question: "Can I change plans later?",
-      answer: "Yes! You can upgrade to a higher plan anytime from your subscription dashboard. Downgrades take effect at your next renewal period.",
+      answer: "You can upgrade to a higher online-priced plan while the current plan is active. The difference is prorated for the remaining days and your current expiry date is preserved. Contact SchoolBase for custom or unpriced plans.",
     },
     {
       question: "What payment methods are accepted?",
-      answer: "SchoolBase uses Paystack for secure payments. You can pay using bank transfers, cards, USSD, or other methods supported by Paystack in your region.",
+      answer: "SchoolBase uses the available secure payment provider for your billing market. Available methods depend on the provider and country.",
     },
     {
       question: "Is there a free trial?",
@@ -149,6 +166,7 @@ const HELP_GUIDE: PageHelpGuide = {
 
 export default function SubscribePage() {
   const [loading, setLoading] = useState(true);
+  const [now, setNow] = useState(0);
   const [plans, setPlans] = useState<Plan[]>(defaultPlans);
   const [selectedPlan, setSelectedPlan] = useState<Plan>(defaultPlans[1]);
   const [currency, setCurrency] = useState("");
@@ -163,6 +181,7 @@ export default function SubscribePage() {
   const [schoolName, setSchoolName] = useState("");
   const [schoolSlug, setSchoolSlug] = useState("");
   const [schoolData, setSchoolData] = useState<SchoolBillingProfile | null>(null);
+  const [billingIntent, setBillingIntent] = useState<"RENEWAL" | "UPGRADE" | null>(null);
   const [showBankPanel, setShowBankPanel] = useState(false);
 
   const openBankModal = () => {
@@ -178,6 +197,13 @@ export default function SubscribePage() {
   const bankAccountName = process.env.BANK_ACCOUNT_NAME ?? process.env.NEXT_PUBLIC_BANK_ACCOUNT_NAME ?? "ClickBase Technologies Ltd";
   const bankAccountNumber = process.env.BANK_ACCOUNT_NUMBER ?? process.env.NEXT_PUBLIC_BANK_ACCOUNT_NUMBER ?? "1228481040";
   const bankName = process.env.BANK_NAME ?? process.env.NEXT_PUBLIC_BANK_NAME ?? "Zenith";
+
+  useEffect(() => {
+    const updateTime = () => setNow(Date.now());
+    updateTime();
+    const intervalId = window.setInterval(updateTime, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -256,7 +282,9 @@ export default function SubscribePage() {
               });
 
               setPlans(updatedPlans);
-              setSelectedPlan(updatedPlans.find((plan) => plan.id === "standard" && !plan.disabled)
+              const activePlanId = resolvedSchool.plan === "GROWTH" ? "standard" : String(resolvedSchool.plan || "").toLowerCase();
+              setSelectedPlan(updatedPlans.find((plan) => plan.id === activePlanId && !plan.disabled)
+                ?? updatedPlans.find((plan) => plan.id === "standard" && !plan.disabled)
                 ?? updatedPlans.find((plan) => !plan.disabled)
                 ?? updatedPlans[1]);
             } else {
@@ -302,6 +330,13 @@ export default function SubscribePage() {
       ? "Flutterwave"
       : "Online checkout unavailable";
   const currentSchoolPlan = String(schoolData?.plan || "").toUpperCase();
+  const currentExpiry = schoolData?.subscriptionExpiresAt ? new Date(schoolData.subscriptionExpiresAt) : null;
+  const isActivePaidSubscription = Boolean(
+    currentExpiry &&
+    !Number.isNaN(currentExpiry.getTime()) &&
+    currentExpiry.getTime() > now &&
+    PLAN_RANK[currentSchoolPlan],
+  );
   const currentPlanCardId = currentSchoolPlan === "STARTER"
     ? "starter"
     : currentSchoolPlan === "GROWTH"
@@ -309,6 +344,44 @@ export default function SubscribePage() {
     : currentSchoolPlan === "ENTERPRISE"
     ? "enterprise"
     : null;
+  const selectedPlanCode = selectedPlan.id === "standard" ? "GROWTH" : selectedPlan.id.toUpperCase();
+  const currentPlan = plans.find((plan) => plan.id === currentPlanCardId) ?? null;
+  const remainingDays = currentExpiry
+    ? Math.max(0, Math.ceil((currentExpiry.getTime() - now) / (24 * 60 * 60 * 1000)))
+    : 0;
+  const upgradeAmountMinor = currentPlan && selectedPlan.amountMinor > currentPlan.amountMinor
+    ? Math.ceil(((selectedPlan.amountMinor - currentPlan.amountMinor) * remainingDays) / 90)
+    : 0;
+  const checkoutAmountMinor = !isActivePaidSubscription
+    ? selectedPlan.amountMinor
+    : billingIntent === "RENEWAL" && selectedPlanCode === currentSchoolPlan
+      ? selectedPlan.amountMinor
+      : billingIntent === "UPGRADE" && PLAN_RANK[selectedPlanCode] > PLAN_RANK[currentSchoolPlan]
+        ? upgradeAmountMinor
+        : 0;
+  const effectiveBillingIntent: BillingIntent | null = isActivePaidSubscription
+    ? billingIntent
+    : "NEW";
+  const isPlanSelectable = (plan: Plan) => {
+    if (plan.disabled) return false;
+    if (!isActivePaidSubscription) return true;
+    const planCode = plan.id === "standard" ? "GROWTH" : plan.id.toUpperCase();
+    if (billingIntent === "RENEWAL") return planCode === currentSchoolPlan;
+    if (billingIntent === "UPGRADE") return PLAN_RANK[planCode] > PLAN_RANK[currentSchoolPlan];
+    return false;
+  };
+  const chooseBillingIntent = (intent: "RENEWAL" | "UPGRADE") => {
+    setBillingIntent(intent);
+    if (intent === "RENEWAL") {
+      if (currentPlan) setSelectedPlan(currentPlan);
+      return;
+    }
+    const firstHigherPlan = plans.find((plan) => {
+      const planCode = plan.id === "standard" ? "GROWTH" : plan.id.toUpperCase();
+      return !plan.disabled && PLAN_RANK[planCode] > PLAN_RANK[currentSchoolPlan];
+    });
+    if (firstHigherPlan) setSelectedPlan(firstHigherPlan);
+  };
 
   if (loading) {
     return (
@@ -379,6 +452,51 @@ export default function SubscribePage() {
         </div>
       ) : null}
 
+      {isActivePaidSubscription ? (
+        <section className="border border-border bg-surface p-5 sm:p-6" aria-labelledby="billing-intent-heading">
+          <p className="text-[11px] font-bold uppercase tracking-[.14em] text-brand">Choose your subscription change</p>
+          <h2 id="billing-intent-heading" className="mt-1 text-lg font-semibold text-foreground">
+            Your {currentSchoolPlan} plan is active until {currentExpiry?.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
+          </h2>
+          <p className="mt-2 text-sm text-muted">Select whether this payment renews your current plan or upgrades it. We will show the applicable amount before checkout.</p>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <label className="flex cursor-pointer gap-3 border border-border p-4 hover:border-brand">
+              <input
+                type="radio"
+                name="billing-intent"
+                value="RENEWAL"
+                checked={billingIntent === "RENEWAL"}
+                onChange={() => chooseBillingIntent("RENEWAL")}
+                className="mt-1 accent-brand"
+              />
+              <span>
+                <span className="block font-semibold text-foreground">Renew my current plan</span>
+                <span className="mt-1 block text-sm text-muted">Pay the full one-term price for {currentSchoolPlan}. Any remaining time is preserved.</span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer gap-3 border border-border p-4 hover:border-brand">
+              <input
+                type="radio"
+                name="billing-intent"
+                value="UPGRADE"
+                checked={billingIntent === "UPGRADE"}
+                onChange={() => chooseBillingIntent("UPGRADE")}
+                className="mt-1 accent-brand"
+              />
+              <span>
+                <span className="block font-semibold text-foreground">Upgrade to a higher plan</span>
+                <span className="mt-1 block text-sm text-muted">Pay the prorated difference for the remaining {remainingDays} day(s). The current expiry date stays unchanged.</span>
+              </span>
+            </label>
+          </div>
+          {!billingIntent ? <p className="mt-3 text-sm font-medium text-amber-800">Choose one option before selecting a plan or continuing to payment.</p> : null}
+        </section>
+      ) : (
+        <div className="border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          This purchase starts a new subscription term from the payment date.
+        </div>
+      )}
+
       {/* Plans */}
       <section>
         <div className="mb-3 flex items-end justify-between gap-3">
@@ -392,7 +510,7 @@ export default function SubscribePage() {
         {plans.map((plan) => (
           <div
             key={plan.id}
-            onClick={() => !plan.disabled && setSelectedPlan(plan)}
+            onClick={() => isPlanSelectable(plan) && setSelectedPlan(plan)}
             className={`border transition cursor-pointer p-5 flex flex-col
               ${
                 selectedPlan.id === plan.id
@@ -400,7 +518,7 @@ export default function SubscribePage() {
                   : "border-border hover:border-black/20"
               }
               bg-surface
-              ${plan.disabled ? "opacity-50 cursor-not-allowed" : ""}
+              ${!isPlanSelectable(plan) ? "opacity-50 cursor-not-allowed" : ""}
             `}
           >
             {currentPlanCardId === plan.id && (
@@ -435,15 +553,16 @@ export default function SubscribePage() {
             {/* Action */}
             <div className="mt-6">
               {plan.disabled ? (
-                  <button className="w-full border border-border py-2 text-sm font-semibold text-foreground transition hover:border-brand hover:text-brand">
+                  <a href="mailto:sales@schoolbase.live?subject=SchoolBase%20subscription%20quote" className="block w-full border border-border py-2 text-center text-sm font-semibold text-foreground transition hover:border-brand hover:text-brand">
                   Contact Sales
-                </button>
+                </a>
               ) : (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    setSelectedPlan(plan);
+                    if (isPlanSelectable(plan)) setSelectedPlan(plan);
                   }}
+                  disabled={!isPlanSelectable(plan)}
                     className={`w-full py-2 text-sm font-semibold transition
                     ${
                       selectedPlan.id === plan.id
@@ -451,7 +570,7 @@ export default function SubscribePage() {
                         : "border border-border bg-background text-foreground hover:border-brand hover:text-brand"
                     }`}
                 >
-                  {selectedPlan.id === plan.id ? "Selected" : "Select"}
+                  {selectedPlan.id === plan.id ? "Selected" : isActivePaidSubscription && billingIntent === "UPGRADE" ? "Upgrade to this plan" : "Select"}
                 </button>
               )}
             </div>
@@ -496,11 +615,22 @@ export default function SubscribePage() {
                 <h3 className="text-lg font-semibold text-foreground">Checkout</h3>
               </div>
               <p className="text-sm text-muted">
-                Upgrading <span className="font-semibold">{schoolName}</span> →
+                Billing for <span className="font-semibold">{schoolName}</span> →
                 <span className="ml-1 font-semibold text-brand">
                   {selectedPlan.name}
                 </span>
               </p>
+              {checkoutAmountMinor > 0 ? (
+                <p className="mt-2 text-lg font-bold text-foreground">
+                  {formatAmount(checkoutAmountMinor, currency)}
+                  <span className="ml-2 text-xs font-medium text-muted">
+                    {effectiveBillingIntent === "UPGRADE" ? `for ${remainingDays} remaining days` : "for one term"}
+                  </span>
+                </p>
+              ) : null}
+              {isActivePaidSubscription && effectiveBillingIntent === "UPGRADE" ? (
+                <p className="mt-1 text-xs text-muted">The upgrade takes effect after payment; your current expiry date is retained.</p>
+              ) : null}
               <p className="mt-2 text-sm text-muted">
                 Prices are displayed in {currency} for {countryName}. Checkout uses {paymentProviderLabel}.
               </p>
@@ -509,7 +639,7 @@ export default function SubscribePage() {
             <div className="w-full max-w-40 self-end sm:shrink-0">
               {checkoutAvailable && paymentProvider === "PAYSTACK" ? (
                 <PaystackPurchaseButton
-                  amountMinor={selectedPlan.amountMinor}
+                  amountMinor={checkoutAmountMinor}
                   currency={currency}
                   email={adminEmail}
                   name={adminName}
@@ -517,12 +647,13 @@ export default function SubscribePage() {
                   schoolName={schoolName}
                   slug={schoolSlug}
                   phone=""
-                  disabled={!adminName || !adminEmail || !schoolName || !isValidEmail(adminEmail)}
+                  disabled={!adminName || !adminEmail || !schoolName || !isValidEmail(adminEmail) || !effectiveBillingIntent || checkoutAmountMinor <= 0}
                   isSubscription={true}
+                  billingIntent={effectiveBillingIntent ?? undefined}
                 />
               ) : checkoutAvailable && paymentProvider === "FLUTTERWAVE" ? (
                 <FlutterwavePurchaseButton
-                  amountMinor={selectedPlan.amountMinor}
+                  amountMinor={checkoutAmountMinor}
                   currency={currency}
                   email={adminEmail}
                   name={adminName}
@@ -530,14 +661,18 @@ export default function SubscribePage() {
                   schoolName={schoolName}
                   slug={schoolSlug}
                   phone=""
-                  disabled={!adminName || !adminEmail || !schoolName || !isValidEmail(adminEmail)}
+                  disabled={!adminName || !adminEmail || !schoolName || !isValidEmail(adminEmail) || !effectiveBillingIntent || checkoutAmountMinor <= 0}
                   isSubscription={true}
+                  billingIntent={effectiveBillingIntent ?? undefined}
                 />
               ) : null}
             </div>
           </div>
           {!checkoutAvailable ? (
             <p className="mt-4 text-sm text-muted">Online checkout is not enabled for this billing market yet. Contact SchoolBase to discuss payment options.</p>
+          ) : null}
+          {isActivePaidSubscription && billingIntent === "UPGRADE" && checkoutAmountMinor <= 0 ? (
+            <p className="mt-4 text-sm text-amber-800">An online upgrade price is unavailable for this plan. Please contact SchoolBase for a confirmed quote; no estimated charge will be applied.</p>
           ) : null}
         </section>
       )}

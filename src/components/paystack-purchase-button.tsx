@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import { Button } from "@/components/ui/button";
 import { buildApiUrl } from "@/lib/api-client";
+import { ErrorModal } from "@/components/ui/error-modal";
 
 declare global {
   interface Window {
@@ -91,6 +92,7 @@ interface PaystackPurchaseButtonProps {
   phone: string;
   disabled?: boolean;
   isSubscription?: boolean;
+  billingIntent?: "NEW" | "RENEWAL" | "UPGRADE";
 }
 
 export function PaystackPurchaseButton({
@@ -104,6 +106,7 @@ export function PaystackPurchaseButton({
   phone,
   disabled = false,
   isSubscription = false,
+  billingIntent,
 }: PaystackPurchaseButtonProps): ReactElement {
   const fallbackPublicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? null;
   const [publicKey, setPublicKey] = useState<string | null>(null);
@@ -207,6 +210,7 @@ export function PaystackPurchaseButton({
             phone,
             schoolSlug: slug ?? "",
             isSubscription,
+            billingIntent,
           },
           callback_url: `${window.location.origin}${isSubscription ? "/admin/subscription-success" : "/purchase/success"}`,
         }),
@@ -235,7 +239,7 @@ export function PaystackPurchaseButton({
       setError((err as Error).message || "Unable to start payment.");
       setLoading(false);
     }
-  }, [amountMinor, currency, email, isSubscription, name, phone, plan, schoolName, slug]);
+  }, [amountMinor, billingIntent, currency, email, isSubscription, name, phone, plan, schoolName, slug]);
 
   if (!isSubscription && !publicKey) {
     return (
@@ -259,7 +263,17 @@ export function PaystackPurchaseButton({
       >
         {loading ? "Processing…" : "Pay now"}
       </Button>
-      {error ? <p className="text-xs text-red-600 font-medium">{error}</p> : null}
+      {error && !isSubscription ? <p className="text-xs text-red-600 font-medium">{error}</p> : null}
+      {isSubscription ? (
+        <ErrorModal
+          isOpen={Boolean(error)}
+          onClose={() => setError(null)}
+          title="Unable to start subscription checkout"
+          message={error || ""}
+          type="error"
+          confirmLabel="Okay"
+        />
+      ) : null}
     </div>
   );
 }

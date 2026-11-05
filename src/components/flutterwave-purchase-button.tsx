@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { ErrorModal } from "@/components/ui/error-modal";
 
 interface FlutterwavePurchaseButtonProps {
   amountMinor: number;
@@ -15,6 +16,7 @@ interface FlutterwavePurchaseButtonProps {
   disabled?: boolean;
   isSubscription?: boolean;
   isPublicSubscription?: boolean;
+  billingIntent?: "NEW" | "RENEWAL" | "UPGRADE";
 }
 
 export function FlutterwavePurchaseButton({
@@ -29,6 +31,7 @@ export function FlutterwavePurchaseButton({
   disabled = false,
   isSubscription = false,
   isPublicSubscription = false,
+  billingIntent,
 }: FlutterwavePurchaseButtonProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +55,7 @@ export function FlutterwavePurchaseButton({
             isPublicSubscription
               ? { plan, slug, email, name }
               : isSubscription
-              ? { plan }
+              ? { plan, billingIntent, amountMinor }
               : { amountMinor, currency, email, name, phone, plan, schoolName, slug, isSubscription },
           ),
         });
@@ -80,7 +83,17 @@ export function FlutterwavePurchaseButton({
       >
         {loading ? "Processing…" : "Pay now"}
       </Button>
-      {error ? <p className="text-xs text-red-600 font-medium">{error}</p> : null}
+      {error && !isSubscription && !isPublicSubscription ? <p className="text-xs text-red-600 font-medium">{error}</p> : null}
+      {isSubscription || isPublicSubscription ? (
+        <ErrorModal
+          isOpen={Boolean(error)}
+          onClose={() => setError(null)}
+          title="Unable to start subscription checkout"
+          message={error || ""}
+          type="error"
+          confirmLabel="Okay"
+        />
+      ) : null}
     </div>
   );
 }

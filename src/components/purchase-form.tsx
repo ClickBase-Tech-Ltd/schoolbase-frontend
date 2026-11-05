@@ -199,7 +199,7 @@ export function PurchaseForm({ initialPlan = "starter", success = false }: Purch
           </section>
 
           <section className="mt-10 border-t border-border pt-7" aria-labelledby="contact-heading">
-            <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-muted">Step 2</p><h2 id="contact-heading" className="mt-1 text-xl font-semibold">School and contact details</h2><p className="mt-2 text-sm text-muted">We use these details to set up your school subscription.</p></div>
+            <div><p className="text-xs font-bold uppercase tracking-[0.14em] text-muted">Step 2</p><h2 id="contact-heading" className="mt-1 text-xl font-semibold">School and contact details</h2><p className="mt-2 text-sm text-muted">We use these details to set up your school subscription. If your school already has an active paid plan, sign in as an administrator to choose renewal or upgrade.</p></div>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <label className={labelClass}>School name<input required value={schoolName} onChange={(event) => setSchoolName(event.target.value)} type="text" autoComplete="organization" placeholder="Greenfield School" className={fieldClass}/></label>
               <label className={labelClass}>Existing SchoolBase URL name<input required value={slug} onChange={(event) => setSlug(event.target.value)} placeholder="greenfield" className={fieldClass}/><span className="mt-1 block text-xs font-normal text-muted">Use the existing school&apos;s SchoolBase URL name so the payment can be assigned to the correct billing account.</span></label>

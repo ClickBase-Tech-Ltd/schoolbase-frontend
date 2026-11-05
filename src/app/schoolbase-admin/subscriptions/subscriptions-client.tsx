@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect, useTransition, useRef, type FormEvent } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { Download, Plus, TrendingUp } from "lucide-react";
 import Image from "next/image";
 import { setSchoolPlanAction, approveSchoolSubscriptionAction, rejectSchoolSubscriptionAction } from "../actions";
@@ -58,6 +59,8 @@ interface SubscriptionPaymentRecord {
   currency: string | null;
   status: string | null;
   paymentStatus: string | null;
+  subscriptionApplicationStatus?: string | null;
+  billingIntent?: string | null;
 }
 
 interface SubscriptionSchoolRecord {
@@ -120,6 +123,7 @@ export default function SubscriptionsPageClient({
   subscriptions: SubscriptionSchoolRecord[];
   loadError?: string | null;
 }) {
+  const router = useRouter();
   const [schools, setSchools] = useState<School[]>(initialSchools);
   const [manuallyAddedPayments, setManuallyAddedPayments] = useState<SubscriptionPaymentRecord[]>([]);
   const payments = useMemo(() => {
@@ -469,9 +473,10 @@ export default function SubscriptionsPageClient({
           paymentDate: formData.get("paymentDate"),
           method: formData.get("method"),
           reference: formData.get("reference"),
+          billingAction: formData.get("billingAction"),
         }),
       });
-      const data: { payment?: SubscriptionPaymentRecord; message?: string } | null = await response.json().catch(() => null);
+      const data: { payment?: SubscriptionPaymentRecord; message?: string; subscriptionApplied?: boolean } | null = await response.json().catch(() => null);
       const payment = data?.payment;
       if (!response.ok || !payment) {
         throw new Error(data?.message || "Could not record this payment.");
@@ -481,9 +486,12 @@ export default function SubscriptionsPageClient({
       setPaymentPage(1);
       setFeedback({
         type: "success",
-        title: "Payment recorded",
-        message: "The confirmed subscription payment has been added to the revenue report.",
+        title: data.subscriptionApplied ? "Payment recorded and subscription applied" : "Payment recorded",
+        message: data.subscriptionApplied
+          ? "The confirmed payment has been recorded and the school subscription updated."
+          : "The confirmed payment has been added to the revenue report without changing school access.",
       });
+      if (data.subscriptionApplied) router.refresh();
       form.reset();
       setCustomSchoolId("");
       setCustomSchoolName("");
@@ -883,7 +891,7 @@ export default function SubscriptionsPageClient({
                 <h3 className="text-base font-semibold text-foreground">Record a custom or historical payment</h3>
               </div>
               <p className="mb-4 text-sm leading-6 text-muted">
-                Use this for confirmed payments collected outside checkout or historical receipts that are missing from the ledger. Enter the actual payment date and amount. This records revenue only; it does not activate or change a school subscription.
+                Record confirmed payments or historical receipts. For a newly verified transfer, you can atomically record the receipt and apply a new 90-day term, renewal, or upgrade. Leave the action as “Record only” for historical receipts that must not change school access.
               </p>
               <form onSubmit={handleCustomPaymentSubmit} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
@@ -893,15 +901,15 @@ export default function SubscriptionsPageClient({
                       name="schoolId"
                       value={customSchoolId}
                       onChange={(event) => {
-                        const selected = initialSubscriptions.find((subscription) => subscription.id === event.target.value);
+                        const selected = schools.find((school) => school.id === event.target.value);
                         setCustomSchoolId(event.target.value);
                         if (selected) setCustomSchoolName(selected.name);
                       }}
                       className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
                     >
                       <option value="">Record by school name only</option>
-                      {initialSubscriptions.map((subscription) => (
-                        <option key={subscription.id} value={subscription.id}>{subscription.name} · {subscription.plan}</option>
+                      {schools.map((school) => (
+                        <option key={school.id} value={school.id}>{school.name} · {school.plan}</option>
                       ))}
                     </select>
                   </label>
@@ -921,6 +929,16 @@ export default function SubscriptionsPageClient({
                       <option value="ENTERPRISE">Enterprise</option>
                       <option value="CUSTOM">Custom</option>
                     </select>
+                  </label>
+                  <label className="text-sm font-medium text-foreground">
+                    Subscription action
+                    <select name="billingAction" defaultValue="RECORD_ONLY" className="mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm">
+                      <option value="RECORD_ONLY">Record only — do not change access</option>
+                      <option value="NEW">Apply new 90-day subscription</option>
+                      <option value="RENEWAL">Apply renewal — preserve remaining days</option>
+                      <option value="UPGRADE">Apply upgrade — preserve current expiry</option>
+                    </select>
+                    <span className="mt-1 block text-xs font-normal text-muted">Only select an apply action after confirming the funds were received. Applying requires an existing school and a valid matching billing currency.</span>
                   </label>
                   <label className="text-sm font-medium text-foreground">
                     Currency
@@ -1063,6 +1081,7 @@ export default function SubscriptionsPageClient({
                     <th className="px-3 py-2 font-medium">Country</th>
                     <th className="px-3 py-2 font-medium">Plan</th>
                     <th className="px-3 py-2 font-medium">Payment Status</th>
+                    <th className="px-3 py-2 font-medium">Subscription action</th>
                     <th className="px-3 py-2 font-medium">Amount</th>
                     <th className="px-3 py-2 font-medium">Method</th>
                     <th className="px-3 py-2 font-medium">Reference</th>
@@ -1083,6 +1102,19 @@ export default function SubscriptionsPageClient({
                         <span className="rounded-full bg-success/10 px-2.5 py-1 text-xs font-semibold text-success">
                           {payment.paymentStatus || "COMPLETED"}
                         </span>
+                      </td>
+                      <td className="px-3 py-2 text-xs">
+                        {payment.subscriptionApplicationStatus === "APPLIED"
+                          ? payment.billingIntent === "RENEWAL"
+                            ? "Renewal applied"
+                            : payment.billingIntent === "UPGRADE"
+                              ? "Upgrade applied"
+                              : "New term applied"
+                          : payment.subscriptionApplicationStatus === "REVIEW_REQUIRED"
+                            ? "Review required"
+                            : payment.subscriptionApplicationStatus === "RECORD_ONLY"
+                              ? "Record only"
+                              : "Not tracked"}
                       </td>
                       <td className="px-3 py-2 font-medium text-foreground">
                         {formatMinorAmount(payment.amount || 0, payment.currency || "NGN")}

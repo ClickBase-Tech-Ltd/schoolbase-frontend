@@ -4,6 +4,8 @@ import { AlertTriangle, CheckCircle2, CreditCard } from "lucide-react";
 
 interface SubscriptionVerificationResponse {
   success?: boolean;
+  subscriptionApplied?: boolean;
+  message?: string;
   error?: string;
   reference?: string;
   school?: {
@@ -69,15 +71,19 @@ async function ActivateSchoolServer({ reference, transactionId }: { reference: s
 
   return (
     <div className="border border-border bg-surface p-6 sm:p-8">
-      <div className="border border-emerald-200 bg-emerald-50 p-6">
+      <div className={`border p-6 ${verificationData.subscriptionApplied === false ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
         <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center bg-emerald-100 text-emerald-700">
-            <CheckCircle2 className="h-6 w-6" />
+          <div className={`flex h-12 w-12 items-center justify-center ${verificationData.subscriptionApplied === false ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+            {verificationData.subscriptionApplied === false ? <AlertTriangle className="h-6 w-6" /> : <CheckCircle2 className="h-6 w-6" />}
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-emerald-900">Subscription activated</h2>
-            <p className="mt-2 text-sm text-emerald-800">
-              Your payment has been confirmed and your school can now access SchoolBase.
+            <h2 className={`text-xl font-semibold ${verificationData.subscriptionApplied === false ? "text-amber-900" : "text-emerald-900"}`}>
+              {verificationData.subscriptionApplied === false ? "Payment received — review required" : "Subscription activated"}
+            </h2>
+            <p className={`mt-2 text-sm ${verificationData.subscriptionApplied === false ? "text-amber-800" : "text-emerald-800"}`}>
+              {verificationData.subscriptionApplied === false
+                ? verificationData.message || "Your payment is confirmed, but the school subscription needs support review before access can be updated."
+                : "Your payment has been confirmed and your school can now access SchoolBase."}
             </p>
           </div>
         </div>

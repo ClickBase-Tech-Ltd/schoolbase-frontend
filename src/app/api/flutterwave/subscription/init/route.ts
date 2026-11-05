@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
         "Content-Type": "application/json",
         Cookie: request.headers.get("cookie") || "",
       },
-      body: JSON.stringify({ plan: body?.plan }),
+      body: JSON.stringify({ plan: body?.plan, billingIntent: body?.billingIntent, amountMinor: body?.amountMinor }),
       cache: "no-store",
     });
     const data = await response.json().catch(() => null);

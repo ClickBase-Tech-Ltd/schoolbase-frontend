@@ -83,7 +83,7 @@ const statusConfig: Record<string, { icon: React.ReactNode; color: string; badge
 
 const HELP_GUIDE: PageHelpGuide = {
   title: "Managing Your Subscription",
-  overview: "View and manage your school's subscription plan, billing dates, and renewal status. Stay informed about your trial period and subscription expiry dates for the active term.",
+  overview: "View and manage your school's subscription plan, billing dates, and renewal status. Paid subscriptions are billed per term.",
   steps: [
     "Check your current subscription status and plan details.",
     "Monitor your subscription expiry date and days remaining.",
@@ -94,12 +94,13 @@ const HELP_GUIDE: PageHelpGuide = {
   commonTasks: [
     {
       title: "Renew Your Subscription",
-      description: "Extend your school's subscription access for the next term.",
+      description: "Extend your school's access for one additional term.",
       tips: [
         "Click 'Renew Subscription' button on this page",
         "Select your plan and payment method",
         "Complete payment to activate the renewal",
-        "Your subscription will be extended for the next school term",
+        "Renewing before expiry adds one term to the existing expiry date",
+        "Renewing after expiry starts a new term from the payment date",
       ],
     },
     {
@@ -109,7 +110,8 @@ const HELP_GUIDE: PageHelpGuide = {
         "Click 'Upgrade Plan' to view available plans",
         "Compare features between STARTER, GROWTH, and ENTERPRISE plans",
         "Select the plan that fits your school's needs",
-        "Complete payment and your new plan activates immediately",
+        "Review the prorated price for the remaining days",
+        "After payment, the higher plan activates and your existing expiry is preserved",
       ],
     },
     {
@@ -130,7 +132,7 @@ const HELP_GUIDE: PageHelpGuide = {
     },
     {
       question: "How long does a subscription last?",
-      answer: "Each subscription is tied to a school term and remains active until the term ends. You'll receive reminders before expiry, and you can renew anytime to extend your access for the next term.",
+      answer: "Each paid subscription lasts one term. Renewing before expiry preserves the remaining time and adds one term; renewing after expiry starts a new term from the payment date.",
     },
     {
       question: "What's the difference between plans?",
@@ -138,7 +140,7 @@ const HELP_GUIDE: PageHelpGuide = {
     },
     {
       question: "Can I upgrade or downgrade my plan?",
-      answer: "Yes, you can upgrade anytime to access more features. Downgrades are also available but take effect at your next renewal period.",
+      answer: "You can upgrade to a higher plan during an active term. The upgrade is prorated for the remaining days and preserves your current expiry date. Downgrades are not available through the online mid-term upgrade flow.",
     },
   ],
 };
@@ -380,7 +382,7 @@ export default function SubscriptionPage() {
       ? new Date(activePlanDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
       : "No date available";
   const activePlanSecondary = isActivePlan && activePlanDate
-    ? `Renews on ${new Date(activePlanDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+    ? `Access through ${new Date(activePlanDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
     : null;
 
   return (
