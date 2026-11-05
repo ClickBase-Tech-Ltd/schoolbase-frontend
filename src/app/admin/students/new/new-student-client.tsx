@@ -300,6 +300,10 @@ export default function NewStudentClient() {
 
       if (!response.ok) {
         const result = await response.json();
+        if (result.code === "STUDENT_CAPACITY_REACHED") {
+          router.replace("/admin/subscribe");
+          return;
+        }
         throw new Error(result.error || "Failed to create student");
       }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -55,6 +56,7 @@ function getStatusLabel(status: string) {
 }
 
 export default function AdminAdmissionsPage() {
+  const router = useRouter();
   const [applications, setApplications] = useState<any[]>([]);
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [searchValue, setSearchValue] = useState("");
@@ -302,6 +304,10 @@ export default function AdminAdmissionsPage() {
 
       if (response.status === 403 && data?.code === "SUBSCRIPTION_INACTIVE") {
         setSubscriptionBlocked({ reason: data?.reason || "Your school subscription is not active" });
+        return;
+      }
+      if (data?.code === "STUDENT_CAPACITY_REACHED") {
+        router.replace("/admin/subscribe");
         return;
       }
 

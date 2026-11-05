@@ -381,6 +381,10 @@ export default function StudentsPageClient({ pupils, classes }: { pupils: any[];
         body: JSON.stringify({ status: nextStatus }),
       });
       const data = await response.json().catch(() => ({}));
+      if (data?.code === "STUDENT_CAPACITY_REACHED") {
+        router.replace("/admin/subscribe");
+        return;
+      }
       if (!response.ok) throw new Error(data.error || `Student could not be marked ${nextStatus.toLowerCase()}.`);
       const updatedStudent = { ...statusActionStudent, ...data, status: nextStatus, isActive: nextStatus === "ACTIVE" };
       if (nextStatus === "INACTIVE") {
@@ -628,6 +632,10 @@ export default function StudentsPageClient({ pupils, classes }: { pupils: any[];
       }
 
       if (!res.ok) {
+        if (data?.code === 'STUDENT_CAPACITY_REACHED') {
+          router.replace('/admin/subscribe');
+          return;
+        }
         const fallbackMessage = typeof data?.error === 'string' && data.error.trim()
           ? data.error
           : 'The import preview could not be completed.';
@@ -689,6 +697,10 @@ export default function StudentsPageClient({ pupils, classes }: { pupils: any[];
       }
 
       if (!res.ok) {
+        if (data?.code === 'STUDENT_CAPACITY_REACHED') {
+          router.replace('/admin/subscribe');
+          return;
+        }
         setImportErrors([data?.error || 'The student import could not be completed.']);
         return;
       }

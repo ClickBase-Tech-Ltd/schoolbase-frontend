@@ -267,6 +267,10 @@ export default function StudentEditClient({ studentId }: { studentId: string }) 
 
       if (!response.ok) {
         const result = await response.json();
+        if (result.code === "STUDENT_CAPACITY_REACHED") {
+          router.replace("/admin/subscribe");
+          return;
+        }
         throw new Error(result.error || "Failed to update student");
       }
 
