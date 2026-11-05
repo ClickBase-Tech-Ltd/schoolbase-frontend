@@ -9,10 +9,13 @@ import SubscriptionsClient from "./subscriptions-client";
 export default function SubscriptionsPage() {
   const [schools, setSchools] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [subscriptions, setSubscriptions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
+      setLoadError(null);
       const [schoolsRes, paymentsRes] = await Promise.all([
         fetch(`/schoolbase-admin/api/schools?limit=500`, {
           credentials: "include",
@@ -22,13 +25,23 @@ export default function SubscriptionsPage() {
         }),
       ]);
 
-      const schoolsData = await schoolsRes.json();
       const paymentsData = await paymentsRes.json();
+      if (!paymentsRes.ok) {
+        throw new Error(paymentsData?.error || paymentsData?.message || "Subscription payment records could not be loaded.");
+      }
 
-      setSchools(schoolsData.schools || []);
+      if (schoolsRes.ok) {
+        const schoolsData = await schoolsRes.json();
+        setSchools(schoolsData.schools || []);
+      } else {
+        console.error("School overview data could not be loaded:", await schoolsRes.text());
+        setSchools([]);
+      }
       setPayments(paymentsData.payments || []);
+      setSubscriptions(paymentsData.subscriptions || []);
     } catch (err) {
       console.error("Error loading subscriptions data:", err);
+      setLoadError(err instanceof Error ? err.message : "Unable to load subscription data.");
     } finally {
       setLoading(false);
     }
@@ -42,18 +55,17 @@ export default function SubscriptionsPage() {
     const handleFocus = () => {
       void loadData();
     };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") void loadData();
+    };
 
     window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") {
-        void loadData();
-      }
-    });
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       window.clearTimeout(initialLoad);
       window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [loadData]);
 
@@ -67,7 +79,7 @@ export default function SubscriptionsPage() {
 
   return (
     <SubscriptionPageFrame>
-      <SubscriptionsClient schools={schools} payments={payments} />
+      <SubscriptionsClient schools={schools} payments={payments} subscriptions={subscriptions} loadError={loadError} />
     </SubscriptionPageFrame>
   );
 }

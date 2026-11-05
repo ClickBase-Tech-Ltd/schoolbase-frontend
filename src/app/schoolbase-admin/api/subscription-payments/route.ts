@@ -31,3 +31,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Failed to fetch subscription payments" }, { status: 500 });
   }
 }
+
+export async function POST(req: NextRequest) {
+  try {
+    const backendUrl = getBackendUrl();
+    const response = await fetch(`${backendUrl}/schoolbase-admin/api/subscription-payments`, {
+      method: "POST",
+      headers: {
+        Cookie: req.headers.get("cookie") || "",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(await req.json()),
+      cache: "no-store",
+    });
+    const data = await response.json().catch(() => null);
+    return NextResponse.json(data ?? { message: "Failed to record the subscription payment." }, { status: response.status });
+  } catch (error) {
+    console.error("Error recording custom subscription payment:", error);
+    return NextResponse.json({ message: "Failed to record the subscription payment." }, { status: 502 });
+  }
+}
