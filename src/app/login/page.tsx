@@ -2,6 +2,7 @@ import { CheckCircle2, LockKeyhole, ShieldCheck } from "lucide-react";
 import { AppLogo } from "@/components/app-logo";
 import { LoginForm } from "@/components/auth/login-form";
 import { LoginPageAdSlot } from "@/components/login-page-ad-slot";
+import { AccountSetupSuccessModal } from "./account-setup-success-modal";
 
 export const metadata = {
   title: "School Login | SchoolBase",
@@ -12,9 +13,9 @@ export const metadata = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; signup?: string; reset?: string }>;
+  searchParams: Promise<{ next?: string; signup?: string; reset?: string; setup?: string }>;
 }) {
-  const { next, signup, reset } = await searchParams;
+  const { next, signup, reset, setup } = await searchParams;
   const teacherLoginRequested = next === "/teacher";
   const attendanceLoginRequested = next === "/staff/attendance";
   const adminDestination = typeof next === "string"
@@ -78,13 +79,18 @@ export default async function LoginPage({
                 </div>
               ) : null}
 
-              <p className="mt-2 text-sm text-muted">Sign in to manage your school.</p>
+              <p className="mt-2 text-sm text-muted">Sign in to your SchoolBase workspace. We’ll take you to the right place based on your account.</p>
 
               <LoginForm redirectTo={teacherLoginRequested ? "/teacher" : attendanceLoginRequested ? "/staff/attendance" : adminDestination} teacherLoginRequested={teacherLoginRequested} attendanceLoginRequested={attendanceLoginRequested} />
+              <div className="mt-6 border-t border-border pt-4 text-center text-xs leading-5 text-muted">
+                SchoolBase platform admins and invited country administrators also sign in here.
+                Access is assigned by your account; country administrators cannot self-register.
+              </div>
             </div>
           </div>
         </section>
       </div>
+      <AccountSetupSuccessModal isOpen={setup === "success"} />
     </main>
   );
 }

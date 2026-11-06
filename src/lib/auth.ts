@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { sendEmail, buildSignupVerificationEmail } from "@/lib/email";
 
-export type UserRole = "SCHOOL_ADMIN" | "BURSAR" | "TEACHER" | "STAFF" | "PARENT" | "STUDENT" | "PLATFORM_ADMIN";
+export type UserRole = "SCHOOL_ADMIN" | "BURSAR" | "TEACHER" | "STAFF" | "PARENT" | "STUDENT" | "PLATFORM_ADMIN" | "COUNTRY_REP";
 
 const SESSION_COOKIE = "schoolbase_session"; // Unified session cookie for all user types
 
@@ -23,6 +23,7 @@ export type StaffSession = {
   email: string;
   name: string;
   role: UserRole;
+  countryCode?: string | null;
   iat?: number;
   exp?: number;
 };
@@ -102,6 +103,23 @@ export async function getPlatformAdminSession(): Promise<StaffSession | null> {
       return session;
     }
     return null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getCountryRepresentativeSession(): Promise<StaffSession | null> {
+  const jar = await cookies();
+  const token = getSessionTokenFromJar(jar);
+  if (!token) return null;
+
+  const backendSession = await getBackendSession(token);
+  if (backendSession?.role === "COUNTRY_REP" && backendSession.countryCode) return backendSession;
+
+  try {
+    const { payload } = await jwtVerify(token, secret());
+    const session = payload as unknown as StaffSession;
+    return session.role === "COUNTRY_REP" && session.countryCode ? session : null;
   } catch {
     return null;
   }

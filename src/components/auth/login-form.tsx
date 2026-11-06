@@ -9,8 +9,8 @@ type LoginResponse = {
   error?: string;
   needsVerification?: boolean;
   email?: string;
-  session?: { role?: string } | null;
-  user?: { role?: string } | null;
+  session?: { role?: string; countryCode?: string } | null;
+  user?: { role?: string; countryCode?: string } | null;
   role?: string | null;
 };
 
@@ -33,10 +33,6 @@ export function LoginForm({ redirectTo, teacherLoginRequested = false, attendanc
       const email = (form.elements.namedItem("email") as HTMLInputElement).value;
       const password = (form.elements.namedItem("password") as HTMLInputElement).value;
 
-      console.log('=== LOGIN FORM SUBMIT ===');
-      console.log('Email:', email);
-      console.log('Password length:', password.length);
-
       // ✅ Call the canonical auth proxy route
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -46,10 +42,6 @@ export function LoginForm({ redirectTo, teacherLoginRequested = false, attendanc
       });
 
       const data = await res.json() as LoginResponse;
-
-      console.log('=== LOGIN RESPONSE ===');
-      console.log('Status:', res.status);
-      console.log('Data:', data);
 
       if (!res.ok) {
         const needsVerification = Boolean(data.needsVerification);
@@ -103,6 +95,9 @@ export function LoginForm({ redirectTo, teacherLoginRequested = false, attendanc
       } else if (sessionRole === "PLATFORM_ADMIN") {
         redirectUrl = "/schoolbase-admin";
         console.log('Platform admin login detected, redirecting to /schoolbase-admin');
+      } else if (sessionRole === "COUNTRY_REP") {
+        redirectUrl = "/country-admin";
+        console.log('Country representative login detected, redirecting to /country-admin');
       } else if (sessionRole === "SCHOOL_ADMIN") {
         redirectUrl = redirectTo === "/admin" ? "/admin?onboarding=1" : redirectTo;
         console.log(`School admin login detected, redirecting to ${redirectUrl}`);

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { portalForRole, roleCanAccess, roleRequirementForPath } from '../src/lib/role-access.js';
+import { loginForPath, portalForRole, roleCanAccess, roleRequirementForPath } from '../src/lib/role-access.js';
 
 const portalCases = [
   ['/admin/fees', 'SCHOOL_ADMIN'],
@@ -7,12 +7,13 @@ const portalCases = [
   ['/teacher/results', 'TEACHER'],
   ['/parent/invoices', 'PARENT'],
   ['/schoolbase-admin/audit', 'PLATFORM_ADMIN'],
+  ['/country-admin', 'COUNTRY_REP'],
 ] as const;
 
 for (const [path, allowedRole] of portalCases) {
   const requirement = roleRequirementForPath(path);
   assert.equal(roleCanAccess(requirement, allowedRole), true, `${allowedRole} should access ${path}`);
-  for (const deniedRole of ['SCHOOL_ADMIN', 'BURSAR', 'TEACHER', 'PARENT', 'STUDENT', 'PLATFORM_ADMIN']) {
+  for (const deniedRole of ['SCHOOL_ADMIN', 'BURSAR', 'TEACHER', 'PARENT', 'STUDENT', 'PLATFORM_ADMIN', 'COUNTRY_REP']) {
     if (deniedRole !== allowedRole) {
       assert.equal(roleCanAccess(requirement, deniedRole), false, `${deniedRole} must not access ${path}`);
     }
@@ -31,6 +32,12 @@ assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/whatsapp/status'),
 assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/whatsapp/status'), 'SCHOOL_ADMIN'), true);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/whatsapp/status', 'POST'), 'BURSAR'), false);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/admin/verify', 'POST'), null), true);
+assert.equal(roleCanAccess(roleRequirementForPath('/api/country-admin/overview'), 'COUNTRY_REP'), true);
+assert.equal(roleCanAccess(roleRequirementForPath('/api/country-admin/overview'), 'PLATFORM_ADMIN'), false);
+assert.equal(roleCanAccess(roleRequirementForPath('/country-admin/login'), null), true);
+assert.equal(loginForPath('/country-admin'), '/login');
+assert.equal(loginForPath('/schoolbase-admin'), '/login');
+assert.equal(portalForRole('COUNTRY_REP'), '/country-admin');
 assert.equal(roleCanAccess(roleRequirementForPath('/api/parent/login', 'POST'), null), true);
 assert.equal(roleCanAccess(roleRequirementForPath('/staff'), 'STAFF'), true);
 assert.equal(roleCanAccess(roleRequirementForPath('/api/staff/me'), 'STAFF'), true);

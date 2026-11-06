@@ -5,7 +5,8 @@ export type SchoolBaseRole =
   | 'STAFF'
   | 'PARENT'
   | 'STUDENT'
-  | 'PLATFORM_ADMIN';
+  | 'PLATFORM_ADMIN'
+  | 'COUNTRY_REP';
 
 export type RoleRequirement = readonly SchoolBaseRole[] | null;
 
@@ -25,7 +26,11 @@ function isWithin(pathname: string, prefix: string) {
 export function roleRequirementForPath(pathname: string, method = 'GET'): RoleRequirement {
   const normalizedMethod = method.toUpperCase();
 
-  if (pathname === '/parent/login' || pathname === '/schoolbase-admin/login') return null;
+  if (
+    pathname === '/parent/login' ||
+    pathname === '/schoolbase-admin/login' ||
+    pathname === '/country-admin/login'
+  ) return null;
 
   if (pathname === '/api/admin/verify'
     || pathname === '/api/admin/login'
@@ -37,6 +42,9 @@ export function roleRequirementForPath(pathname: string, method = 'GET'): RoleRe
 
   if (isWithin(pathname, '/schoolbase-admin') || isWithin(pathname, '/schoolbase-admin/api')) {
     return ['PLATFORM_ADMIN'];
+  }
+  if (isWithin(pathname, '/country-admin') || isWithin(pathname, '/api/country-admin')) {
+    return ['COUNTRY_REP'];
   }
   if (isWithin(pathname, '/accounting') || isWithin(pathname, '/api/bursar')) {
     return ACCOUNTING_ROLES;
@@ -76,12 +84,12 @@ export function portalForRole(role?: string | null): string {
     case 'STAFF': return '/staff';
     case 'PARENT': return '/parent';
     case 'PLATFORM_ADMIN': return '/schoolbase-admin';
+    case 'COUNTRY_REP': return '/country-admin';
     default: return '/login';
   }
 }
 
 export function loginForPath(pathname: string): string {
   if (isWithin(pathname, '/parent')) return '/parent/login';
-  if (isWithin(pathname, '/schoolbase-admin')) return '/schoolbase-admin/login';
   return '/login';
 }

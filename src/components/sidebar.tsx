@@ -144,7 +144,9 @@ export default function Sidebar({
         ? "Teacher workspace"
         : logoHref.startsWith("/schoolbase-admin")
           ? "Platform admin"
-          : "School admin";
+          : logoHref.startsWith("/country-admin")
+            ? "Country Admin"
+            : "School admin";
   const schoolContext = [session?.name ?? "Staff", school?.city ?? school?.country].filter(Boolean).join(" · ");
   const normalizedProgress = typeof setupProgress === "number" ? Math.max(0, Math.min(100, setupProgress)) : 0;
   const isSetupComplete = normalizedProgress >= 100;

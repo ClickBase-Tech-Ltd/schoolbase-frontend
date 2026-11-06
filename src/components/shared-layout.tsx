@@ -852,7 +852,7 @@ export default function SharedLayout({
             )}
           </Button>
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand">{logoHref === "/teacher" ? "Teacher workspace" : logoHref === "/parent" ? "Parent portal" : logoHref === "/accounting" ? "Finance workspace" : "School admin"}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand">{logoHref === "/teacher" ? "Teacher workspace" : logoHref === "/parent" ? "Parent portal" : logoHref === "/accounting" ? "Finance workspace" : logoHref === "/country-admin" ? "Country administrator" : "School admin"}</p>
             <h1 className="truncate text-sm font-semibold text-foreground">{school?.name || "SchoolBase"}</h1>
           </div>
         </div>

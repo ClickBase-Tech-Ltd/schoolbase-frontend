@@ -20,6 +20,8 @@ const ROLE_PROTECTED_PREFIXES = [
   "/api/staff",
   "/api/parent",
   "/schoolbase-admin/api",
+  "/country-admin",
+  "/api/country-admin",
 ] as const;
 
 function isRoleProtectedPath(pathname: string) {
@@ -93,7 +95,7 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (!isRoleProtectedPath(pathname)) return NextResponse.next();
 
-  const isApiRequest = pathname.startsWith('/api/') || pathname.startsWith('/schoolbase-admin/api/');
+  const isApiRequest = pathname.startsWith('/api/') || pathname.startsWith('/schoolbase-admin/api/') || pathname.startsWith('/country-admin/api/');
   const requirement = roleRequirementForPath(pathname, request.method);
   const cookie = SESSION_COOKIE_NAMES
     .map((name) => ({ name, value: request.cookies.get(name)?.value }))

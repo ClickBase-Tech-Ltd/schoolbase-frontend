@@ -12,6 +12,7 @@ const hiddenPublicShellPaths = [
   "/admissions",
   "/schoolbase-admin",
   "/accounting",
+  "/country-admin",
 ];
 
 export default function PublicShellGate({ children }: { children: ReactNode }) {
