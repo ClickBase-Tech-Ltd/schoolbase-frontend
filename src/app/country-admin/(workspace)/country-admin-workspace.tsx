@@ -70,8 +70,8 @@ export default function CountryAdminWorkspace({ section }: { section: CountryAdm
       if (search.trim()) query.set("search", search.trim());
       if (status) query.set("status", status);
       const [dashboardResponse, supportResponse] = await Promise.all([
-        fetch(`/api/country-admin/overview?${query}`, { cache: "no-store" }),
-        fetch("/api/country-admin/support?limit=25", { cache: "no-store" }),
+        fetch(`/country-admin/api/overview?${query}`, { cache: "no-store" }),
+        fetch("/country-admin/api/support?limit=25", { cache: "no-store" }),
       ]);
       const [dashboardBody, supportBody] = await Promise.all([dashboardResponse.json(), supportResponse.json()]);
       if (!dashboardResponse.ok) throw new Error(dashboardBody.error || "Could not load country schools.");
@@ -93,7 +93,7 @@ export default function CountryAdminWorkspace({ section }: { section: CountryAdm
 
   async function openSupport(requestId: string) {
     try {
-      const response = await fetch(`/api/country-admin/support/${encodeURIComponent(requestId)}`, { cache: "no-store" });
+      const response = await fetch(`/country-admin/api/support/${encodeURIComponent(requestId)}`, { cache: "no-store" });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || "Could not open this support request.");
       setSelectedSupport(body.request);
@@ -108,7 +108,7 @@ export default function CountryAdminWorkspace({ section }: { section: CountryAdm
     if (!selectedSupport || !reply.trim()) return;
     setSending(true);
     try {
-      const response = await fetch(`/api/country-admin/support/${encodeURIComponent(selectedSupport.id)}/reply`, {
+      const response = await fetch(`/country-admin/api/support/${encodeURIComponent(selectedSupport.id)}/reply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: reply.trim() }),
@@ -128,7 +128,7 @@ export default function CountryAdminWorkspace({ section }: { section: CountryAdm
   async function updateSupportStatus(nextStatus: string) {
     if (!selectedSupport) return;
     try {
-      const response = await fetch(`/api/country-admin/support/${encodeURIComponent(selectedSupport.id)}/status`, {
+      const response = await fetch(`/country-admin/api/support/${encodeURIComponent(selectedSupport.id)}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: nextStatus }),

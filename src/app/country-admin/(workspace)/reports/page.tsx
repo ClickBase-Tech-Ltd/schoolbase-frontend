@@ -51,7 +51,7 @@ export default function CountryAdminReportsPage() {
 
   useEffect(() => {
     let active = true;
-    fetch("/api/country-admin/reports", { cache: "no-store" })
+    fetch("/country-admin/api/reports", { cache: "no-store" })
       .then(async (response) => {
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || "Could not load country reports.");
