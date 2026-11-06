@@ -26,7 +26,6 @@ const nav = [
     href: "/schoolbase-admin/competition",
     label: "Competition",
     icon: "Award",
-    badge: "New",
     children: [
       { href: "/schoolbase-admin/competition/questions", label: "Competition Questions", icon: "BookOpen" },
       { href: "/schoolbase-admin/competition/challenges", label: "Competition Challenges", icon: "ClipboardCheck" },

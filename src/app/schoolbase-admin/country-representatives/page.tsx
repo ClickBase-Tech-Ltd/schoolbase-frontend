@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { MailPlus, RefreshCw, ShieldCheck } from "lucide-react";
+import { ErrorModal } from "@/components/ui/error-modal";
 
 type Representative = {
   id: string;
@@ -121,7 +122,6 @@ export default function CountryRepresentativesPage() {
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">Invite trusted local administrators to support schools in a specific country. They can view school contact and onboarding details and respond to support requests in their assigned country, but cannot access platform administration, academic records, staff or pupil data, or billing.</p>
       </header>
 
-      {message && <p role="status" className="border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{message}</p>}
       {error && <p role="alert" className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
 
       <section className="border border-border bg-surface p-5 sm:p-6">
@@ -169,6 +169,15 @@ export default function CountryRepresentativesPage() {
           </div>
         )}
       </section>
+
+      <ErrorModal
+        isOpen={Boolean(message)}
+        onClose={() => setMessage(null)}
+        type="success"
+        title="Country administrator updated"
+        message={message || ""}
+        confirmLabel="Done"
+      />
     </main>
   );
 }

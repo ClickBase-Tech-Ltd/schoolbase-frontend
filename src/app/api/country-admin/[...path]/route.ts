@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildApiUrl } from "@/lib/api-client";
+import { getBackendUrl } from "@/lib/backend-url";
 
 async function forwardCountryAdminRequest(
   request: NextRequest,
@@ -8,9 +8,9 @@ async function forwardCountryAdminRequest(
   try {
     const { path } = await context.params;
     const backendUrl = new URL(
-      buildApiUrl(`/country-admin/api/${path.map(encodeURIComponent).join("/")}${request.nextUrl.search}`),
+      `/country-admin/api/${path.map(encodeURIComponent).join("/")}${request.nextUrl.search}`,
+      getBackendUrl(),
     );
-    backendUrl.pathname = backendUrl.pathname.replace(/^\/api\/country-admin\/api(?=\/|$)/, "/country-admin/api");
     const headers = new Headers();
 
     request.headers.forEach((value, key) => {

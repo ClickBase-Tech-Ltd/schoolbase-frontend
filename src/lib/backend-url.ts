@@ -14,7 +14,7 @@ export function getBackendUrl(): string {
   // requests to the backend. This avoids direct backend calls from admin,
   // accounting, teacher, parent, and platform-admin pages.
   if (typeof window !== 'undefined') {
-    const protectedPrefixes = ['/admin', '/accounting', '/teacher', '/parent', '/schoolbase-admin'];
+    const protectedPrefixes = ['/admin', '/accounting', '/teacher', '/parent', '/schoolbase-admin', '/country-admin'];
     const pathname = window.location.pathname || '/';
 
     const isParentLoginPage = pathname === '/parent/login';
