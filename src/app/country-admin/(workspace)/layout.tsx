@@ -8,6 +8,7 @@ const navigation = [
   { href: "/country-admin", label: "Overview", icon: "LayoutDashboard" },
   { href: "/country-admin/schools", label: "Schools & onboarding", icon: "Building2" },
   { href: "/country-admin/support", label: "Support inbox", icon: "HelpCircle" },
+  { href: "/country-admin/messages", label: "Messages & updates", icon: "MessageSquare", badge: "COUNTRY_COMMS" },
   { href: "/country-admin/reports", label: "Country reports", icon: "BarChart3" },
 ];
 

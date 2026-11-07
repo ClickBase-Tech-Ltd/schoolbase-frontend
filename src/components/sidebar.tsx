@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { createElement, type ComponentType, useState } from "react";
+import { createElement, type ComponentType, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AppLogo } from "@/components/app-logo";
@@ -133,6 +133,7 @@ export default function Sidebar({
 }) {
   const pathname = usePathname();
   const [failedSchoolLogo, setFailedSchoolLogo] = useState<string | null>(null);
+  const [communicationsUnread, setCommunicationsUnread] = useState(0);
   const resolvedSchoolLogo = school?.logoUrl ? resolveSchoolAssetUrl(school.logoUrl) : null;
   const schoolLogo = resolvedSchoolLogo && resolvedSchoolLogo !== failedSchoolLogo ? resolvedSchoolLogo : null;
   const schoolName = school?.name || "SchoolBase";
@@ -151,11 +152,40 @@ export default function Sidebar({
   const normalizedProgress = typeof setupProgress === "number" ? Math.max(0, Math.min(100, setupProgress)) : 0;
   const isSetupComplete = normalizedProgress >= 100;
   const progressCircumference = 2 * Math.PI * 10;
+  const communicationsEndpoint = logoHref.startsWith("/country-admin")
+    ? "/country-admin/api/communications/unread-count"
+    : logoHref.startsWith("/schoolbase-admin")
+      ? "/schoolbase-admin/api/country-representatives/communications/unread-count"
+      : null;
   const navItemsWithSectionVisibility = navItems.map((item, index) => ({
     ...item,
     sectionLabel: item.section,
     showSection: Boolean(item.section && (index === 0 || navItems[index - 1].section !== item.section)),
   }));
+
+  useEffect(() => {
+    if (!communicationsEndpoint) return;
+    let active = true;
+    const loadUnreadCount = async () => {
+      try {
+        const response = await fetch(communicationsEndpoint, { cache: "no-store" });
+        if (!response.ok) throw new Error(`Communications badge request failed (HTTP ${response.status}).`);
+        const body = await response.json() as { unreadCount?: number };
+        if (active) setCommunicationsUnread(Math.max(0, Number(body.unreadCount) || 0));
+      } catch (error) {
+        if (active) {
+          setCommunicationsUnread(0);
+          console.error("Could not load country communication unread count:", error);
+        }
+      }
+    };
+    void loadUnreadCount();
+    const intervalId = window.setInterval(() => { void loadUnreadCount(); }, 60_000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, [communicationsEndpoint]);
 
   const handleNavClick = () => {
     if (isMobile && onClose) {
@@ -202,6 +232,9 @@ export default function Sidebar({
           const isParentActive = isActive || childActive;
           const IconComponent = typeof icon === "string" ? icons[icon] : icon;
           const progressRingColor = isSetupComplete ? "text-emerald-500" : isParentActive ? "text-brand" : "text-muted/70";
+          const visibleBadge = badge === "COUNTRY_COMMS"
+            ? communicationsUnread > 0 ? String(communicationsUnread > 99 ? "99+" : communicationsUnread) : null
+            : badge;
 
           return (
             <div key={href}>
@@ -245,7 +278,7 @@ export default function Sidebar({
                     </div>
                   ) : IconComponent ? createElement(IconComponent, { className: "h-4 w-4" }) : null}
                   <span className="min-w-0 flex-1 truncate">{label}</span>
-                  {badge ? <span className="shrink-0 border border-brand/25 bg-brand/10 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none tracking-wide text-brand">{badge}</span> : null}
+                  {visibleBadge ? <span aria-label={badge === "COUNTRY_COMMS" ? `${communicationsUnread} unread communications` : undefined} className={`shrink-0 border px-1.5 py-0.5 text-[9px] font-bold leading-none tracking-wide ${badge === "COUNTRY_COMMS" ? "border-rose-200 bg-rose-50 text-rose-700" : "border-brand/25 bg-brand/10 uppercase text-brand"}`}>{visibleBadge}</span> : null}
                 </Link>
 
                 {Array.isArray(children) && children.length > 0 && (isParentActive || pathname.startsWith(`${href}/`)) ? (

@@ -19,8 +19,23 @@ export default function AuditPage() {
     if (typeof window === "undefined") return "ALL";
     return new URLSearchParams(window.location.search).get("school") || "ALL";
   });
-  const [categoryFilter, setCategoryFilter] = useState("ALL");
+  const [categoryFilter, setCategoryFilter] = useState(() => {
+    if (typeof window === "undefined") return "ALL";
+    return new URLSearchParams(window.location.search).get("category") || "ALL";
+  });
   const [outcomeFilter, setOutcomeFilter] = useState("ALL");
+  const [countryFilter, setCountryFilter] = useState(() => {
+    if (typeof window === "undefined") return "ALL";
+    return new URLSearchParams(window.location.search).get("country") || "ALL";
+  });
+  const [actorRoleFilter, setActorRoleFilter] = useState(() => {
+    if (typeof window === "undefined") return "ALL";
+    return new URLSearchParams(window.location.search).get("actorRole") || "ALL";
+  });
+  const [actorFilter, setActorFilter] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("actor") || "";
+  });
   const [timeFilter, setTimeFilter] = useState("90D");
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [eventFilter, setEventFilter] = useState<{ events: string[]; eventPrefixes: string[] } | null>(null);
@@ -77,6 +92,9 @@ export default function AuditPage() {
       if (schoolFilter !== "ALL") params.set("school", schoolFilter);
       if (categoryFilter !== "ALL") params.set("category", categoryFilter);
       if (outcomeFilter !== "ALL") params.set("outcome", outcomeFilter);
+      if (countryFilter !== "ALL") params.set("country", countryFilter);
+      if (actorRoleFilter !== "ALL") params.set("actorRole", actorRoleFilter);
+      if (actorFilter.trim()) params.set("actor", actorFilter.trim());
       if (eventFilter?.events.length) params.set("events", eventFilter.events.join(","));
       if (eventFilter?.eventPrefixes.length) params.set("eventPrefixes", eventFilter.eventPrefixes.join(","));
       try {
@@ -106,7 +124,7 @@ export default function AuditPage() {
     }
     void loadAuditEvents();
     return () => controller.abort();
-  }, [categoryFilter, eventFilter, outcomeFilter, page, pageSize, refreshToken, schoolFilter, searchQuery, selectedDay, timeFilter]);
+  }, [actorFilter, actorRoleFilter, categoryFilter, countryFilter, eventFilter, outcomeFilter, page, pageSize, refreshToken, schoolFilter, searchQuery, selectedDay, timeFilter]);
 
   return <AuditReportView
     logs={logs}
@@ -124,6 +142,12 @@ export default function AuditPage() {
     setSchoolFilter={(value) => { setSchoolFilter(value); setEventFilter(null); setPage(1); }}
     categoryFilter={categoryFilter}
     setCategoryFilter={setCategoryFilter}
+    actorRoleFilter={actorRoleFilter}
+    setActorRoleFilter={setActorRoleFilter}
+    countryFilter={countryFilter}
+    setCountryFilter={setCountryFilter}
+    actorFilter={actorFilter}
+    setActorFilter={setActorFilter}
     outcomeFilter={outcomeFilter}
     setOutcomeFilter={setOutcomeFilter}
     timeFilter={timeFilter}
@@ -140,6 +164,9 @@ export default function AuditPage() {
       setSchoolFilter("ALL");
       setCategoryFilter("ALL");
       setOutcomeFilter("ALL");
+      setCountryFilter("ALL");
+      setActorRoleFilter("ALL");
+      setActorFilter("");
       setTimeFilter("90D");
       setSelectedDay(null);
       setEventFilter(null);

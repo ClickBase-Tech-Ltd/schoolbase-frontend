@@ -21,6 +21,12 @@ type AuditReportViewProps = {
   setSchoolFilter: (value: string) => void;
   categoryFilter: string;
   setCategoryFilter: (value: string) => void;
+  actorRoleFilter: string;
+  setActorRoleFilter: (value: string) => void;
+  countryFilter: string;
+  setCountryFilter: (value: string) => void;
+  actorFilter: string;
+  setActorFilter: (value: string) => void;
   outcomeFilter: string;
   setOutcomeFilter: (value: string) => void;
   setEventFilter: (filter: { events: string[]; eventPrefixes: string[] } | null) => void;
@@ -35,7 +41,8 @@ type AuditReportViewProps = {
   onReset: () => void;
 };
 
-const categories = ["ACCESS", "SCHOOL", "STUDENT", "ACADEMICS", "FINANCE", "COMMUNICATIONS", "MARKETING", "COMPETITION", "CONFIGURATION", "OPERATIONS"];
+const categories = ["ACCESS", "SCHOOL", "STUDENT", "ACADEMICS", "FINANCE", "COMMUNICATIONS", "MARKETING", "COMPETITION", "CONFIGURATION", "OPERATIONS", "COUNTRY_OPERATIONS"];
+const countries = [{ code: "NG", name: "Nigeria" }, { code: "GH", name: "Ghana" }, { code: "SL", name: "Sierra Leone" }, { code: "LR", name: "Liberia" }, { code: "GM", name: "The Gambia" }];
 const ranges = [{ value: "24H", label: "24 hours" }, { value: "7D", label: "7 days" }, { value: "30D", label: "30 days" }, { value: "90D", label: "90 days" }];
 
 function humanize(value?: string | null) {
@@ -64,6 +71,7 @@ function categoryTone(category: string) {
     COMPETITION: "border-amber-200 bg-amber-50 text-amber-900",
     CONFIGURATION: "border-border bg-background text-muted",
     OPERATIONS: "border-border bg-background text-muted",
+    COUNTRY_OPERATIONS: "border-teal-200 bg-teal-50 text-teal-800",
   };
   return tones[category] || tones.OPERATIONS;
 }
@@ -90,6 +98,9 @@ export default function AuditReportView(props: AuditReportViewProps) {
     props.search ? `Search: ${props.search}` : null,
     props.categoryFilter !== "ALL" ? `Category: ${humanize(props.categoryFilter)}` : null,
     props.outcomeFilter !== "ALL" ? `Outcome: ${humanize(props.outcomeFilter)}` : null,
+    props.countryFilter !== "ALL" ? `Country: ${countries.find((country) => country.code === props.countryFilter)?.name || props.countryFilter}` : null,
+    props.actorRoleFilter !== "ALL" ? `Role: ${humanize(props.actorRoleFilter)}` : null,
+    props.actorFilter ? `Actor: ${props.actorFilter}` : null,
     props.schoolFilter !== "ALL" ? `School: ${schools.find((school) => school.id === props.schoolFilter)?.name || props.schoolFilter}` : null,
     props.selectedDay ? `Date: ${props.selectedDay}` : null,
   ].filter((filter): filter is string => Boolean(filter));
@@ -113,7 +124,7 @@ export default function AuditReportView(props: AuditReportViewProps) {
     <header className="support-page-hero relative overflow-hidden border border-border bg-surface px-6 pb-8 pt-8 sm:px-8 sm:pb-10 sm:pt-10">
       <div aria-hidden="true" className="support-page-scan" />
       <div className="relative flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
-        <div className="min-w-0"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.18em] text-brand"><span className="support-page-pulse h-2.5 w-2.5 rounded-full bg-brand" />Platform operations</div><h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">Audit trail</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Investigate administrative changes, access events, and operational outcomes.</p></div>
+        <div className="min-w-0"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.18em] text-brand"><span className="support-page-pulse h-2.5 w-2.5 rounded-full bg-brand" />Platform operations</div><h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">{props.categoryFilter === "COUNTRY_OPERATIONS" ? "Country admin activity" : "Audit trail"}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Investigate administrative changes, access events, and operational outcomes. Country-admin events exclude message and follow-up note contents.</p></div>
         <div className="flex flex-wrap items-center gap-3">
           <label className="sr-only" htmlFor="audit-range">Audit date range</label>
           <select id="audit-range" value={props.timeFilter} onChange={(event) => { props.setTimeFilter(event.target.value); props.setEventFilter(null); props.setPage(1); }} className="h-11 min-w-36 border border-border bg-background px-3 text-sm font-semibold text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/15">{ranges.map((range) => <option key={range.value} value={range.value}>Last {range.label}</option>)}</select>
@@ -143,11 +154,14 @@ export default function AuditReportView(props: AuditReportViewProps) {
 
     <section className="border border-border bg-surface">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-5"><div><h2 className="flex items-center gap-2 text-sm font-semibold text-foreground"><SlidersHorizontal className="h-4 w-4 text-brand" />Find an event</h2><p className="mt-0.5 text-xs text-muted">Search the audit trail by action, actor, resource, school, or request ID.</p></div><button type="button" onClick={props.onReset} className="inline-flex h-9 items-center gap-2 border border-border px-3 text-xs font-semibold text-brand transition hover:bg-brand-light"><RotateCcw className="h-3.5 w-3.5" />Clear filters</button></div>
-      <div className="grid gap-2 p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-[minmax(240px,1.6fr)_repeat(3,minmax(130px,.8fr))]">
+      <div className="grid gap-2 p-3 sm:grid-cols-2 sm:p-4 lg:grid-cols-4">
         <label className="flex h-10 min-w-0 items-center gap-2 border border-border bg-background px-3"><Search className="h-4 w-4 shrink-0 text-muted" /><input value={props.search} onChange={(event) => { props.setSearch(event.target.value); props.setPage(1); }} placeholder="Search the audit trail" aria-label="Search audit events" className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none" />{props.search ? <button type="button" onClick={() => props.setSearch("")} aria-label="Clear search" className="text-muted hover:text-foreground"><X className="h-4 w-4" /></button> : null}</label>
         <label className="sr-only" htmlFor="audit-category">Category</label><select id="audit-category" value={props.categoryFilter} onChange={(event) => { props.setCategoryFilter(event.target.value); props.setEventFilter(null); props.setPage(1); }} className="h-10 min-w-0 border border-border bg-background px-3 text-sm text-foreground"><option value="ALL">All categories</option>{categories.map((category) => <option key={category} value={category}>{humanize(category)}</option>)}</select>
         <label className="sr-only" htmlFor="audit-outcome">Outcome</label><select id="audit-outcome" value={props.outcomeFilter} onChange={(event) => { props.setOutcomeFilter(event.target.value); props.setEventFilter(null); props.setPage(1); }} className="h-10 min-w-0 border border-border bg-background px-3 text-sm text-foreground"><option value="ALL">All outcomes</option>{["SUCCESS", "REJECTED", "FAILED", "REDIRECTED", "NOT_RECORDED"].map((outcome) => <option key={outcome} value={outcome}>{outcome === "NOT_RECORDED" ? "Not recorded" : humanize(outcome)}</option>)}</select>
         <label className="sr-only" htmlFor="audit-school">School</label><select id="audit-school" value={props.schoolFilter} onChange={(event) => { props.setSchoolFilter(event.target.value); props.setPage(1); }} className="h-10 min-w-0 border border-border bg-background px-3 text-sm text-foreground"><option value="ALL">All schools</option>{schools.map((school) => <option key={school.id} value={school.id}>{school.name}</option>)}</select>
+        <label className="sr-only" htmlFor="audit-country">Country</label><select id="audit-country" value={props.countryFilter} onChange={(event) => { props.setCountryFilter(event.target.value); props.setPage(1); }} className="h-10 min-w-0 border border-border bg-background px-3 text-sm text-foreground"><option value="ALL">All countries</option>{countries.map((country) => <option key={country.code} value={country.code}>{country.name}</option>)}</select>
+        <label className="sr-only" htmlFor="audit-actor-role">Actor role</label><select id="audit-actor-role" value={props.actorRoleFilter} onChange={(event) => { props.setActorRoleFilter(event.target.value); props.setPage(1); }} className="h-10 min-w-0 border border-border bg-background px-3 text-sm text-foreground"><option value="ALL">All actor roles</option>{["COUNTRY_REP", "PLATFORM_ADMIN", "SYSTEM"].map((role) => <option key={role} value={role}>{humanize(role)}</option>)}</select>
+        <label className="flex h-10 min-w-0 items-center gap-2 border border-border bg-background px-3"><input value={props.actorFilter} onChange={(event) => { props.setActorFilter(event.target.value); props.setPage(1); }} placeholder="Representative name or email" aria-label="Filter by actor name or email" className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none" /></label>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-background px-4 py-2.5 text-xs text-muted sm:px-5"><span aria-live="polite">{props.totalEvents.toLocaleString()} matching events</span><label className="flex items-center gap-2">Rows<select value={props.pageSize} onChange={(event) => { props.setPageSize(Number(event.target.value)); props.setPage(1); }} className="h-8 border border-border bg-surface px-2 text-xs text-foreground">{[25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}</select></label></div>
     </section>
