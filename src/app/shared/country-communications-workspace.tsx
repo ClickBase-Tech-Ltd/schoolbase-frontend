@@ -240,7 +240,7 @@ export default function CountryCommunicationsWorkspace({ platformAdmin }: { plat
     setError(null);
     setSuccess(null);
     try {
-      const response = await fetch(baseUrl, {
+      const response = await fetch(`${baseUrl}/announcements`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
