@@ -31,7 +31,6 @@ type School = {
   incompleteItems: string[];
   followUp: {
     stage: FollowUpStage;
-    ownerUserId: string | null;
     owner: FollowUpOwner | null;
     nextContactAt: string | null;
     latestNote: string | null;
@@ -47,12 +46,13 @@ type SupportItem = {
   requesterEmail: string | null;
   lastMessageAt: string;
   school: { id: string; name: string };
+  assignedCountryRep: FollowUpOwner | null;
   latestMessage: { body: string; senderRole: string } | null;
 };
 
 type DashboardData = {
   country: { countryCode: string; countryName: string; currency: string };
-  representative: { name: string; email: string };
+  representative: { name: string; email: string; followUpRemindersEnabled: boolean };
   summary: {
     schools: number;
     active: number;
@@ -61,7 +61,6 @@ type DashboardData = {
     overdueFollowUps: number;
     blockedSchools: number;
   };
-  followUpOwners: FollowUpOwner[];
   schools: School[];
   pagination: { page: number; pages: number; total: number };
 };
@@ -103,13 +102,13 @@ export default function CountryAdminWorkspace({ section }: { section: CountryAdm
     schoolId: string;
     schoolName: string;
     stage: FollowUpStage;
-    ownerUserId: string;
+    ownerName: string | null;
     nextContactAt: string;
     note: string;
     events: FollowUpEvent[];
-    owners: FollowUpOwner[];
   } | null>(null);
   const [savingFollowUp, setSavingFollowUp] = useState(false);
+  const [savingReminderPreference, setSavingReminderPreference] = useState(false);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -208,11 +207,10 @@ export default function CountryAdminWorkspace({ section }: { section: CountryAdm
         schoolId,
         schoolName,
         stage: followUp.stage,
-        ownerUserId: followUp.ownerUserId || "",
+        ownerName: followUp.owner?.name ?? null,
         nextContactAt: followUp.nextContactAt ? String(followUp.nextContactAt).slice(0, 10) : "",
         note: "",
         events: followUp.events,
-        owners: body.followUpOwners,
       });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not load school follow-up.");
@@ -230,7 +228,6 @@ export default function CountryAdminWorkspace({ section }: { section: CountryAdm
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           stage: followUpEditor.stage,
-          ownerUserId: followUpEditor.ownerUserId || null,
           nextContactAt: followUpEditor.nextContactAt || null,
           note: followUpEditor.note,
         }),
@@ -243,6 +240,28 @@ export default function CountryAdminWorkspace({ section }: { section: CountryAdm
       setError(reason instanceof Error ? reason.message : "Could not save school follow-up.");
     } finally {
       setSavingFollowUp(false);
+    }
+  }
+
+  async function updateReminderPreference(enabled: boolean) {
+    setSavingReminderPreference(true);
+    setError(null);
+    try {
+      const response = await fetch("/country-admin/api/reminder-preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Could not update reminder preferences.");
+      setDashboard((current) => current ? {
+        ...current,
+        representative: { ...current.representative, followUpRemindersEnabled: body.enabled },
+      } : current);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Could not update reminder preferences.");
+    } finally {
+      setSavingReminderPreference(false);
     }
   }
 
@@ -279,19 +298,40 @@ export default function CountryAdminWorkspace({ section }: { section: CountryAdm
       </section>
 
       {section === "overview" ? (
-        <section className="grid gap-4 md:grid-cols-3">
-          {[
-            { href: "/country-admin/schools", title: "Schools & onboarding", description: "Review school contacts, setup progress, and onboarding needs.", icon: Building2 },
-            { href: "/country-admin/support", title: "Support inbox", description: `${dashboard?.summary.openSupport ?? 0} open requests need attention.`, icon: LifeBuoy },
-            { href: "/country-admin/reports", title: "Country reports", description: "View country-only school, onboarding, and signup summaries.", icon: Users },
-          ].map(({ href, title, description, icon: Icon }) => (
-            <Link key={href} href={href} className="border border-border bg-surface p-5 transition hover:border-brand/40 hover:bg-brand/5">
-              <span className="inline-flex rounded-full bg-brand/10 p-3 text-brand"><Icon className="h-5 w-5" /></span>
-              <h2 className="mt-4 font-semibold text-foreground">{title}</h2>
-              <p className="mt-2 text-sm leading-6 text-muted">{description}</p>
-            </Link>
-          ))}
-        </section>
+        <>
+          <section className="grid gap-4 md:grid-cols-3">
+            {[
+              { href: "/country-admin/schools", title: "Schools & onboarding", description: "Review school contacts, setup progress, and onboarding needs.", icon: Building2 },
+              { href: "/country-admin/support", title: "Support inbox", description: `${dashboard?.summary.openSupport ?? 0} open requests need attention.`, icon: LifeBuoy },
+              { href: "/country-admin/reports", title: "Country reports", description: "View country-only school, onboarding, and signup summaries.", icon: Users },
+            ].map(({ href, title, description, icon: Icon }) => (
+              <Link key={href} href={href} className="border border-border bg-surface p-5 transition hover:border-brand/40 hover:bg-brand/5">
+                <span className="inline-flex rounded-full bg-brand/10 p-3 text-brand"><Icon className="h-5 w-5" /></span>
+                <h2 className="mt-4 font-semibold text-foreground">{title}</h2>
+                <p className="mt-2 text-sm leading-6 text-muted">{description}</p>
+              </Link>
+            ))}
+          </section>
+          <section className="flex flex-col gap-4 border border-border bg-surface p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="font-semibold text-foreground">Daily follow-up email</h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
+                Get one daily digest at 8:15 AM UTC for your assigned schools with follow-ups due today or overdue. This does not include other representatives’ assignments.
+              </p>
+            </div>
+            <label className="flex shrink-0 items-center gap-3 text-sm font-medium text-foreground">
+              <input
+                type="checkbox"
+                aria-label="Enable daily follow-up email"
+                checked={dashboard?.representative.followUpRemindersEnabled ?? true}
+                disabled={!dashboard || savingReminderPreference}
+                onChange={(event) => { void updateReminderPreference(event.target.checked); }}
+                className="h-4 w-4 accent-brand"
+              />
+              {savingReminderPreference ? "Saving…" : dashboard?.representative.followUpRemindersEnabled ? "Enabled" : "Disabled"}
+            </label>
+          </section>
+        </>
       ) : (
         <section className="border border-border bg-surface">
           <div className="flex flex-wrap gap-2 border-b border-border p-4">
@@ -345,7 +385,9 @@ export default function CountryAdminWorkspace({ section }: { section: CountryAdm
                         <td className="p-3"><p className="font-medium">{school.setupProgress}%</p>{!school.setupComplete && <p className="mt-1 max-w-48 text-xs text-muted">{school.incompleteItems.slice(0, 3).join(", ")}</p>}</td>
                         <td className="p-3">
                           <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${school.followUp?.stage === "BLOCKED" ? "bg-red-50 text-red-700" : "bg-background text-foreground"}`}>{(school.followUp?.stage || "NEW").replaceAll("_", " ")}</span>
-                          <p className="mt-2 text-xs text-muted">{school.followUp?.owner?.name || "Unassigned"}</p>
+                          <p className="mt-2 text-xs text-muted">
+                            {school.followUp ? school.followUp.owner?.name || "Awaiting an active country representative" : "Follow-up not started"}
+                          </p>
                           {school.followUp?.latestNote && <p className="mt-1 max-w-48 truncate text-xs text-muted" title={school.followUp.latestNote}>{school.followUp.latestNote}</p>}
                         </td>
                         <td className="p-3 text-xs text-muted">{formatDateOnly(school.followUp?.nextContactAt || null)}</td>
@@ -374,6 +416,7 @@ export default function CountryAdminWorkspace({ section }: { section: CountryAdm
                 <button type="button" key={item.id} onClick={() => void openSupport(item.id)} className={`block w-full p-4 text-left hover:bg-background ${selectedSupport?.id === item.id ? "bg-brand/5" : ""}`}>
                   <span className="flex justify-between gap-3"><span className="font-semibold text-foreground">{item.subject}</span><span className="text-xs text-muted">{item.status}</span></span>
                   <span className="mt-1 block text-xs text-muted">{item.school.name} · {item.requesterName || item.requesterEmail || "School contact"}</span>
+                  <span className="mt-1 block text-xs text-muted">Assigned to: {item.assignedCountryRep?.name || "Awaiting an active country representative"}</span>
                   <span className="mt-2 block truncate text-sm text-muted">{item.latestMessage?.body || "No messages yet"}</span>
                 </button>
               ))}
@@ -382,7 +425,7 @@ export default function CountryAdminWorkspace({ section }: { section: CountryAdm
             {selectedSupport ? (
               <div className="flex min-h-[420px] flex-col">
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border p-4">
-                  <div><h2 className="font-semibold text-foreground">{selectedSupport.subject}</h2><p className="mt-1 text-sm text-muted">{selectedSupport.school.name} · {selectedSupport.requesterName || selectedSupport.requesterEmail}</p></div>
+                  <div><h2 className="font-semibold text-foreground">{selectedSupport.subject}</h2><p className="mt-1 text-sm text-muted">{selectedSupport.school.name} · {selectedSupport.requesterName || selectedSupport.requesterEmail}</p><p className="mt-1 text-xs text-muted">Assigned to: {selectedSupport.assignedCountryRep?.name || "Awaiting an active country representative"}</p></div>
                   <select aria-label="Update support status" value={selectedSupport.status} onChange={(event) => void updateSupportStatus(event.target.value)} className="border border-border bg-background px-2 py-1.5 text-xs">
                     {["OPEN", "IN_PROGRESS", "WAITING_FOR_CUSTOMER", "RESOLVED"].map((item) => <option key={item} value={item}>{item.replaceAll("_", " ")}</option>)}
                   </select>
@@ -428,12 +471,11 @@ export default function CountryAdminWorkspace({ section }: { section: CountryAdm
                     <option value="OPERATIONAL">Operational</option>
                   </select>
                 </label>
-                <label className="text-sm font-medium text-foreground">Follow-up owner
-                  <select value={followUpEditor.ownerUserId} onChange={(event) => setFollowUpEditor({ ...followUpEditor, ownerUserId: event.target.value })} className="mt-1 h-10 w-full border border-border bg-background px-3">
-                    <option value="">Unassigned</option>
-                    {followUpEditor.owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name}</option>)}
-                  </select>
-                </label>
+                <div className="text-sm font-medium text-foreground">Assigned representative
+                  <p className="mt-1 flex h-10 items-center border border-border bg-background px-3 font-normal text-muted">
+                    {followUpEditor.ownerName || "Awaiting an active country representative"}
+                  </p>
+                </div>
                 <label className="text-sm font-medium text-foreground">Next contact
                   <input type="date" value={followUpEditor.nextContactAt} onChange={(event) => setFollowUpEditor({ ...followUpEditor, nextContactAt: event.target.value })} className="mt-1 h-10 w-full border border-border bg-background px-3" />
                 </label>
