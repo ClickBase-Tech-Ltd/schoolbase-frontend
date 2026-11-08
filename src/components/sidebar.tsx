@@ -246,6 +246,7 @@ export default function Sidebar({
               <div>
                 <Link
                   href={href}
+                  data-assistant-target={href}
                   onClick={handleNavClick}
                   aria-current={isParentActive ? "page" : undefined}
                   className={`group relative flex cursor-pointer items-center gap-3 border-l-2 px-3 py-2.5 text-sm font-medium transition-colors ${
@@ -289,6 +290,7 @@ export default function Sidebar({
                         <Link
                           key={child.href}
                           href={child.href}
+                          data-assistant-target={child.href}
                           onClick={handleNavClick}
                           aria-current={childActive ? "page" : undefined}
                           className={`flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${

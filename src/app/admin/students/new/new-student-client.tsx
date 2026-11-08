@@ -410,7 +410,12 @@ export default function NewStudentClient() {
         </div>
       </header>
 
-      <form id="new-student-form" onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <form
+        id="new-student-form"
+        data-assistant-form="student-registration"
+        onSubmit={handleSubmit}
+        className="grid grid-cols-1 gap-4 lg:grid-cols-3"
+      >
         {/* Error Alert */}
         {error && !errorModalOpen && (
           <div className="lg:col-span-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -534,7 +539,7 @@ export default function NewStudentClient() {
 
               <label className="text-sm font-semibold text-foreground">
                 First name *
-                <input name="firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} required placeholder="e.g., Chidi" className="mt-2 w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10" />
+                <input name="firstName" data-assistant-target="/admin/students/new" value={firstName} onChange={(e) => setFirstName(e.target.value)} required placeholder="e.g., Chidi" className="mt-2 w-full rounded-2xl border border-border bg-surface px-4 py-3 text-sm text-foreground outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10" />
               </label>
 
               <label className="text-sm font-semibold text-foreground">
