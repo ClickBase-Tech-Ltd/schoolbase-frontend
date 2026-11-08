@@ -27,6 +27,7 @@ import TimetableSetupWizard from "./timetable-setup-wizard";
 import AdminBellManager from "@/components/admin-bell-manager";
 import AdminPeriodsManager from "@/components/admin-periods-manager";
 import { UserGuide, type PageHelpGuide } from "@/components/ui/user-guide";
+import TimetablePlannerModal from "./timetable-planner-modal";
 
 const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
 const accents = ["#0a66c2", "#0b7a75", "#7a5af8", "#c2410c", "#b42318"];
@@ -71,7 +72,7 @@ type Config = {
   entries: Entry[];
   scheduledActivities: ScheduledActivity[];
 };
-type SelectorData = { id: string; name: string; email?: string; arm?: string | null };
+type SelectorData = { id: string; name: string; email?: string; arm?: string | null; phase?: string };
 type ActivityOption = { id: string; name: string; category: string; description?: string | null };
 type LessonTarget = { classId: string; subjectId: string; teacherId: string };
 type TeachingAssignments = {
@@ -236,6 +237,12 @@ export default function TimetableClient() {
   const [errorModal, setErrorModal] = useState<string | null>(null);
   const [successModal, setSuccessModal] = useState<string | null>(null);
   const [showComposer, setShowComposer] = useState(false);
+  const [showAiPlanner, setShowAiPlanner] = useState(false);
+  const [assistantPlannerRequestCount, setAssistantPlannerRequestCount] = useState(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("assistant") === "planner" ? 1 : 0,
+  );
+  const assistantPlannerHandledRef = useRef(0);
+  const [openPlannerAfterCreate, setOpenPlannerAfterCreate] = useState(false);
   const [view, setView] = useState<"week" | "list">("week");
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const [duplicatingEntry, setDuplicatingEntry] = useState<Entry | null>(null);
@@ -526,9 +533,50 @@ export default function TimetableClient() {
   }, [config]);
   const entries = config?.entries || [];
   const published = config?.status === "PUBLISHED";
+  const hasScheduledActivities = Boolean(config?.scheduledActivities?.length);
   const coverage = periods.length
     ? Math.round((entries.length / (periods.length * days.length)) * 100)
     : 0;
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("assistant") !== "planner") return;
+    window.history.replaceState(window.history.state, "", window.location.pathname);
+  }, []);
+
+  useEffect(() => {
+    const handleAssistantPlannerRequest = () => {
+      setAssistantPlannerRequestCount((count) => count + 1);
+    };
+    window.addEventListener("schoolbase:open-timetable-planner", handleAssistantPlannerRequest);
+    return () => window.removeEventListener("schoolbase:open-timetable-planner", handleAssistantPlannerRequest);
+  }, []);
+
+  useEffect(() => {
+    if (loading || assistantPlannerHandledRef.current >= assistantPlannerRequestCount) return;
+    assistantPlannerHandledRef.current = assistantPlannerRequestCount;
+    const frame = window.requestAnimationFrame(() => {
+      if (!config) {
+        setOpenPlannerAfterCreate(true);
+        setShowComposer(true);
+      } else if (config.status === "DRAFT") {
+        setShowAiPlanner(true);
+      } else {
+        setError("AI timetable planning is available on a draft timetable. Create or select a draft board first.");
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [assistantPlannerRequestCount, config, loading]);
+
+  useEffect(() => {
+    if (loading) return;
+    if (openPlannerAfterCreate && config?.status === "DRAFT") {
+      const frame = window.requestAnimationFrame(() => {
+        setOpenPlannerAfterCreate(false);
+        setShowAiPlanner(true);
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }
+  }, [config, loading, openPlannerAfterCreate]);
 
   return (
     <main className="min-h-screen pb-12">
@@ -621,6 +669,15 @@ export default function TimetableClient() {
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setShowAiPlanner(true)}
+              disabled={!config || published}
+              className="inline-flex items-center gap-2 rounded-lg border border-brand/30 bg-brand-light px-4 py-2.5 text-sm font-semibold text-brand transition hover:bg-brand/15 disabled:cursor-not-allowed disabled:opacity-50"
+              title={published ? "Return the timetable to draft before generating a plan" : "Generate a conflict-checked draft using SchoolBase AI"}
+            >
+              <Sparkles size={16} /> Generate with AI
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -817,7 +874,30 @@ export default function TimetableClient() {
           subjects={subjects}
           teachers={teachers}
           onClose={closeComposer}
-          onCreated={load}
+          onCreated={() => { void load(); }}
+        />
+      )}
+      {showAiPlanner && config && (
+        <TimetablePlannerModal
+          configId={config.id}
+          configName={config.name}
+          periods={config.periods}
+          classes={classes}
+          subjects={subjects}
+          teachers={teachers}
+          teachingAssignments={teachingAssignments}
+          historicalConfigs={configs.map((item) => ({
+            id: item.id,
+            status: item.status,
+            entries: item.entries.map(({ classId, subjectId }) => ({ classId, subjectId })),
+          }))}
+          occupied={entries.length > 0 || hasScheduledActivities}
+          onClose={() => setShowAiPlanner(false)}
+          onSaved={() => {
+            setShowAiPlanner(false);
+            showTimetableSuccess("AI-generated lessons were added to the draft. Review the board before publishing.");
+            void load();
+          }}
         />
       )}
       {editingEntry && config && (

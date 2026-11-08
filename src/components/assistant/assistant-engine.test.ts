@@ -3,7 +3,9 @@ import test from "node:test";
 import {
   getAdmissionsQuestion,
   getSchoolIntelligenceIntent,
+  isTimetablePlanningRequest,
   isUnsupportedSchoolDataQuestion,
+  resolveAssistantRequest,
 } from "./assistant-engine";
 
 test("classifies active student count and scopes by class", () => {
@@ -83,4 +85,21 @@ test("classifies admissions count questions without treating them as student cou
   assert.equal(getAdmissionsQuestion("How many applications are awaiting information?"), null);
   assert.equal(getAdmissionsQuestion("How many applications were rejected?"), null);
   assert.equal(getAdmissionsQuestion("Explain the admissions page"), null);
+});
+
+test("recognizes timetable generation requests without matching ordinary timetable help", () => {
+  assert.equal(isTimetablePlanningRequest("Create a timetable for the whole school"), true);
+  assert.equal(isTimetablePlanningRequest("Help me generate the school schedule"), true);
+  assert.equal(isTimetablePlanningRequest("Explain this timetable page"), false);
+  assert.deepEqual(
+    resolveAssistantRequest(
+      "Create a timetable for the whole school",
+      [{ href: "/admin/timetable", label: "Timetable", icon: "CalendarDays" }],
+      "/admin/students",
+    ),
+    {
+      message: "I’ll open the school timetable planner. It will ask you for weekly lesson counts, use the school’s recorded teaching assignments, and prepare a conflict-checked draft for your review. It won’t publish the timetable.",
+      destination: { href: "/admin/timetable", label: "Timetable" },
+    },
+  );
 });

@@ -18,6 +18,11 @@ export type SchoolIntelligenceIntent =
   | "outstanding_students"
   | "payment_summary";
 
+export function isTimetablePlanningRequest(input: string): boolean {
+  return /\b(?:create|make|build|generate|prepare|plan)\b.{0,30}\b(?:school\s+)?(?:time\s*table|schedule)\b/i.test(input)
+    || /\b(?:time\s*table|schedule)\b.{0,30}\b(?:create|make|build|generate|prepare|plan)\b/i.test(input);
+}
+
 export function getSchoolIntelligenceIntent(input: string): {
   intent: SchoolIntelligenceIntent;
   className: string | null;
@@ -358,6 +363,16 @@ export function resolveAssistantRequest(
     return {
       message: `I can explain supported SchoolBase sections, find pages in this dashboard, and guide you through supported workflows. For school accounting users, I can also look up a student’s fees and payment history, and send an individual fee reminder only after you confirm. I can’t record payments or issue invoices. I can currently see: ${available || "the pages registered for this dashboard"}.`,
     };
+  }
+
+  if (isTimetablePlanningRequest(input)) {
+    const timetable = destinations.find((item) => item.href === "/admin/timetable");
+    if (timetable && (pathname === "/admin" || pathname.startsWith("/admin/"))) {
+      return {
+        message: "I’ll open the school timetable planner. It will ask you for weekly lesson counts, use the school’s recorded teaching assignments, and prepare a conflict-checked draft for your review. It won’t publish the timetable.",
+        destination: { href: "/admin/timetable", label: timetable.label },
+      };
+    }
   }
 
   if (isStudentRegistrationRequest(input)) {

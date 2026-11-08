@@ -9,6 +9,7 @@ import {
   getAssistantPortalRoot,
   getAdmissionsQuestion,
   getSchoolIntelligenceIntent,
+  isTimetablePlanningRequest,
   getStudentFieldLabel,
   isUnsupportedSchoolDataQuestion,
   isStudentFormAssistanceRequest,
@@ -798,7 +799,15 @@ export default function SchoolBaseAssistant({
         pendingStudentRegistrationRef.current = true;
       }
       setPendingNavigation(result.destination);
-      if (pathname !== result.destination.href) router.push(result.destination.href);
+      if (result.destination.href === "/admin/timetable" && isTimetablePlanningRequest(trimmed)) {
+        if (pathname === "/admin/timetable") {
+          window.dispatchEvent(new Event("schoolbase:open-timetable-planner"));
+        } else {
+          router.push("/admin/timetable?assistant=planner");
+        }
+      } else if (pathname !== result.destination.href) {
+        router.push(result.destination.href);
+      }
     }
   }, [addMessage, destinations, lookupStudentFees, navItems, pathname, portalRoot, promptForStudentDetails, queryAdmissionsSummary, querySchoolIntelligence, router, schoolIntelligence, speak, stopSpeaking, studentFillMode]);
 
