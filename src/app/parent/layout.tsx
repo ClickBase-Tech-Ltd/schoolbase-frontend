@@ -35,7 +35,7 @@ export default function ParentLayout({
   const router = useRouter();
   const pathname = usePathname();
   const [loading, setLoading] = useState(false);
-  type ParentSessionState = { id?: string; name?: string; phone?: string };
+  type ParentSessionState = { id?: string; name?: string; phone?: string; role: 'PARENT' };
   type ParentSchoolState = { name?: string; [key: string]: unknown } | null;
   const [session, setSession] = useState<ParentSessionState | null>(null);
   const [school, setSchool] = useState<ParentSchoolState>(null);
@@ -80,6 +80,7 @@ export default function ParentLayout({
             id: verifyData.guardianId,
             name: verifyData.name,
             phone: verifyData.phone,
+            role: 'PARENT',
           });
 
           // Fetch school (non-critical)

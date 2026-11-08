@@ -2,6 +2,7 @@
 
 import { type ReactNode, type ComponentType, type ChangeEvent, type MouseEvent as ReactMouseEvent, type TouchEvent as ReactTouchEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Sidebar from "@/components/sidebar";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { Menu, X, Music, Play, Pause, ChevronDown, ChevronLeft, ChevronRight, Volume2, Loader2, Equal, Delete, RefreshCcw, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,11 @@ import { applyTheme, detectSystemTheme, resolveStoredTheme, ThemeMode } from "@/
 import TeacherClassAlert from "@/components/teacher-class-alert";
 import BellScheduler from "@/components/bell-scheduler";
 import SupportChatWidget from "@/components/support-chat-widget";
+
+const SchoolBaseAssistant = dynamic(
+  () => import("@/components/assistant/schoolbase-assistant"),
+  { ssr: false },
+);
 
 export type NavItem = {
   href: string;
@@ -58,7 +64,7 @@ export default function SharedLayout({
   children: ReactNode;
   navItems: NavItem[];
   school?: { name?: string | null; city?: string | null; country?: string | null } | null;
-  session?: { name?: string; role?: string } | null;
+  session?: { id?: string; userId?: string; guardianId?: string; name?: string; role?: string } | null;
   setupProgress?: number | null;
   logoHref?: string;
   logoutRedirectUrl?: string;
@@ -859,6 +865,14 @@ export default function SharedLayout({
 
         <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-background p-4 sm:p-6 md:p-8 print:overflow-visible print:p-0">{children}</main>
         {logoHref !== "/schoolbase-admin" && session?.role === "SCHOOL_ADMIN" ? <SupportChatWidget /> : null}
+        {session?.role !== "PARENT" ? (
+          <SchoolBaseAssistant
+            navItems={navItems}
+            logoHref={logoHref}
+            userId={session?.id ?? session?.userId ?? session?.guardianId}
+            userName={session?.name}
+          />
+        ) : null}
 
         <div className="fixed z-50 flex flex-col items-end gap-2" style={{ left: audioPanelPosition.x, top: audioPanelPosition.y }}>
           {isAudioPlayerOpen ? (
