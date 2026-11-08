@@ -82,10 +82,6 @@ export default async function LoginPage({
               <p className="mt-2 text-sm text-muted">Sign in to your SchoolBase workspace. We’ll take you to the right place based on your account.</p>
 
               <LoginForm redirectTo={teacherLoginRequested ? "/teacher" : attendanceLoginRequested ? "/staff/attendance" : adminDestination} teacherLoginRequested={teacherLoginRequested} attendanceLoginRequested={attendanceLoginRequested} />
-              <div className="mt-6 border-t border-border pt-4 text-center text-xs leading-5 text-muted">
-                SchoolBase platform admins and invited country administrators also sign in here.
-                Access is assigned by your account; country administrators cannot self-register.
-              </div>
             </div>
           </div>
         </section>
