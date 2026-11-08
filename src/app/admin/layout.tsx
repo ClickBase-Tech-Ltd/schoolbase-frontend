@@ -6,6 +6,7 @@ import PendingSchoolModal from '@/components/pending-school-modal';
 import SubscriptionModal from '@/components/subscription-modal';
 import AdminSkeleton from '@/components/ui/skeleton';
 import AdmissionNotificationCenter from '@/components/admission-notification-center';
+import AdminRouteHelpGuide from '@/components/admin-route-help-guide';
 
 const baseNav = [
   { href: "/admin/getting-started", label: "Setup your workspace", icon: "Sparkles" },
@@ -245,6 +246,7 @@ export default function AdminLayout({
         <PendingSchoolModal schoolStatus={school.status} schoolName={school.name} />
         {showGettingStarted && <PendingSchoolModal schoolStatus={school.status} schoolName={school.name} />}
         {session.role === 'SCHOOL_ADMIN' ? <AdmissionNotificationCenter /> : null}
+        <AdminRouteHelpGuide />
         {children}
       </SharedLayout>
     </>
