@@ -383,3 +383,39 @@ export function stopSupportAlertSpeech() {
     }
   }
 }
+
+let countryCommunicationSpeechTimer: number | null = null;
+
+function speakCountryCommunicationMessage(message: string) {
+  const synth = window.speechSynthesis;
+  if (!synth) return;
+
+  const utterance = new SpeechSynthesisUtterance(message);
+  utterance.lang = "en-US";
+  utterance.volume = 1;
+  utterance.rate = 0.95;
+  utterance.pitch = 1.05;
+  synth.speak(utterance);
+}
+
+export function announceCountryCommunication(message: string) {
+  try {
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+
+    stopCountryCommunicationSpeech();
+    speakCountryCommunicationMessage(message);
+    countryCommunicationSpeechTimer = window.setInterval(() => {
+      if (!synth.speaking) speakCountryCommunicationMessage(message);
+    }, 12000);
+  } catch {
+    // Speech synthesis may be unavailable or blocked by the browser.
+  }
+}
+
+export function stopCountryCommunicationSpeech() {
+  if (countryCommunicationSpeechTimer !== null) {
+    window.clearInterval(countryCommunicationSpeechTimer);
+    countryCommunicationSpeechTimer = null;
+  }
+}

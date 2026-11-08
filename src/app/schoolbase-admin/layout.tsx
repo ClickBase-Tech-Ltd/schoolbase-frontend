@@ -5,6 +5,7 @@ import SharedLayout from "@/components/shared-layout";
 import { getPlatformAdminSession } from "@/lib/auth";
 import SharedWorkspaceClient from "@/app/schoolbase-admin/shared-workspace-client";
 import PlatformActivityMonitor from "@/components/platform-activity-monitor";
+import CountryCommunicationsNotifier from "@/components/country-communications-notifier";
 
 const nav = [
   { href: "/schoolbase-admin", label: "Overview", icon: "LayoutDashboard" },
@@ -64,6 +65,7 @@ export default async function PlatformAdminLayout({
       {children}
       <SharedWorkspaceClient />
       <PlatformActivityMonitor />
+      <CountryCommunicationsNotifier platformAdmin />
     </SharedLayout>
   );
 }

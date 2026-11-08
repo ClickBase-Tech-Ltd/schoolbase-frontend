@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { AlertCircle, BellRing, Check, CheckCheck, CirclePlus, Clock3, MessageSquare, RefreshCw, Send, ShieldCheck } from "lucide-react";
+import { BellRing, Check, CheckCheck, CirclePlus, Clock3, MessageSquare, RefreshCw, Send, ShieldCheck } from "lucide-react";
+import { ErrorModal } from "@/components/ui/error-modal";
 
 type Person = { id: string; name: string; email: string; countryCode?: string | null };
 type ThreadMessage = {
@@ -309,9 +310,6 @@ export default function CountryCommunicationsWorkspace({ platformAdmin }: { plat
         </div>
       </header>
 
-      {error ? <div role="alert" className="flex items-start gap-2 border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error}</div> : null}
-      {success ? <div role="status" className="flex items-start gap-2 border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"><Check className="mt-0.5 h-4 w-4 shrink-0" />{success}</div> : null}
-
       <section className="overflow-hidden border border-border bg-surface">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border p-4 sm:px-5">
           <div className="flex gap-1 border border-border bg-background p-1" role="tablist" aria-label="Communications sections">
@@ -433,6 +431,17 @@ export default function CountryCommunicationsWorkspace({ platformAdmin }: { plat
       </section>
 
       <footer className="flex items-start gap-2 border border-border bg-background px-4 py-3 text-xs leading-5 text-muted"><ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand" /><p>Conversation text is kept in the private thread and is not copied into the platform audit log. Audit records capture only the action, participants, country, and status changes.</p></footer>
+      <ErrorModal
+        isOpen={Boolean(error || success)}
+        onClose={() => {
+          setError(null);
+          setSuccess(null);
+        }}
+        title={error ? "Action could not be completed" : success?.startsWith("Announcement published") ? "Announcement published" : "Update complete"}
+        message={error || success || ""}
+        type={error ? "error" : "success"}
+        confirmLabel={error ? "Okay" : "Understood"}
+      />
     </main>
   );
 }

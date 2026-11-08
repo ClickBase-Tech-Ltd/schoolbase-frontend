@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import SharedLayout from "@/components/shared-layout";
 import { getCountryRepresentativeSession } from "@/lib/auth";
+import CountryCommunicationsNotifier from "@/components/country-communications-notifier";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,7 @@ export default async function CountryRepresentativeLayout({
       logoutRedirectUrl="/country-admin/login"
     >
       {children}
+      <CountryCommunicationsNotifier platformAdmin={false} />
     </SharedLayout>
   );
 }

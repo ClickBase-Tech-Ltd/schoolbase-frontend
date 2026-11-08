@@ -128,6 +128,7 @@ export default function PlatformActivityMonitor() {
     unlockAudio();
     window.localStorage.setItem("schoolbase-platform-activity-sound", "enabled");
     setSoundReady(true);
+    window.dispatchEvent(new Event("schoolbase-platform-activity-sound-enabled"));
   };
 
   return (
