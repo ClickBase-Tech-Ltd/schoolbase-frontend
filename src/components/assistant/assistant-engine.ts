@@ -1,4 +1,5 @@
 import type { NavItem } from "@/components/shared-layout";
+import type { TimetableQuestion } from "./timetable-intelligence";
 
 export type AssistantDestination = {
   href: string;
@@ -17,6 +18,54 @@ export type SchoolIntelligenceIntent =
   | "outstanding_summary"
   | "outstanding_students"
   | "payment_summary";
+
+export function getTimetableQuestion(input: string): TimetableQuestion | null {
+  const normalized = input.trim().replace(/\s+/g, " ");
+  const asksAvailability = /\b(?:free|available)\b/i.test(normalized)
+    && /\b(?:now|today|period|lesson|timetable|schedule)\b/i.test(normalized);
+  if (asksAvailability) {
+    return {
+      intent: "availability",
+      className: null,
+      teacherName: null,
+      subjectName: null,
+      personal: false,
+    };
+  }
+  const classMatch = normalized.match(
+    /\b(?:class|for|in)\s+((?:nursery|kindergarten|reception|primary|basic|jss|sss|junior secondary|senior secondary)\s*\d*[a-z]?)\b/i,
+  ) ?? normalized.match(
+    /\b((?:nursery|kindergarten|reception|primary|basic|jss|sss|junior secondary|senior secondary)\s*\d+[a-z]?)\b/i,
+  );
+  const hasTimetableTarget = /\b(?:lesson|class|period|teaching|timetable|schedule)\b/i.test(normalized)
+    || /\bteachers?\b.*\b(?:teach|teaches|teaching|take|taking|have|has)\b/i.test(normalized)
+    || /\bwho\b.*\b(?:teach|teaching|take|taking)\b/i.test(normalized)
+    || Boolean(classMatch);
+  const asksCurrent = /\b(?:now|right now|currently|ongoing|in progress|happening)\b/i.test(normalized)
+    && hasTimetableTarget;
+  const asksNext = /\bnext\s+(?:lesson|class|period)\b/i.test(normalized);
+  const asksToday = /\b(?:today|this morning|this afternoon)\b/i.test(normalized)
+    && hasTimetableTarget;
+  const personMatch = normalized.match(/\b(?:does|is)\s+(.+?)\s+(?:have|has|teach|teaching|take|taking)\b/i)
+    ?? normalized.match(/\bwhat(?:'s| is)\s+(.+?)(?:'s)?\s+next\s+(?:lesson|class|period)\b/i)
+    ?? normalized.match(/\bwhat classes is\s+(.+?)\s+teaching\b/i);
+  const teacherName = personMatch?.[1]?.trim() ?? null;
+  const subjectMatch = normalized.match(
+    /\b(?:taking|teaching|teach|teaches)\s+(.+?)(?=\s+(?:for|in|with|today|this morning|this afternoon|now|right now|currently)\b|[?.!,]|$)/i,
+  );
+  const subjectName = subjectMatch?.[1]?.trim() ?? null;
+  const isSelfReference = teacherName && /^(?:i|me|my|we|us|our)(?:\s+(?:class|teacher|lesson|timetable))?$/i.test(teacherName);
+  const intent = asksCurrent ? "now" : asksNext ? "next" : asksToday ? "today" : null;
+  if (!intent) return null;
+  const personal = /\b(?:my|me|i|we|our)\b/i.test(normalized);
+  return {
+    intent,
+    className: classMatch?.[1]?.trim() ?? null,
+    teacherName: isSelfReference ? null : teacherName,
+    subjectName,
+    personal,
+  };
+}
 
 export function isTimetablePlanningRequest(input: string): boolean {
   return /\b(?:create|make|build|generate|prepare|plan)\b.{0,30}\b(?:school\s+)?(?:time\s*table|schedule)\b/i.test(input)
@@ -80,7 +129,9 @@ export function isUnsupportedSchoolDataQuestion(input: string): boolean {
     && /\b(how many|number of|count|show|find|list|who|which|how much|collected|collection|collections|revenue|owing|owen|paid|graduated|withdrawn|transferred|male|female|gender|admitted|absent|present|attendance|average|highest|lowest|compare)\b/i.test(input);
 }
 
-export function getAdmissionsQuestion(input: string): "pending" | "approved" | "total" | null {
+export function getAdmissionsQuestion(
+  input: string,
+): "pending" | "pendingReview" | "awaitingFamily" | "approved" | "rejected" | "withdrawn" | "total" | null {
   if (
     /\b(today|yesterday|this week|last week|this month|last month|this term|last term|this year|last year|since|between|class|term|month|week|year)\b/i.test(input)
     || /\b(?:nursery|kindergarten|primary|basic|jss|sss|junior secondary|senior secondary)\s*\d*\b/i.test(input)
@@ -88,15 +139,27 @@ export function getAdmissionsQuestion(input: string): "pending" | "approved" | "
   ) {
     return null;
   }
-  const asksAdmissionCount = /\b(how many|number of|count of|total)\b/i.test(input)
+  const asksAdmissionCount = /\b(how many|number of|count(?: of)?|total)\b/i.test(input)
     && /\b(admissions?|applications?)\b/i.test(input);
   if (!asksAdmissionCount) return null;
-  if (/\b(rejected|withdrawn|submitted|under review|awaiting|needs? information)\b/i.test(input)) return null;
+  const explicitStatuses = [
+    { question: "approved", pattern: /\bapproved\b/i },
+    { question: "rejected", pattern: /\brejected\b/i },
+    { question: "withdrawn", pattern: /\bwithdrawn\b/i },
+  ] as const;
+  const matchedStatuses = explicitStatuses.filter(({ pattern }) => pattern.test(input));
+  if (matchedStatuses.length > 1) return null;
+
+  const asksAwaitingFamily = /\b(?:await(?:ing)?|wait(?:ing)? for)\s+(?:(?:the\s+)?(?:family|parent)\s+)?(?:information|details|response)\b|\b(?:await(?:ing)?|wait(?:ing)? for|needs?|missing)\s+(?:the\s+)?(?:family|parent)\s+(?:information|details|response)\b|\b(?:family|parent)\s+(?:information|response)\s+(?:is\s+)?(?:needed|pending)\b/i.test(input);
+  const asksPendingReview = /\b(?:pending|awaiting|waiting for)\s+(?:school|our|staff)?\s*review\b|\bnot yet reviewed\b|\bawaiting school action\b/i.test(input);
   const asksPending = /\b(pending|open|not yet (?:reviewed|decided))\b/i.test(input);
-  const asksApproved = /\bapproved\b/i.test(input);
-  if (asksPending && asksApproved) return null;
+  if (matchedStatuses.length === 1 && (asksAwaitingFamily || asksPendingReview || asksPending)) return null;
+  if (asksAwaitingFamily && asksPendingReview) return null;
+  if (matchedStatuses.length === 1) return matchedStatuses[0].question;
+  if (asksAwaitingFamily) return "awaitingFamily";
+  if (asksPendingReview) return "pendingReview";
   if (asksPending) return "pending";
-  if (asksApproved) return "approved";
+
   return "total";
 }
 

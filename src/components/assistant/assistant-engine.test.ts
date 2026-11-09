@@ -8,6 +8,11 @@ import {
   isUnsupportedSchoolDataQuestion,
   resolveAssistantRequest,
 } from "./assistant-engine";
+import {
+  getAssistantConversationReply,
+  getAssistantConversationRequest,
+  type VerifiedAssistantContext,
+} from "./assistant-conversation";
 
 test("classifies active student count and scopes by class", () => {
   assert.deepEqual(getSchoolIntelligenceIntent("How many students are in Primary 5?"), {
@@ -92,10 +97,16 @@ test("classifies admissions count questions without treating them as student cou
   assert.equal(getAdmissionsQuestion("How many admissions are pending?"), "pending");
   assert.equal(getAdmissionsQuestion("How many admission applications have we received?"), "total");
   assert.equal(getAdmissionsQuestion("How many applications were approved?"), "approved");
+  assert.equal(getAdmissionsQuestion("How many applications await information from the family?"), "awaitingFamily");
+  assert.equal(getAdmissionsQuestion("Count applications waiting for school review"), "pendingReview");
+  assert.equal(getAdmissionsQuestion("What is the number of rejected applications?"), "rejected");
+  assert.equal(getAdmissionsQuestion("How many applications were withdrawn?"), "withdrawn");
+  assert.equal(getAdmissionsQuestion("How many applications are awaiting review?"), "pendingReview");
+  assert.equal(getAdmissionsQuestion("How many applications were approved and rejected?"), null);
+  assert.equal(getAdmissionsQuestion("How many applications are pending and approved?"), null);
   assert.equal(getAdmissionsQuestion("How many admissions were approved this year?"), null);
   assert.equal(getAdmissionsQuestion("How many applications are pending in Primary 4?"), null);
-  assert.equal(getAdmissionsQuestion("How many applications are awaiting information?"), null);
-  assert.equal(getAdmissionsQuestion("How many applications were rejected?"), null);
+  assert.equal(getAdmissionsQuestion("List rejected applications"), null);
   assert.equal(getAdmissionsQuestion("Explain the admissions page"), null);
 });
 
@@ -113,5 +124,89 @@ test("recognizes timetable generation requests without matching ordinary timetab
       message: "I’ll open the school timetable planner. It will ask you for weekly lesson counts, use the school’s recorded teaching assignments, and prepare a conflict-checked draft for your review. It won’t publish the timetable.",
       destination: { href: "/admin/timetable", label: "Timetable" },
     },
+  );
+});
+
+test("routes ordinary conversation locally without classifying it as a data query", () => {
+  for (const phrase of [
+    "Hello!",
+    "Good morning.",
+    "How are you?",
+    "Okay",
+    "Got it.",
+    "Thank you.",
+    "Goodbye.",
+    "Bye",
+    "Okay, bye",
+    "Can you help me?",
+  ]) {
+    assert.ok(getAssistantConversationRequest(phrase), phrase);
+    assert.equal(isReadOnlyAiEngineQuery(phrase), false);
+  }
+  assert.equal(getAssistantConversationRequest("Good morning, how many students do we have?"), null);
+});
+
+test("recognizes logout requests without treating them as a command to log out automatically", () => {
+  for (const phrase of ["Log me out", "Log out", "Logout", "Sign me out", "Can you log me out?"]) {
+    const request = getAssistantConversationRequest(phrase);
+    assert.equal(request?.intent, "logout", phrase);
+    assert.match(getAssistantConversationReply(request!, null, "/admin"), /highlighted the Sign out button/i);
+    assert.match(getAssistantConversationReply(request!, null, "/admin"), /won’t sign you out automatically/i);
+  }
+});
+
+test("answers profile questions only from verified context", () => {
+  const request = getAssistantConversationRequest("Who am I?");
+  assert.ok(request);
+  assert.match(getAssistantConversationReply(request, null, "/teacher"), /can’t verify your identity/i);
+
+  const context: VerifiedAssistantContext = {
+    name: "Amina Mensah",
+    role: "TEACHER",
+    schoolName: "North School",
+    timezone: "Africa/Accra",
+    serverNow: "2026-11-09T12:30:00.000Z",
+  };
+  assert.match(
+    getAssistantConversationReply(request, context, "/teacher"),
+    /Amina Mensah.*Teacher.*North School/i,
+  );
+  assert.match(
+    getAssistantConversationReply(getAssistantConversationRequest("What permissions do I have")!, context, "/teacher"),
+    /won’t guess/i,
+  );
+});
+
+test("formats time and date from server time in the configured school timezone", () => {
+  const context: VerifiedAssistantContext = {
+    name: null,
+    role: "SCHOOL_ADMIN",
+    schoolName: "North School",
+    timezone: "Africa/Accra",
+    serverNow: "2026-11-09T12:30:00.000Z",
+  };
+  const timeRequest = getAssistantConversationRequest("What time is it now?");
+  const dateRequest = getAssistantConversationRequest("What is today's date?");
+  const dayRequest = getAssistantConversationRequest("What day is today?");
+  assert.ok(timeRequest && dateRequest && dayRequest);
+  assert.match(getAssistantConversationReply(timeRequest, context, "/admin"), /12:30.*Africa\/Accra/);
+  assert.match(getAssistantConversationReply(dateRequest, context, "/admin"), /Monday, 9 November 2026.*Africa\/Accra/);
+  assert.match(getAssistantConversationReply(dayRequest, context, "/admin"), /Monday.*Africa\/Accra/);
+});
+
+test("does not fabricate school-local time without a valid timezone", () => {
+  const request = getAssistantConversationRequest("What time is it?");
+  assert.ok(request);
+  const context: VerifiedAssistantContext = {
+    name: null,
+    role: "TEACHER",
+    schoolName: "North School",
+    timezone: null,
+    serverNow: "2026-11-09T12:30:00.000Z",
+  };
+  assert.match(getAssistantConversationReply(request, context, "/teacher"), /timezone.*unavailable/i);
+  assert.match(
+    getAssistantConversationReply(request, { ...context, timezone: "Not/A_Timezone" }, "/teacher"),
+    /timezone is invalid/i,
   );
 });

@@ -865,7 +865,7 @@ export default function SharedLayout({
 
         <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-background p-4 sm:p-6 md:p-8 print:overflow-visible print:p-0">{children}</main>
         {logoHref !== "/schoolbase-admin" && session?.role === "SCHOOL_ADMIN" ? <SupportChatWidget /> : null}
-        {session?.role !== "PARENT" ? (
+        {session?.role === "SCHOOL_ADMIN" || session?.role === "PLATFORM_ADMIN" ? (
           <SchoolBaseAssistant
             navItems={navItems}
             logoHref={logoHref}

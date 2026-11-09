@@ -38,6 +38,138 @@ body {
   font-family: var(--font-inter), system-ui, sans-serif;
 }
 
+@keyframes assistant-orb-breathe {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 28px rgb(10 102 194 / 24%); }
+  50% { transform: scale(1.04); box-shadow: 0 0 38px rgb(10 102 194 / 34%); }
+}
+
+@keyframes assistant-orb-listening {
+  0%, 100% { transform: scale(.98); opacity: .48; }
+  50% { transform: scale(1.12); opacity: .9; }
+}
+
+@keyframes assistant-orb-processing {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes assistant-wave {
+  0%, 100% { transform: scaleY(.35); }
+  50% { transform: scaleY(1); }
+}
+
+@keyframes assistant-menu-enter {
+  from { opacity: 0; transform: translateY(6px) scale(.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.assistant-orb {
+  position: relative;
+  display: grid;
+  width: 112px;
+  height: 112px;
+  place-items: center;
+  isolation: isolate;
+}
+
+.assistant-orb__core {
+  z-index: 1;
+  display: grid;
+  width: 64px;
+  height: 64px;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / 70%);
+  border-radius: 9999px;
+  background: radial-gradient(circle at 35% 30%, #70b5f9, #0a66c2 65%, #064b91);
+  color: white;
+  box-shadow: 0 0 28px rgb(10 102 194 / 24%);
+  animation: assistant-orb-breathe 3.8s ease-in-out infinite;
+}
+
+.assistant-orb__ring {
+  position: absolute;
+  border: 1px solid rgb(10 102 194 / 25%);
+  border-radius: 9999px;
+}
+
+.assistant-orb__ring--outer {
+  inset: 3px;
+}
+
+.assistant-orb__ring--inner {
+  inset: 15px;
+  border-color: rgb(10 102 194 / 35%);
+}
+
+.assistant-orb--listening .assistant-orb__ring {
+  border-color: rgb(10 102 194 / 65%);
+  animation: assistant-orb-listening 1.15s ease-in-out infinite;
+}
+
+.assistant-orb--listening .assistant-orb__ring--inner {
+  animation-delay: .18s;
+}
+
+.assistant-orb--processing .assistant-orb__ring--outer {
+  border-top-color: transparent;
+  animation: assistant-orb-processing 1.7s linear infinite;
+}
+
+.assistant-orb--processing .assistant-orb__ring--inner {
+  border-bottom-color: transparent;
+  animation: assistant-orb-processing 2.4s linear infinite reverse;
+}
+
+.assistant-orb--speaking .assistant-orb__core {
+  box-shadow: 0 0 40px rgb(10 102 194 / 48%);
+}
+
+.assistant-orb--paused .assistant-orb__core {
+  animation: none;
+  opacity: .72;
+}
+
+.assistant-orb--error .assistant-orb__core {
+  background: radial-gradient(circle at 35% 30%, #fca5a5, #b91c1c 70%);
+  animation: none;
+}
+
+.assistant-waveform {
+  display: flex;
+  height: 22px;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.assistant-waveform span {
+  width: 3px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #0a66c2;
+  transform: scaleY(.35);
+}
+
+.assistant-waveform--listening span,
+.assistant-waveform--speaking span {
+  animation: assistant-wave .72s ease-in-out infinite;
+}
+
+.assistant-waveform span:nth-child(2n) { animation-delay: .12s; }
+.assistant-waveform span:nth-child(3n) { animation-delay: .24s; }
+
+.assistant-mode-menu {
+  animation: assistant-menu-enter 160ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-orb__core,
+  .assistant-orb__ring,
+  .assistant-waveform span,
+  .assistant-mode-menu {
+    animation: none !important;
+  }
+}
+
 @keyframes competition-heading-light-sweep {
   from { transform: translateX(-140%); }
   to { transform: translateX(360%); }

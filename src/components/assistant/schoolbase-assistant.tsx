@@ -2,9 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Bot, Compass, Eraser, Mic, MicOff, RotateCcw, Send, Volume2, VolumeX, X } from "lucide-react";
+import { AudioLines, Bot, Compass, Eraser, LoaderCircle, MessageSquareText, Mic, MicOff, Send, Volume2, VolumeX, X } from "lucide-react";
 import { formatMoney } from "@/lib/format";
 import {
+  getAssistantConversationReply,
+  getAssistantConversationRequest,
+  type VerifiedAssistantContext,
+} from "./assistant-conversation";
+import {
+  getTimetableQuestion,
   getAssistantDestinations,
   getAssistantPortalRoot,
   getAdmissionsQuestion,
@@ -20,6 +26,7 @@ import {
   type SchoolIntelligenceIntent,
   type StudentIntakeField,
 } from "./assistant-engine";
+import type { TimetableQuestion } from "./timetable-intelligence";
 import type { NavItem } from "@/components/shared-layout";
 
 type Message = {
@@ -145,14 +152,6 @@ type SpeechWindow = Window & {
   webkitSpeechRecognition?: new () => SpeechRecognitionLike;
 };
 
-function buildWelcomeMessage(userName: string | undefined): string {
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-  const displayName = userName?.trim();
-  const personalGreeting = displayName ? `${greeting}, ${displayName}` : greeting;
-  return `${personalGreeting}. Welcome to SchoolBase! I’m your SchoolBase Assistant, and I’m here to help you learn and use SchoolBase. Ask me to explain this page, find a feature, guide you through a supported workflow, or help prepare information for a supported form. You stay in control of every change and submission.`;
-}
-
 function extractStudentFeeSearch(input: string): string | null {
   const patterns = [
     /\bhow much\s+(?:is|does|has)\s+(.+?)\s+(?:owe|owes|owing|paid|pay)\b/i,
@@ -240,7 +239,6 @@ export default function SchoolBaseAssistant({
   navItems,
   logoHref,
   userId,
-  userName,
 }: {
   navItems: NavItem[];
   logoHref: string;
@@ -254,14 +252,17 @@ export default function SchoolBaseAssistant({
     () => (portalRoot ? getAssistantDestinations(navItems) : []),
     [navItems, portalRoot],
   );
-  const [isOpen, setIsOpen] = useState(false);
+  const [assistantMode, setAssistantMode] = useState<"voice" | "text" | null>(null);
+  const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [continuousMode, setContinuousMode] = useState(false);
+  const [voiceError, setVoiceError] = useState("");
+  const [voicePaused, setVoicePaused] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [voicePreferenceLoaded, setVoicePreferenceLoaded] = useState(false);
-  const [greetingNeedsUserAction, setGreetingNeedsUserAction] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [pendingNavigation, setPendingNavigation] = useState<AssistantDestination | null>(null);
   const [highlightRect, setHighlightRect] = useState<DOMRect | null>(null);
@@ -279,19 +280,19 @@ export default function SchoolBaseAssistant({
   const shouldListenRef = useRef(false);
   const recognitionStartingRef = useRef(false);
   const isSpeakingRef = useRef(false);
+  const isProcessingRef = useRef(false);
+  const launcherRef = useRef<HTMLDivElement | null>(null);
+  const voiceButtonRef = useRef<HTMLButtonElement | null>(null);
+  const voiceStartButtonRef = useRef<HTMLButtonElement | null>(null);
+  const textInputRef = useRef<HTMLTextAreaElement | null>(null);
   const recognitionRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startListeningRef = useRef<() => void>(() => undefined);
   const sendMessageRef = useRef<(text: string) => void>(() => undefined);
-  const loginGreetingStartedRef = useRef(false);
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const highlightedHrefRef = useRef<string | null>(null);
   const highlightedElementRef = useRef<HTMLElement | null>(null);
   const pendingStudentRegistrationRef = useRef(false);
   const aiContextTokenRef = useRef<string | null>(null);
-  const welcomeMessage = useMemo(() => buildWelcomeMessage(userName), [userName]);
-  const welcomeKey = portalRoot && userId
-    ? `schoolbase-assistant-welcome:${portalRoot}:${userId}`
-    : null;
   const voicePreferenceKey = portalRoot && userId
     ? `schoolbase-assistant-voice:${portalRoot}:${userId}`
     : null;
@@ -299,6 +300,10 @@ export default function SchoolBaseAssistant({
   const addMessage = useCallback((role: Message["role"], text: string) => {
     messageId.current += 1;
     setMessages((current) => [...current, { id: messageId.current, role, text }]);
+    if (role === "assistant") {
+      isProcessingRef.current = false;
+      setIsProcessing(false);
+    }
   }, []);
 
   const promptForStudentDetails = useCallback(() => {
@@ -317,6 +322,42 @@ export default function SchoolBaseAssistant({
     setIsSpeaking(false);
   }, []);
 
+  const closeAssistant = useCallback(() => {
+    shouldListenRef.current = false;
+    if (recognitionRestartTimerRef.current) clearTimeout(recognitionRestartTimerRef.current);
+    recognitionRef.current?.stop();
+    setIsListening(false);
+    setVoicePaused(false);
+    stopSpeaking();
+    setAssistantMode(null);
+    setIsModeMenuOpen(false);
+    window.requestAnimationFrame(() => launcherRef.current?.querySelector("button")?.focus());
+  }, [stopSpeaking]);
+
+  const switchToText = useCallback(() => {
+    if (shouldListenRef.current) {
+      shouldListenRef.current = false;
+      if (recognitionRestartTimerRef.current) clearTimeout(recognitionRestartTimerRef.current);
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      setVoicePaused(true);
+    }
+    stopSpeaking();
+    setAssistantMode("text");
+  }, [stopSpeaking]);
+
+  const switchToVoice = useCallback(() => {
+    if (shouldListenRef.current) {
+      shouldListenRef.current = false;
+      if (recognitionRestartTimerRef.current) clearTimeout(recognitionRestartTimerRef.current);
+      recognitionRef.current?.stop();
+      setIsListening(false);
+    }
+    setAssistantMode("voice");
+    setVoiceError("");
+    setVoicePaused(false);
+  }, []);
+
   const startListening = useCallback(() => {
     if (!shouldListenRef.current || recognitionStartingRef.current || isSpeakingRef.current) return;
     const speechWindow = window as SpeechWindow;
@@ -324,14 +365,14 @@ export default function SchoolBaseAssistant({
     if (!Recognition) {
       shouldListenRef.current = false;
       setIsListening(false);
-      setStatusMessage("Voice input isn’t available in this browser. You can continue by typing.");
+      setVoiceError("Voice input isn’t available in this browser. Switch to Text to continue.");
       return;
     }
 
     const recognition = new Recognition();
     recognition.lang = navigator.language || "en";
     recognition.interimResults = false;
-    recognition.continuous = true;
+    recognition.continuous = assistantMode === "voice" && continuousMode;
     recognition.onresult = (event) => {
       if (isSpeakingRef.current) return;
       const transcript = Array.from(event.results)
@@ -341,7 +382,11 @@ export default function SchoolBaseAssistant({
         .join(" ")
         .trim();
       if (transcript) {
+        if (assistantMode !== "voice" || !continuousMode) shouldListenRef.current = false;
+        isProcessingRef.current = true;
+        setIsProcessing(true);
         recognition.stop();
+        setIsListening(false);
         sendMessageRef.current(transcript);
       }
     };
@@ -350,14 +395,22 @@ export default function SchoolBaseAssistant({
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
         shouldListenRef.current = false;
         setIsListening(false);
-        setStatusMessage("Microphone access is unavailable. Check your browser permission or type your request.");
+        setVoiceError("Microphone access was denied. Allow microphone access in your browser settings, or switch to Text.");
       } else if (event.error !== "no-speech" && event.error !== "aborted") {
-        setStatusMessage("Voice input paused. I’ll try listening again, or you can type your request.");
+        shouldListenRef.current = false;
+        setIsListening(false);
+        setVoiceError("Voice input stopped unexpectedly. Try the microphone again or switch to Text.");
       }
     };
     recognition.onend = () => {
       recognitionStartingRef.current = false;
-      if (!shouldListenRef.current || isSpeakingRef.current) return;
+      if (!shouldListenRef.current || isSpeakingRef.current || isProcessingRef.current) return;
+      if (!continuousMode || assistantMode !== "voice") {
+        shouldListenRef.current = false;
+        setIsListening(false);
+        setStatusMessage("I didn’t catch that. Select the microphone to try again, or switch to Text.");
+        return;
+      }
       if (recognitionRestartTimerRef.current) clearTimeout(recognitionRestartTimerRef.current);
       recognitionRestartTimerRef.current = setTimeout(() => startListeningRef.current(), 450);
     };
@@ -367,23 +420,29 @@ export default function SchoolBaseAssistant({
     try {
       recognition.start();
       setIsListening(true);
-      setStatusMessage("Listening for your next instruction. Select the microphone again to stop.");
+      setVoiceError("");
+      setStatusMessage("Listening. Select the microphone again to pause.");
     } catch {
       recognitionStartingRef.current = false;
       shouldListenRef.current = false;
       setIsListening(false);
-      setStatusMessage("Voice input couldn’t start. Please try again or type your request.");
+      setVoiceError("Voice input couldn’t start. Check microphone permission and try again, or switch to Text.");
     }
-  }, []);
+  }, [assistantMode, continuousMode]);
   useEffect(() => {
     startListeningRef.current = startListening;
   }, [startListening]);
 
-  const speak = useCallback((text: string, force = false) => {
-    if ((!voiceEnabled && !force) || typeof window === "undefined") return;
+  const speak = useCallback((text: string) => {
+    if (!voiceEnabled || assistantMode !== "voice" || typeof window === "undefined") {
+      if (shouldListenRef.current && assistantMode === "voice" && continuousMode && !voiceEnabled) {
+        startListeningRef.current();
+      }
+      return;
+    }
     if (!("speechSynthesis" in window)) {
-      setStatusMessage("Spoken replies aren’t supported by this browser. You can continue using text.");
-      if (force) setStatusMessage("Spoken welcome isn’t supported by this browser. You can continue using the assistant.");
+      setVoiceError("Spoken replies aren’t supported by this browser. Your answer is available in Text mode.");
+      if (shouldListenRef.current && continuousMode) startListeningRef.current();
       return;
     }
     isSpeakingRef.current = true;
@@ -405,7 +464,6 @@ export default function SchoolBaseAssistant({
     utterance.onstart = () => {
       isSpeakingRef.current = true;
       setIsSpeaking(true);
-      setGreetingNeedsUserAction(false);
     };
     utterance.onend = () => {
       isSpeakingRef.current = false;
@@ -415,14 +473,103 @@ export default function SchoolBaseAssistant({
     utterance.onerror = () => {
       isSpeakingRef.current = false;
       setIsSpeaking(false);
-      if (force) {
-        setGreetingNeedsUserAction(true);
-        setStatusMessage("Your welcome is ready. Select “Play welcome” to hear it.");
-      }
+      setVoiceError("Speech playback failed. You can still read the response in Text mode.");
       if (shouldListenRef.current) startListeningRef.current();
     };
     window.speechSynthesis.speak(utterance);
-  }, [voiceEnabled]);
+  }, [assistantMode, continuousMode, voiceEnabled]);
+
+  const answerConversationQuestion = useCallback(async (
+    request: NonNullable<ReturnType<typeof getAssistantConversationRequest>>,
+  ) => {
+    if (
+      request.intent === "greeting"
+      || request.intent === "how_are_you"
+      || request.intent === "acknowledgement"
+      || request.intent === "thanks"
+      || request.intent === "goodbye"
+      || request.intent === "logout"
+      || request.intent === "help"
+      || request.intent === "capabilities"
+      || request.intent === "interesting"
+      || request.intent === "identity_portal"
+    ) {
+      let reply = getAssistantConversationReply(request, null, portalRoot);
+      if (request.intent === "logout") {
+        const logoutControl = findNavigationTarget("/logout");
+        if (logoutControl) {
+          highlightedHrefRef.current = "/logout";
+          highlightedElementRef.current = logoutControl;
+          setHighlightRect(logoutControl.getBoundingClientRect());
+          setStatusMessage("The Sign out button in the left sidebar is highlighted.");
+          if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+          highlightTimerRef.current = setTimeout(() => {
+            highlightedHrefRef.current = null;
+            highlightedElementRef.current = null;
+            setHighlightRect(null);
+          }, 6500);
+        } else {
+          reply = "I can’t see the Sign out button in the current layout. Open the left sidebar and select Sign out when you’re ready. I won’t sign you out automatically.";
+          setStatusMessage("");
+        }
+      }
+      addMessage("assistant", reply);
+      speak(reply);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/assistant/context", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const data = await response.json() as VerifiedAssistantContext & { error?: string };
+      if (!response.ok) {
+        throw new Error(data.error || "Verified account information is temporarily unavailable.");
+      }
+      const reply = getAssistantConversationReply(request, data, portalRoot);
+      addMessage("assistant", reply);
+      speak(reply);
+    } catch (error) {
+      console.error("Assistant could not retrieve verified conversation context:", error);
+      const reply = error instanceof Error
+        ? error.message
+        : "Verified account information is temporarily unavailable.";
+      addMessage("assistant", reply);
+      speak(reply);
+    }
+  }, [addMessage, portalRoot, speak]);
+
+  const queryTimetable = useCallback(async (question: TimetableQuestion) => {
+    const params = new URLSearchParams({ intent: question.intent });
+    if (question.className) params.set("className", question.className);
+    if (question.teacherName) params.set("teacherName", question.teacherName);
+    if (question.subjectName) params.set("subjectName", question.subjectName);
+    if (question.personal) params.set("personal", "true");
+
+    try {
+      const response = await fetch(`/api/assistant/timetable?${params.toString()}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const data = await response.json() as { reply?: string; error?: string };
+      if (!response.ok) {
+        throw new Error(data.error || "The published timetable could not be checked.");
+      }
+      if (typeof data.reply !== "string" || !data.reply.trim()) {
+        throw new Error("The timetable service returned an unexpected answer.");
+      }
+      addMessage("assistant", data.reply);
+      speak(data.reply);
+    } catch (error) {
+      console.error("Assistant timetable query failed:", error);
+      const reply = error instanceof Error
+        ? error.message
+        : "The published timetable could not be checked. Please try again.";
+      addMessage("assistant", reply);
+      speak(reply);
+    }
+  }, [addMessage, speak]);
 
   const lookupStudentFees = useCallback(async (search: string) => {
     setIsLookingUpFees(true);
@@ -677,7 +824,7 @@ export default function SchoolBaseAssistant({
     }
   }, [addMessage, speak]);
 
-  const queryAdmissionsSummary = useCallback(async (question: "pending" | "approved" | "total") => {
+  const queryAdmissionsSummary = useCallback(async (question: NonNullable<ReturnType<typeof getAdmissionsQuestion>>) => {
     setIsLookingUpFees(true);
     setFeeLookup(null);
     setSchoolIntelligence(null);
@@ -709,11 +856,29 @@ export default function SchoolBaseAssistant({
       }
 
       setAdmissionSummary(result);
-      const reply = question === "pending"
-        ? `There are ${result.openTotal} open admission application${result.openTotal === 1 ? "" : "s"}: ${result.pendingReview} awaiting school review and ${result.awaitingFamily} awaiting information from families.`
-        : question === "approved"
-          ? `${result.approved} admission application${result.approved === 1 ? " has" : "s have"} been approved.`
-          : `SchoolBase has recorded ${result.total} admission application${result.total === 1 ? "" : "s"}: ${result.openTotal} still open and ${result.approved} approved.`;
+      let reply: string;
+      switch (question) {
+        case "pending":
+          reply = `There are ${result.openTotal} open admission application${result.openTotal === 1 ? "" : "s"}: ${result.pendingReview} awaiting school review and ${result.awaitingFamily} awaiting information from families.`;
+          break;
+        case "pendingReview":
+          reply = `There are ${result.pendingReview} admission application${result.pendingReview === 1 ? "" : "s"} awaiting school review.`;
+          break;
+        case "awaitingFamily":
+          reply = `${result.awaitingFamily} admission application${result.awaitingFamily === 1 ? " is" : "s are"} awaiting information from families.`;
+          break;
+        case "approved":
+          reply = `${result.approved} admission application${result.approved === 1 ? " has" : "s have"} been approved.`;
+          break;
+        case "rejected":
+          reply = `${result.rejected} admission application${result.rejected === 1 ? " has" : "s have"} been rejected.`;
+          break;
+        case "withdrawn":
+          reply = `${result.withdrawn} admission application${result.withdrawn === 1 ? " has" : "s have"} been withdrawn.`;
+          break;
+        default:
+          reply = `SchoolBase has recorded ${result.total} admission application${result.total === 1 ? "" : "s"}: ${result.openTotal} still open and ${result.approved} approved.`;
+      }
       addMessage("assistant", reply);
       speak(reply);
     } catch (error) {
@@ -772,8 +937,17 @@ export default function SchoolBaseAssistant({
     if (!trimmed) return;
     stopSpeaking();
     if (shouldListenRef.current) recognitionRef.current?.stop();
+    isProcessingRef.current = true;
+    setIsProcessing(true);
     addMessage("user", trimmed);
     setInput("");
+
+    const conversationRequest = getAssistantConversationRequest(trimmed);
+    if (conversationRequest) {
+      aiContextTokenRef.current = null;
+      void answerConversationQuestion(conversationRequest);
+      return;
+    }
 
     if (studentFillMode) {
       aiContextTokenRef.current = null;
@@ -794,6 +968,13 @@ export default function SchoolBaseAssistant({
       const reply = "I’ve prepared these details for your review. Nothing has been entered yet. Check the names, dates, contact details, and class below, then choose “Apply to form” if they’re correct. You will still review and submit the SchoolBase form yourself.";
       addMessage("assistant", reply);
       speak(reply);
+      return;
+    }
+
+    const timetableQuestion = getTimetableQuestion(trimmed);
+    if (timetableQuestion) {
+      aiContextTokenRef.current = null;
+      void queryTimetable(timetableQuestion);
       return;
     }
 
@@ -928,7 +1109,7 @@ export default function SchoolBaseAssistant({
         router.push(result.destination.href);
       }
     }
-  }, [addMessage, destinations, lookupStudentFees, navItems, pathname, portalRoot, promptForStudentDetails, queryAdmissionsSummary, queryReadOnlyAiEngine, querySchoolIntelligence, router, schoolIntelligence, speak, stopSpeaking, studentFillMode]);
+  }, [addMessage, answerConversationQuestion, destinations, lookupStudentFees, navItems, pathname, portalRoot, promptForStudentDetails, queryAdmissionsSummary, queryReadOnlyAiEngine, querySchoolIntelligence, queryTimetable, router, schoolIntelligence, speak, stopSpeaking, studentFillMode]);
 
   useEffect(() => {
     sendMessageRef.current = sendMessage;
@@ -939,36 +1120,57 @@ export default function SchoolBaseAssistant({
   }, [portalRoot, userId]);
 
   useEffect(() => {
-    let frame = 0;
+    let savedPreference: string | null = null;
+    let preferenceReadFailed = false;
     try {
-      const savedPreference = voicePreferenceKey
+      savedPreference = voicePreferenceKey
         ? window.localStorage.getItem(voicePreferenceKey)
         : null;
-      frame = window.requestAnimationFrame(() => {
-        if (savedPreference === "off") setVoiceEnabled(false);
-        setVoicePreferenceLoaded(true);
-      });
     } catch {
-      frame = window.requestAnimationFrame(() => setVoicePreferenceLoaded(true));
+      preferenceReadFailed = true;
     }
+    const frame = window.requestAnimationFrame(() => {
+      if (savedPreference === "off") setVoiceEnabled(false);
+      if (preferenceReadFailed) {
+        setStatusMessage("I couldn’t load your voice preference. Spoken replies are available in Voice mode.");
+      }
+    });
     return () => window.cancelAnimationFrame(frame);
   }, [voicePreferenceKey]);
 
   useEffect(() => {
-    if (!voicePreferenceLoaded || loginGreetingStartedRef.current) return;
-    let cancelled = false;
-    const frame = window.requestAnimationFrame(() => {
-      if (cancelled || loginGreetingStartedRef.current) return;
-      loginGreetingStartedRef.current = true;
-      setIsOpen(true);
-      if (voiceEnabled) speak(welcomeMessage, true);
-      else setStatusMessage("Spoken welcome is turned off. You can turn on spoken replies at any time.");
-    });
-    return () => {
-      cancelled = true;
-      if (frame) window.cancelAnimationFrame(frame);
+    if (isModeMenuOpen) {
+      voiceButtonRef.current?.focus();
+    }
+  }, [isModeMenuOpen]);
+
+  useEffect(() => {
+    if (assistantMode === "text") textInputRef.current?.focus();
+    if (assistantMode === "voice") voiceStartButtonRef.current?.focus();
+  }, [assistantMode]);
+
+  useEffect(() => {
+    if (!isModeMenuOpen && !assistantMode) return;
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (isModeMenuOpen) {
+        setIsModeMenuOpen(false);
+        return;
+      }
+      closeAssistant();
     };
-  }, [speak, voiceEnabled, voicePreferenceLoaded, welcomeMessage]);
+    const handlePointerDown = (event: PointerEvent) => {
+      if (isModeMenuOpen && !launcherRef.current?.contains(event.target as Node)) {
+        setIsModeMenuOpen(false);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [assistantMode, closeAssistant, isModeMenuOpen]);
 
   useEffect(() => {
     if (pathname !== "/admin/students/new" || !pendingStudentRegistrationRef.current) return;
@@ -1041,30 +1243,26 @@ export default function SchoolBaseAssistant({
       if (recognitionRestartTimerRef.current) clearTimeout(recognitionRestartTimerRef.current);
       recognitionRef.current?.stop();
       setIsListening(false);
-      setStatusMessage("Voice listening is off.");
+      setVoicePaused(true);
+      setVoiceError("");
+      setStatusMessage("Microphone paused. Select the microphone to resume.");
       return;
     }
 
     const speechWindow = window as SpeechWindow;
     const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition;
     if (!Recognition) {
-      setStatusMessage("Voice input is not supported by this browser. You can still type your request.");
+      setVoiceError("Voice input is not supported by this browser. Switch to Text to continue.");
       return;
     }
 
     stopSpeaking();
+    setVoicePaused(false);
+    setVoiceError("");
     shouldListenRef.current = true;
     setIsListening(true);
     setStatusMessage("Starting voice listening...");
     startListeningRef.current();
-  };
-
-  const replayWelcome = () => {
-    if (!voiceEnabled) {
-      setStatusMessage("Spoken replies are off. Turn them on to hear the welcome.");
-      return;
-    }
-    speak(welcomeMessage, true);
   };
 
   const toggleVoiceReplies = () => {
@@ -1074,16 +1272,13 @@ export default function SchoolBaseAssistant({
       if (voicePreferenceKey) window.localStorage.setItem(voicePreferenceKey, nextEnabled ? "on" : "off");
       if (!nextEnabled) {
         stopSpeaking();
-        setGreetingNeedsUserAction(false);
-        setStatusMessage("Spoken replies are off. Voice listening can still be controlled with the microphone.");
+        setStatusMessage("Spoken replies are off. Text and voice input remain available.");
         return;
       }
       setStatusMessage("Spoken replies are on.");
-      if (greetingNeedsUserAction) speak(welcomeMessage, true);
     } catch {
       if (!nextEnabled) {
         stopSpeaking();
-        setGreetingNeedsUserAction(false);
         setStatusMessage("Spoken replies are off for this session, but the preference could not be saved.");
       } else {
         setStatusMessage("Spoken replies are on for this session, but the preference could not be saved.");
@@ -1091,27 +1286,16 @@ export default function SchoolBaseAssistant({
     }
   };
 
-  const markWelcomeSeen = (closeAssistant: boolean) => {
-    let preferenceSaved = false;
-    if (welcomeKey) {
-      try {
-        window.localStorage.setItem(welcomeKey, "seen");
-        preferenceSaved = true;
-      } catch {
-        setStatusMessage("I couldn’t save this preference in your browser. You can still use the assistant.");
-      }
-    }
-    if (closeAssistant) {
+  const toggleContinuousMode = () => {
+    const nextEnabled = !continuousMode;
+    setContinuousMode(nextEnabled);
+    if (!nextEnabled && shouldListenRef.current) {
       shouldListenRef.current = false;
       if (recognitionRestartTimerRef.current) clearTimeout(recognitionRestartTimerRef.current);
       recognitionRef.current?.stop();
       setIsListening(false);
-      stopSpeaking();
-      setFeeLookup(null);
-      setPendingFeeReminder(null);
-      setIsOpen(false);
-    } else if (preferenceSaved) {
-      setStatusMessage("Welcome completed. Ask me to explain this page or find a dashboard section.");
+      setVoicePaused(true);
+      setStatusMessage("Continuous conversation is off. Select Speak for each request.");
     }
   };
 
@@ -1215,6 +1399,27 @@ export default function SchoolBaseAssistant({
   };
 
   if (!portalRoot || destinations.length === 0) return null;
+  const voiceVisualState = voiceError
+    ? "error"
+    : isListening
+      ? "listening"
+      : isProcessing
+        ? "processing"
+        : isSpeaking
+          ? "speaking"
+          : voicePaused
+            ? "paused"
+            : "idle";
+  const voiceStatus = voiceError
+    || (isListening
+      ? "Listening"
+      : isProcessing
+        ? "Thinking"
+        : isSpeaking
+          ? "Speaking"
+          : voicePaused
+            ? "Paused"
+            : "Ready when you are");
 
   return (
     <>
@@ -1233,11 +1438,11 @@ export default function SchoolBaseAssistant({
         />
       ) : null}
 
-      {isOpen ? (
+      {assistantMode === "text" ? (
         <section
-          aria-label="SchoolBase AI"
+          aria-label="SchoolBase AI text assistant"
           aria-modal="false"
-          className="fixed bottom-56 right-3 z-[105] flex max-h-[min(680px,calc(100dvh-14rem))] w-[min(400px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface text-foreground shadow-2xl sm:right-6"
+          className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-3 z-[90] flex max-h-[min(680px,calc(100dvh-8rem))] w-[min(400px,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface text-foreground shadow-2xl sm:right-6"
           role="dialog"
         >
           <header className="flex items-center justify-between gap-3 border-b border-border bg-brand px-4 py-3 text-white">
@@ -1262,16 +1467,16 @@ export default function SchoolBaseAssistant({
               </button>
               <button
                 type="button"
-                onClick={replayWelcome}
-                aria-label={greetingNeedsUserAction ? "Play welcome" : "Replay the welcome"}
-                title={greetingNeedsUserAction ? "Play welcome" : "Replay welcome"}
+                onClick={switchToVoice}
+                aria-label="Switch to voice assistant"
+                title="Switch to Voice"
                 className="rounded-lg p-2 transition hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
               >
-                {greetingNeedsUserAction ? <span className="px-1 text-xs font-medium">Play welcome</span> : <RotateCcw className="h-4 w-4" />}
+                <AudioLines className="h-4 w-4" />
               </button>
               <button
                 type="button"
-                onClick={() => markWelcomeSeen(true)}
+                onClick={closeAssistant}
                 aria-label="Close assistant"
                 className="rounded-lg p-2 transition hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
               >
@@ -1300,6 +1505,12 @@ export default function SchoolBaseAssistant({
               </div>
             ))}
             {statusMessage ? <p role="status" className="text-xs text-muted">{statusMessage}</p> : null}
+            {isProcessing ? (
+              <p role="status" className="flex items-center gap-2 text-xs text-muted">
+                <LoaderCircle className="h-4 w-4 animate-spin text-brand" aria-hidden="true" />
+                Working on your request…
+              </p>
+            ) : null}
             {studentFillMode ? (
               <p className="rounded-lg border border-brand/20 bg-brand/5 px-3 py-2 text-xs text-foreground">
                 Form assistance is ready. Dictate or type field labels with their values; you’ll review everything before it is entered.
@@ -1605,14 +1816,7 @@ export default function SchoolBaseAssistant({
                   <button
                     key={suggestion}
                     type="button"
-                    onClick={() => {
-                      if (suggestion === "Show me around") {
-                        if (welcomeKey) markWelcomeSeen(false);
-                        sendMessage(suggestion);
-                      } else {
-                        sendMessage(suggestion);
-                      }
-                    }}
+                    onClick={() => sendMessage(suggestion)}
                     className="rounded-full border border-border px-3 py-1.5 text-xs text-foreground transition hover:border-brand hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
                   >
                     {suggestion}
@@ -1636,13 +1840,10 @@ export default function SchoolBaseAssistant({
             {messages.some((message) => message.role === "assistant") ? (
               <button
                 type="button"
-                onClick={() => {
-                  const lastReply = [...messages].reverse().find((message) => message.role === "assistant");
-                  if (lastReply) speak(lastReply.text, true);
-                }}
+                onClick={switchToVoice}
                 className="self-start text-xs font-medium text-brand underline underline-offset-2"
               >
-                Read the last reply aloud
+                Switch to Voice for spoken replies
               </button>
             ) : null}
           </div>
@@ -1650,6 +1851,7 @@ export default function SchoolBaseAssistant({
           <div className="border-t border-border p-3">
             <form onSubmit={submit} className="flex items-end gap-2">
               <textarea
+                ref={textInputRef}
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={onInputKeyDown}
@@ -1684,7 +1886,7 @@ export default function SchoolBaseAssistant({
                   type="button"
                   onClick={toggleVoiceReplies}
                   aria-label={voiceEnabled ? "Turn spoken replies off" : "Turn spoken replies on"}
-                  title={voiceEnabled ? "Spoken replies on" : "Spoken replies off"}
+                  title={voiceEnabled ? "Spoken replies on in Voice mode" : "Spoken replies off"}
                   className="rounded-lg p-1.5 text-muted transition hover:bg-background hover:text-foreground"
                 >
                   {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
@@ -1700,27 +1902,6 @@ export default function SchoolBaseAssistant({
                 ) : null}
               </div>
             </div>
-            {welcomeKey && messages.length <= 1 ? (
-              <button
-                type="button"
-                onClick={() => {
-                  markWelcomeSeen(false);
-                  sendMessage("Show me around");
-                }}
-                className="mt-1 text-[11px] text-muted underline underline-offset-2 hover:text-foreground"
-              >
-                Yes, show me around
-              </button>
-            ) : null}
-            {welcomeKey && messages.length <= 1 ? (
-              <button
-                type="button"
-                onClick={() => markWelcomeSeen(true)}
-                className="ml-3 mt-1 text-[11px] text-muted underline underline-offset-2 hover:text-foreground"
-              >
-                I’ll explore on my own
-              </button>
-            ) : null}
             <div className="mt-2 flex items-center gap-1 text-[10px] text-muted">
               <Compass className="h-3 w-3" />
               {destinations.length} registered pages available in this dashboard
@@ -1729,19 +1910,187 @@ export default function SchoolBaseAssistant({
         </section>
       ) : null}
 
-      <button
-        type="button"
-        onClick={() => {
-          if (isOpen) markWelcomeSeen(true);
-          else setIsOpen(true);
-        }}
-        aria-label={isOpen ? "Close SchoolBase Assistant" : "Open SchoolBase Assistant"}
-        aria-expanded={isOpen}
-        className="fixed bottom-40 right-4 z-[104] flex min-h-14 items-center justify-center gap-2 rounded-full bg-brand px-4 text-white shadow-xl transition hover:scale-105 hover:shadow-2xl focus-visible:outline focus-visible:outline-4 focus-visible:outline-brand/30 print:hidden sm:right-6"
-        title="SchoolBase Assistant — ask for help navigating and learning SchoolBase"
+      {assistantMode === "voice" ? (
+        <section
+          aria-label="SchoolBase AI voice assistant"
+          aria-modal="false"
+          className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-3 z-[90] flex max-h-[min(460px,calc(100dvh-8rem))] w-[min(360px,calc(100vw-1.5rem))] flex-col overflow-y-auto rounded-2xl border border-border bg-surface p-4 text-foreground shadow-2xl sm:right-6"
+          role="dialog"
+        >
+          <header className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand/10 text-brand">
+                <AudioLines className="h-4 w-4" aria-hidden="true" />
+              </span>
+              <div>
+                <h2 className="text-sm font-semibold">SchoolBase AI</h2>
+                <p className="text-xs text-muted">Voice mode</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={switchToText}
+                aria-label="Switch to text conversation"
+                title="Switch to Text"
+                className="rounded-lg p-2 text-muted transition hover:bg-background hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+              >
+                <MessageSquareText className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={closeAssistant}
+                aria-label="Close voice assistant"
+                className="rounded-lg p-2 text-muted transition hover:bg-background hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </header>
+
+          <div className="flex flex-col items-center px-2 pb-3 pt-5">
+            <div className={`assistant-orb assistant-orb--${voiceVisualState}`} aria-hidden="true">
+              <span className="assistant-orb__ring assistant-orb__ring--outer" />
+              <span className="assistant-orb__ring assistant-orb__ring--inner" />
+              <span className="assistant-orb__core">
+                {isProcessing ? <LoaderCircle className="h-7 w-7 animate-spin" /> : <AudioLines className="h-7 w-7" />}
+              </span>
+            </div>
+            <p className="mt-4 text-sm font-semibold" role="status" aria-live="polite">{voiceStatus}</p>
+            {voiceError ? (
+              <p className="mt-1 max-w-[290px] text-center text-xs text-red-700">{voiceError}</p>
+            ) : (
+              <p className="mt-1 text-xs text-muted">
+                {isListening ? "Your microphone is active." : isSpeaking ? "Select Stop to interrupt the reply." : "Choose the microphone when you’re ready to speak."}
+              </p>
+            )}
+            {isListening || isSpeaking ? (
+              <div className={`assistant-waveform assistant-waveform--${voiceVisualState}`} aria-hidden="true">
+                {[0, 1, 2, 3, 4, 5, 6].map((bar) => <span key={bar} />)}
+              </div>
+            ) : null}
+            {messages.length ? (
+              <p className="mt-3 line-clamp-3 w-full rounded-xl bg-background px-3 py-2 text-xs leading-relaxed text-foreground">
+                {[...messages].reverse().find((message) => message.role === "assistant")?.text || "Your conversation will appear here when you switch to Text."}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-2 border-t border-border pt-3">
+            <button
+              ref={voiceStartButtonRef}
+              type="button"
+              onClick={startOrStopListening}
+              aria-label={isListening ? "Pause microphone" : "Start microphone"}
+              aria-pressed={isListening}
+              className={`inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${isListening ? "bg-red-50 text-red-700 hover:bg-red-100" : "bg-brand text-white hover:bg-brand-hover"}`}
+            >
+              {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              {isListening ? "Pause" : "Speak"}
+            </button>
+            {isSpeaking ? (
+              <button
+                type="button"
+                onClick={stopSpeaking}
+                className="min-h-11 rounded-full border border-border px-4 text-sm font-medium hover:border-brand hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+              >
+                Stop speaking
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={toggleVoiceReplies}
+              aria-label={voiceEnabled ? "Mute spoken replies" : "Unmute spoken replies"}
+              aria-pressed={voiceEnabled}
+              title={voiceEnabled ? "Spoken replies on" : "Spoken replies off"}
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-border text-muted transition hover:border-brand hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+            >
+              {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={toggleContinuousMode}
+            aria-pressed={continuousMode}
+            className="mt-3 self-center rounded-lg px-2 py-1 text-xs text-muted underline-offset-2 hover:text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+          >
+            Continuous conversation: {continuousMode ? "On" : "Off"}
+          </button>
+          {voiceError ? (
+            <button
+              type="button"
+              onClick={startOrStopListening}
+              className="mt-1 self-center text-xs font-medium text-brand underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+            >
+              Try microphone again
+            </button>
+          ) : null}
+          {!isSpeaking && voiceEnabled && messages.some((message) => message.role === "assistant") ? (
+            <button
+              type="button"
+              onClick={() => {
+                const lastReply = [...messages].reverse().find((message) => message.role === "assistant");
+                if (lastReply) speak(lastReply.text);
+              }}
+              className="mt-2 self-center text-xs font-medium text-brand underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+            >
+              Play last reply
+            </button>
+          ) : null}
+        </section>
+      ) : null}
+
+      <div
+        ref={launcherRef}
+        className="fixed bottom-[calc(12.5rem+env(safe-area-inset-bottom))] right-4 z-[91] flex flex-col items-end gap-2 print:hidden sm:right-6"
       >
-        {isOpen ? <X className="h-6 w-6" /> : <><Bot className="h-5 w-5" /><span className="ml-1 text-xs font-semibold">Ask me</span></>}
-      </button>
+        {isModeMenuOpen ? (
+          <div className="assistant-mode-menu flex items-center gap-2" role="group" aria-label="Choose assistant mode">
+            <button
+              ref={voiceButtonRef}
+              type="button"
+              onClick={() => {
+                switchToVoice();
+                setIsModeMenuOpen(false);
+              }}
+              aria-label="Use voice assistant"
+              title="Voice"
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-brand shadow-lg transition hover:scale-105 hover:bg-brand hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+            >
+              <AudioLines className="h-5 w-5" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                switchToText();
+                setIsModeMenuOpen(false);
+              }}
+              aria-label="Use text assistant"
+              title="Text"
+              className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-surface text-brand shadow-lg transition hover:scale-105 hover:bg-brand hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+            >
+              <MessageSquareText className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </div>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => {
+            if (assistantMode) {
+              closeAssistant();
+              return;
+            }
+            setIsModeMenuOpen((open) => !open);
+          }}
+          aria-label={assistantMode ? "Close SchoolBase AI" : isModeMenuOpen ? "Close assistant choices" : "Open SchoolBase AI choices"}
+          aria-expanded={isModeMenuOpen || assistantMode !== null}
+          aria-haspopup="true"
+          className="flex h-14 w-14 items-center justify-center rounded-full border border-white/30 bg-brand text-white shadow-lg shadow-brand/20 transition duration-200 hover:scale-105 hover:shadow-xl focus-visible:outline focus-visible:outline-4 focus-visible:outline-brand/30 active:scale-95"
+          title="SchoolBase AI"
+        >
+          {assistantMode ? <X className="h-6 w-6" aria-hidden="true" /> : <Mic className="h-6 w-6" aria-hidden="true" />}
+        </button>
+      </div>
     </>
   );
 }
