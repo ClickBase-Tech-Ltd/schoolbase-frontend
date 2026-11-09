@@ -3,7 +3,11 @@ export type AssistantConversationIntent =
   | "how_are_you"
   | "acknowledgement"
   | "thanks"
+  | "welcome"
   | "goodbye"
+  | "apology"
+  | "anything_else"
+  | "assistant_identity"
   | "logout"
   | "help"
   | "capabilities"
@@ -33,6 +37,7 @@ export type VerifiedAssistantContext = {
 
 const requestPatterns: Array<[AssistantConversationIntent, RegExp]> = [
   ["logout", /^(?:(?:please|can you|could you|i want to|i'd like to)\s+)?(?:log\s*me\s*out|log\s*out|logout|sign\s*me\s*out|sign\s*out|log\s*off|sign\s*off)(?:\s+please)?$/i],
+  ["assistant_identity", /^(?:who are you|what are you|are you (?:a )?human|are you a real person)$/i],
   ["identity_name", /^what(?:'s| is) my name$/i],
   ["identity_summary", /^(?:who am i|tell me about myself)$/i],
   ["identity_role", /^(?:what(?:'s| is) my role|what role do i have|which role do i have)$/i],
@@ -43,16 +48,29 @@ const requestPatterns: Array<[AssistantConversationIntent, RegExp]> = [
   ["current_date", /^(?:what(?:'s| is) (?:today(?:'s)? date|the date today)|what date is it today|today(?:'s)? date)$/i],
   ["current_day", /^(?:what day is today|what(?:'s| is) today|which day is it today|what day is it)$/i],
   ["how_are_you", /^(?:how are you|how(?:'s| is) everything|how are things)(?: going)?$/i],
-  ["acknowledgement", /^(?:ok|okay|alright|all right|got it|understood|sure|sounds good|that works|perfect)$/i],
-  ["thanks", /^(?:thanks|thank you|thanks a lot|thank you very much|much appreciated|appreciate it)$/i],
-  ["goodbye", /^(?:(?:ok(?:ay)?|alright|thanks|thank you)[,!\s]+)?(?:goodbye|bye|see you|talk to you later|see you later)(?:\s+(?:for now|later))?$/i],
+  ["anything_else", /^(?:no(?:,?\s+(?:thanks?|thank you))?|nothing else|that(?:['’]s| is) all(?:[,!\s]+(?:thanks?|thank you))?|i(?:'m| am) all set|not right now|no more questions)$/i],
+  ["acknowledgement", /^(?:ok|okay|alright|all right|got it|understood|sure|sounds good|that works|perfect|great|noted)$/i],
+  ["thanks", /^(?:thanks|thank you|thanks a lot|thank you very much|much appreciated|i appreciate it|appreciate it)$/i],
+  ["welcome", /^(?:you(?:'re|’re| are) welcome|no problem|my pleasure|anytime)$/i],
+  ["apology", /^(?:sorry|i(?:['’]m| am) sorry|my apologies|i apologize)$/i],
+  ["goodbye", /^(?:(?:ok(?:ay)?|alright|thanks|thank you)[,!\s]+)?(?:goodbye|bye|see you|talk to you later|see you later)(?:\s+(?:for now|later|tomorrow))?$/i],
   ["help", /^(?:can you help me|could you help me|i need help|help me)$/i],
   ["capabilities", /^(?:what can you do|how can you help|what can you help me with|show me around)$/i],
   ["interesting", /^(?:tell me something interesting|tell me an interesting fact)$/i],
-  ["greeting", /^(?:hello|hi|hey|good morning|good afternoon|good evening)(?: there)?$/i],
+  ["greeting", /^(?:hello|hi|hey|morning|afternoon|evening|good morning|good afternoon|good evening)(?: there)?$/i],
 ];
 
-const greetingPattern = /^(good morning|good afternoon|good evening|hello|hi|hey)\b[,.!:\s]+/i;
+const greetingPattern = /^(good morning|good afternoon|good evening|morning|afternoon|evening|hello|hi|hey)(?:\s+there)?\b[,.!:\s]+/i;
+
+export function splitAssistantGreeting(input: string): { greeting: string | null; question: string } {
+  const trimmed = input.trim();
+  const match = trimmed.match(greetingPattern);
+  if (!match) return { greeting: null, question: trimmed };
+  const question = trimmed.slice(match[0].length).trim();
+  return question
+    ? { greeting: match[1], question }
+    : { greeting: null, question: trimmed };
+}
 
 export function getAssistantConversationRequest(input: string): AssistantConversationRequest | null {
   const trimmed = input.trim();
@@ -87,16 +105,28 @@ export function getAssistantConversationReply(
       return `${opening}Okay. Let me know if you need anything else.`;
     case "thanks":
       return `${opening}You’re welcome. I’m here if you need anything else.`;
+    case "welcome":
+      return `${opening}Thank you. Let me know if there’s anything else I can help with.`;
     case "goodbye":
       return `${opening}Take care. I’ll be here when you need help with SchoolBase.`;
+    case "apology":
+      return `${opening}No worries. What would you like help with?`;
+    case "anything_else":
+      return `${opening}All right. I’ll be here if you need anything later.`;
+    case "assistant_identity":
+      return `${opening}I’m SchoolBase AI, an assistant built into SchoolBase. I’m not a person; I can help navigate the portal and answer supported questions from verified SchoolBase information.`;
     case "logout":
       return `${opening}I’ve highlighted the Sign out button in the left sidebar. Select it when you’re ready; I won’t sign you out automatically.`;
     case "help":
-      return `${opening}Of course. I can explain a page, help find a section in your portal, or answer supported questions using verified SchoolBase information. What do you need help with?`;
+      return `${opening}${portalRoot === "/admin"
+        ? "Of course. I can explain a page or help with supported student counts and rosters, admission-status summaries, recorded fee balances and collections, individual student fee history, and published timetable lookups. Attendance analytics and examination comparisons aren’t connected yet. What would you like to check?"
+        : "Of course. I can explain a page, help find a section in your portal, or answer supported questions using verified SchoolBase information. What do you need help with?"}`;
     case "capabilities":
       return `${opening}${portalRoot === "/admin"
-        ? "I can explain pages, find sections, guide supported workflows, answer the read-only SchoolBase questions enabled in this portal, and check published timetable assignments for today when dates and timezones are verified. I can’t confirm free periods, closures, cancellations, or substitutions, and open-ended general-knowledge answers are not enabled yet."
-        : "I can explain pages, help find sections, and check your own published timetable assignments for today when dates and timezones are verified. I can’t confirm free periods, closures, cancellations, or substitutions."}`;
+        ? "I can help you navigate and understand pages; check school-wide or class student counts and supported student and staff lists; summarize admission statuses; review recorded fee balances, collections, and an individual student’s fee history; and check the published timetable for today, now, or next when the school date and timezone are verified. For example, ask “How many active students are in Primary 4?”, “How many applications await review?”, or “What is the next scheduled lesson for Primary 5?” You can also ask me to prepare student form details for your review. I won’t submit forms, change records, or send an individual fee reminder without your confirmation. Attendance analytics, examination comparisons, school-calendar exceptions, and broad cross-module reports are not enabled here yet. A published timetable does not confirm that a person is free or account for cancellations, substitutions, or closures."
+        : portalRoot === "/schoolbase-admin"
+          ? "I can help you navigate and explain SchoolBase Admin pages and answer the verified, role-authorized questions available in this portal. School-level records and sensitive operational data are not included unless an approved capability explicitly provides them."
+          : "I can help you navigate and explain the sections available in this portal and check your own published timetable where that feature is enabled. I can’t confirm free periods, closures, cancellations, or substitutions."}`;
     case "interesting":
       return `${opening}I don’t have an approved general-knowledge source connected yet, so I won’t make up a fact. I can help with verified SchoolBase information available in this portal.`;
     case "identity_name":

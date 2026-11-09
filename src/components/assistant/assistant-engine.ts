@@ -109,19 +109,30 @@ export function getSchoolIntelligenceIntent(input: string): {
     && /\b(this term|current term)\b/i.test(input)
   ) return { intent: "payment_summary", className };
 
-  const asksStudentCount = /\b(?:how many|many|number of|count of|count)\b/i.test(input)
+  const asksStudentCount = /\b(?:how many|many|number of|count of|count|head\s?count|total number of|total)\b/i.test(input)
     && /\b(students?|pupils?|learners?)\b/i.test(input)
-    && /\b(?:do we have|we have|have we|are there|in|from|within|currently|active|registered|enrolled|enrol)\b/i.test(input);
+    && !/\b(?:admitted|admission|graduated|withdrawn|transferred|absent|attendance|male|female|gender)\b/i.test(input);
   if (asksStudentCount) return { intent: "active_student_count", className };
   return null;
 }
 
 function extractClassName(input: string): string | null {
+  const standardClass = input.match(/\bfor\s+(?:class\s+)?((?:nursery|kindergarten|reception|primary|basic|jss|sss|junior secondary|senior secondary)\s*(?:\d+[a-z]?|one|two|three|four|five|six|seven|eight|nine|ten|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)?)\b/i)?.[1];
   const match = input.match(/\b(?:in|from|within)\s+(?:the\s+)?(?:class|phase|level)?\s*(.+?)(?=\s+\b(?:who|that|with|owing|owen|owe|owes|have|has|are|is)\b|\s*[?.!]*$)/i);
-  const candidate = match?.[1]
+  const candidate = (standardClass ?? match?.[1])
     ?.replace(/^(?:the\s+)?(?:school|my school|this school|our school)$/i, "")
     .trim();
-  return candidate || null;
+  if (!candidate) return null;
+  const numberWords: Record<string, string> = {
+    one: "1", first: "1", two: "2", second: "2", three: "3", third: "3",
+    four: "4", fourth: "4", five: "5", fifth: "5", six: "6", sixth: "6",
+    seven: "7", seventh: "7", eight: "8", eighth: "8", nine: "9", ninth: "9",
+    ten: "10", tenth: "10",
+  };
+  return candidate.replace(
+    /\b(nursery|kindergarten|reception|primary|basic|jss|sss|junior secondary|senior secondary)\s+(one|first|two|second|three|third|four|fourth|five|fifth|six|sixth|seven|seventh|eight|eighth|nine|ninth|ten|tenth)\b/i,
+    (_match, level: string, number: string) => `${level} ${numberWords[number.toLowerCase()]}`,
+  );
 }
 
 export function isUnsupportedSchoolDataQuestion(input: string): boolean {
@@ -318,6 +329,22 @@ const pageKnowledge: Record<string, { aliases: string[]; description: string }> 
     aliases: ["whatsapp settings", "whatsapp", "pairing", "qr code"],
     description: "WhatsApp settings let an authorised school administrator pair the school’s linked device, send a test message, and review delivery limits, quiet hours, retries, and bulk-send approval. Review the recipient and message before sending.",
   },
+  admissions: {
+    aliases: ["admissions", "admission applications", "application review", "applicants"],
+    description: "Admissions pages let authorised school administrators review applications and their recorded workflow status. Check the applicant, requested class, documents, and current status in SchoolBase before making a decision; the assistant does not approve or reject applications.",
+  },
+  analytics: {
+    aliases: ["analytics", "reports", "school performance", "statistics", "dashboard metrics"],
+    description: "Reports and analytics summarize the records and measures supported by the selected page. Check the selected term, date range, cohort, and metric definition before comparing results. The assistant does not yet provide every report as a conversational answer.",
+  },
+  classes: {
+    aliases: ["classes", "class arms", "classrooms", "class list"],
+    description: "Class pages manage school class and arm information. Confirm the academic year and class arm before reviewing related student or teaching assignments.",
+  },
+  communication: {
+    aliases: ["communications", "messages", "announcements", "parent messages", "notification history"],
+    description: "Communication pages provide the messaging and notification controls available to your role. Message delivery states depend on the recorded provider status; review recipients and message content before sending.",
+  },
   students: {
     aliases: ["students", "student", "pupils", "pupil", "admission", "admissions", "enrolment", "enrollment", "register a student"],
     description: "Student pages provide access to student records and related school workflows. Use the page controls to review or update a record; the assistant will not submit changes.",
@@ -332,7 +359,11 @@ const pageKnowledge: Record<string, { aliases: string[]; description: string }> 
   },
   timetable: {
     aliases: ["timetable", "schedule", "schedules", "lesson plan"],
-    description: "Timetable pages provide access to schedule information and related controls available to your role.",
+    description: "Timetable pages provide access to the schedules and controls available to your role. A published schedule is not confirmation of a live lesson, teacher availability, cancellation, substitution, or school closure.",
+  },
+  academicYears: {
+    aliases: ["academic year", "academic years", "school year", "school years", "term dates", "academic calendar"],
+    description: "Academic-year and term pages show the dates and records configured in SchoolBase. Verify the current selection and timezone; a configured date range alone does not establish that the school is open.",
   },
   support: {
     aliases: ["support", "help", "ticket", "tickets", "support request"],

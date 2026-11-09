@@ -7,6 +7,7 @@ import { formatMoney } from "@/lib/format";
 import {
   getAssistantConversationReply,
   getAssistantConversationRequest,
+  splitAssistantGreeting,
   type VerifiedAssistantContext,
 } from "./assistant-conversation";
 import {
@@ -293,17 +294,30 @@ export default function SchoolBaseAssistant({
   const highlightedElementRef = useRef<HTMLElement | null>(null);
   const pendingStudentRegistrationRef = useRef(false);
   const aiContextTokenRef = useRef<string | null>(null);
+  const pendingGreetingRef = useRef<string | null>(null);
+  const greetedSpeechReplyRef = useRef<{ original: string; decorated: string } | null>(null);
   const voicePreferenceKey = portalRoot && userId
     ? `schoolbase-assistant-voice:${portalRoot}:${userId}`
     : null;
 
   const addMessage = useCallback((role: Message["role"], text: string) => {
+    let displayText = text;
+    if (role === "assistant" && pendingGreetingRef.current) {
+      const greeting = pendingGreetingRef.current;
+      displayText = `${greeting[0].toUpperCase()}${greeting.slice(1)}! ${text}`;
+      greetedSpeechReplyRef.current = { original: text, decorated: displayText };
+      pendingGreetingRef.current = null;
+    } else {
+      greetedSpeechReplyRef.current = null;
+      if (role === "assistant") pendingGreetingRef.current = null;
+    }
     messageId.current += 1;
-    setMessages((current) => [...current, { id: messageId.current, role, text }]);
+    setMessages((current) => [...current, { id: messageId.current, role, text: displayText }]);
     if (role === "assistant") {
       isProcessingRef.current = false;
       setIsProcessing(false);
     }
+    return displayText;
   }, []);
 
   const promptForStudentDetails = useCallback(() => {
@@ -434,6 +448,10 @@ export default function SchoolBaseAssistant({
   }, [startListening]);
 
   const speak = useCallback((text: string) => {
+    const speechText = greetedSpeechReplyRef.current?.original === text
+      ? greetedSpeechReplyRef.current.decorated
+      : text;
+    greetedSpeechReplyRef.current = null;
     if (!voiceEnabled || assistantMode !== "voice" || typeof window === "undefined") {
       if (shouldListenRef.current && assistantMode === "voice" && continuousMode && !voiceEnabled) {
         startListeningRef.current();
@@ -449,7 +467,7 @@ export default function SchoolBaseAssistant({
     setIsSpeaking(true);
     recognitionRef.current?.stop();
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(speechText);
     utterance.lang = "en-NG";
     utterance.rate = 1;
     utterance.volume = 1;
@@ -487,7 +505,11 @@ export default function SchoolBaseAssistant({
       || request.intent === "how_are_you"
       || request.intent === "acknowledgement"
       || request.intent === "thanks"
+      || request.intent === "welcome"
       || request.intent === "goodbye"
+      || request.intent === "apology"
+      || request.intent === "anything_else"
+      || request.intent === "assistant_identity"
       || request.intent === "logout"
       || request.intent === "help"
       || request.intent === "capabilities"
@@ -745,7 +767,7 @@ export default function SchoolBaseAssistant({
 
       if (response.status === 422) {
         aiContextTokenRef.current = null;
-        const reply = "I can’t safely resolve that query with the currently enabled data capabilities, so I haven’t treated it as zero results. Please ask about student, staff, class, subject, or academic-year records using a direct count or list request.";
+        const reply = "I can’t safely resolve that request with the data capabilities enabled for your account, so I haven’t treated it as zero results. I can try a direct count or list of supported student or staff records, classes, subjects, academic years, admission-status totals, recorded fee summaries, or published timetable entries. Attendance analysis, examination comparisons, and broader cross-module reports are not connected yet.";
         addMessage('assistant', reply);
         speak(reply);
         return;
@@ -971,19 +993,22 @@ export default function SchoolBaseAssistant({
       return;
     }
 
-    const timetableQuestion = getTimetableQuestion(trimmed);
+    const { greeting, question: requestText } = splitAssistantGreeting(trimmed);
+    pendingGreetingRef.current = greeting;
+
+    const timetableQuestion = getTimetableQuestion(requestText);
     if (timetableQuestion) {
       aiContextTokenRef.current = null;
       void queryTimetable(timetableQuestion);
       return;
     }
 
-    const isAiEngineQuery = portalRoot === "/admin" && isReadOnlyAiEngineQuery(trimmed);
+    const isAiEngineQuery = portalRoot === "/admin" && isReadOnlyAiEngineQuery(requestText);
     const isAiEngineFollowup = portalRoot === "/admin"
-      && /^(?:show|list|find|display)\s+(?:me\s+)?(?:them|those students|those pupils|those learners|the same students|the same pupils|those staff|those employees|those teachers|the same staff|the same employees|the same teachers)[?.!]*$/i.test(trimmed);
+      && /^(?:show|list|find|display)\s+(?:me\s+)?(?:them|those students|those pupils|those learners|the same students|the same pupils|those staff|those employees|those teachers|the same staff|the same employees|the same teachers)[?.!]*$/i.test(requestText);
     if (!isAiEngineQuery && !isAiEngineFollowup) aiContextTokenRef.current = null;
 
-    if (isStudentFormAssistanceRequest(trimmed) && portalRoot === "/admin") {
+    if (isStudentFormAssistanceRequest(requestText) && portalRoot === "/admin") {
       const registrationPage = destinations.find((item) => item.href === "/admin/students");
       if (!registrationPage) {
         const reply = "Student registration is not available in this dashboard.";
@@ -1014,7 +1039,7 @@ export default function SchoolBaseAssistant({
       portalRoot === "/admin"
       && schoolIntelligence
       && (schoolIntelligence.kind === "outstanding_summary" || schoolIntelligence.kind === "outstanding_students")
-      && /\b(show|tell me|give me|list|who are)\b.*\b(their names|those students|them|the students)\b/i.test(trimmed)
+      && /\b(show|tell me|give me|list|who are)\b.*\b(their names|those students|them|the students)\b/i.test(requestText)
     ) {
       setShowIntelligenceStudents(true);
       const reply = schoolIntelligence.students.length
@@ -1025,8 +1050,8 @@ export default function SchoolBaseAssistant({
       return;
     }
 
-    if (portalRoot === "/admin" && isExplicitStudentFeeLookup(trimmed)) {
-      const studentSearch = extractStudentFeeSearch(trimmed);
+    if (portalRoot === "/admin" && isExplicitStudentFeeLookup(requestText)) {
+      const studentSearch = extractStudentFeeSearch(requestText);
       if (!studentSearch) {
         const reply = "Please include the student’s full name or admission number so I can look up the correct fee record.";
         addMessage("assistant", reply);
@@ -1037,20 +1062,20 @@ export default function SchoolBaseAssistant({
       return;
     }
 
-    const admissionsQuestion = portalRoot === "/admin" ? getAdmissionsQuestion(trimmed) : null;
+    const admissionsQuestion = portalRoot === "/admin" ? getAdmissionsQuestion(requestText) : null;
     if (admissionsQuestion) {
       void queryAdmissionsSummary(admissionsQuestion);
       return;
     }
 
-    const intelligenceIntent = portalRoot === "/admin" ? getSchoolIntelligenceIntent(trimmed) : null;
+    const intelligenceIntent = portalRoot === "/admin" ? getSchoolIntelligenceIntent(requestText) : null;
     if (intelligenceIntent) {
       void querySchoolIntelligence(intelligenceIntent.intent, intelligenceIntent.className);
       return;
     }
 
-    if (portalRoot === "/admin" && isStudentFeeQuestion(trimmed)) {
-      const studentSearch = extractStudentFeeSearch(trimmed);
+    if (portalRoot === "/admin" && isStudentFeeQuestion(requestText)) {
+      const studentSearch = extractStudentFeeSearch(requestText);
       if (!studentSearch) {
         const reply = "I can check fees, balances, and recorded payment dates. Please include the student’s full name or admission number so I can look up the correct record.";
         addMessage("assistant", reply);
@@ -1062,18 +1087,18 @@ export default function SchoolBaseAssistant({
     }
 
     if (isAiEngineQuery || isAiEngineFollowup) {
-      void queryReadOnlyAiEngine(trimmed);
+      void queryReadOnlyAiEngine(requestText);
       return;
     }
 
-    if (portalRoot === "/admin" && isUnsupportedSchoolDataQuestion(trimmed)) {
-      const reply = "I don’t have a verified query for that information yet, so I won’t guess or present an unsupported query as zero results. Please ask about student counts, outstanding fees, or recorded collections using the supported questions.";
+    if (portalRoot === "/admin" && isUnsupportedSchoolDataQuestion(requestText)) {
+      const reply = "I don’t have a verified data source for that request yet, so I won’t guess or present an unsupported query as zero results. I can currently help with school-wide or class student counts, supported student and staff lists, admission-status summaries, recorded fee balances and collections, individual student fee history, and published timetable lookups. Attendance analytics, exam comparisons, message-delivery reports, and school-calendar exceptions aren’t connected to this assistant yet.";
       addMessage("assistant", reply);
       speak(reply);
       return;
     }
 
-    if (portalRoot === "/admin" && /\bwhats\s?app\b/i.test(trimmed)) {
+    if (portalRoot === "/admin" && /\bwhats\s?app\b/i.test(requestText)) {
       const whatsappSettingsPath = "/admin/settings/whatsapp";
       if (pathname === whatsappSettingsPath) {
         const reply = "You’re on WhatsApp settings. Use Connect to start pairing, then scan the QR code in WhatsApp → Linked devices or enter the pairing code. After connecting, send a test message and review the sending limits, quiet hours, and bulk-approval policy before reminders are sent. I can guide you, but you must complete pairing and approve messages on this page.";
@@ -1090,7 +1115,7 @@ export default function SchoolBaseAssistant({
       return;
     }
 
-    const result = resolveAssistantRequest(trimmed, navItems, pathname);
+    const result = resolveAssistantRequest(requestText, navItems, pathname);
     addMessage("assistant", result.message);
     speak(result.message);
 
@@ -1099,7 +1124,7 @@ export default function SchoolBaseAssistant({
         pendingStudentRegistrationRef.current = true;
       }
       setPendingNavigation(result.destination);
-      if (result.destination.href === "/admin/timetable" && isTimetablePlanningRequest(trimmed)) {
+      if (result.destination.href === "/admin/timetable" && isTimetablePlanningRequest(requestText)) {
         if (pathname === "/admin/timetable") {
           window.dispatchEvent(new Event("schoolbase:open-timetable-planner"));
         } else {

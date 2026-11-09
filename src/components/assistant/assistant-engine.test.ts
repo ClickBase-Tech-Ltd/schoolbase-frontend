@@ -11,6 +11,7 @@ import {
 import {
   getAssistantConversationReply,
   getAssistantConversationRequest,
+  splitAssistantGreeting,
   type VerifiedAssistantContext,
 } from "./assistant-conversation";
 
@@ -34,6 +35,18 @@ test("classifies active student count and scopes by class", () => {
   assert.deepEqual(getSchoolIntelligenceIntent("How many students are in Nursery?"), {
     intent: "active_student_count",
     className: "Nursery",
+  });
+  assert.deepEqual(getSchoolIntelligenceIntent("What is our student headcount?"), {
+    intent: "active_student_count",
+    className: null,
+  });
+  assert.deepEqual(getSchoolIntelligenceIntent("How many students are in Primary Four?"), {
+    intent: "active_student_count",
+    className: "Primary 4",
+  });
+  assert.deepEqual(getSchoolIntelligenceIntent("What is the student headcount for Primary 4?"), {
+    intent: "active_student_count",
+    className: "Primary 4",
   });
   assert.deepEqual(getSchoolIntelligenceIntent("How many students do we have in second year"), {
     intent: "active_student_count",
@@ -144,6 +157,65 @@ test("routes ordinary conversation locally without classifying it as a data quer
     assert.equal(isReadOnlyAiEngineQuery(phrase), false);
   }
   assert.equal(getAssistantConversationRequest("Good morning, how many students do we have?"), null);
+});
+
+test("splits social greetings from operational questions without changing the user transcript", () => {
+  assert.deepEqual(splitAssistantGreeting("Good morning, how many active students are in Primary 4?"), {
+    greeting: "Good morning",
+    question: "how many active students are in Primary 4?",
+  });
+  assert.deepEqual(splitAssistantGreeting("Hi! Show me the current academic year."), {
+    greeting: "Hi",
+    question: "Show me the current academic year.",
+  });
+  assert.deepEqual(splitAssistantGreeting("Morning, give me the student numbers for Primary Four."), {
+    greeting: "Morning",
+    question: "give me the student numbers for Primary Four.",
+  });
+  const operationalQuestion = splitAssistantGreeting("Good morning, how many students do we have in Primary Four?");
+  assert.deepEqual(getSchoolIntelligenceIntent(operationalQuestion.question), {
+    intent: "active_student_count",
+    className: "Primary 4",
+  });
+  assert.deepEqual(splitAssistantGreeting("Good afternoon"), {
+    greeting: null,
+    question: "Good afternoon",
+  });
+  assert.deepEqual(splitAssistantGreeting("Show me the student register."), {
+    greeting: null,
+    question: "Show me the student register.",
+  });
+});
+
+test("responds naturally to common acknowledgements, apologies, closings, and identity questions", () => {
+  const cases = [
+    ["Sorry", "No worries"],
+    ["That’s all, thank you", "I’ll be here"],
+    ["No, thanks", "I’ll be here"],
+    ["You’re welcome", "Thank you"],
+    ["See you tomorrow", "Take care"],
+    ["Who are you?", "I’m SchoolBase AI"],
+    ["Are you human?", "I’m not a person"],
+    ["I’m sorry", "No worries"],
+  ] as const;
+  for (const [phrase, expected] of cases) {
+    const request = getAssistantConversationRequest(phrase);
+    assert.ok(request, phrase);
+    assert.match(getAssistantConversationReply(request, null, "/admin"), new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+  }
+});
+
+test("describes useful school-admin questions while disclosing unconnected capabilities", () => {
+  const request = getAssistantConversationRequest("What can you do?");
+  assert.ok(request);
+  const reply = getAssistantConversationReply(request, null, "/admin");
+  assert.match(reply, /How many active students are in Primary 4/);
+  assert.match(reply, /applications await review/);
+  assert.match(reply, /Attendance analytics.*not enabled/i);
+  assert.match(reply, /won’t submit forms/i);
+
+  const platformReply = getAssistantConversationReply(request, null, "/schoolbase-admin");
+  assert.match(platformReply, /School-level records.*not included/i);
 });
 
 test("recognizes logout requests without treating them as a command to log out automatically", () => {
