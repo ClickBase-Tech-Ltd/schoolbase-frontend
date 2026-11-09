@@ -23,6 +23,7 @@ const nav = [
   { href: "/schoolbase-admin/shared-workspace", label: "Shared Workspace", icon: "CheckSquare" },
   { href: "/schoolbase-admin/videos", label: "Video Library", icon: "FileText" },
   { href: "/schoolbase-admin/id-cards", label: "ID Cards", icon: "WalletCards" },
+  { href: "/schoolbase-admin/financing", label: "Tuition Financing", icon: "Building2" },
   { href: "/schoolbase-admin/subscriptions", label: "Subscriptions", icon: "CreditCard" },
   {
     href: "/schoolbase-admin/competition",

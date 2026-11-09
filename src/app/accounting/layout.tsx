@@ -46,6 +46,12 @@ export default async function AccountingLayout({
       section: "Accounting",
     },
     {
+      label: "Tuition Financing",
+      href: "/accounting/financing",
+      icon: "Building2",
+      section: "Accounting",
+    },
+    {
       label: "Cashbook",
       href: "/accounting/cashbook",
       icon: "BookOpen",

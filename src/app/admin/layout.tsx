@@ -12,6 +12,7 @@ const baseNav = [
   { href: "/admin/getting-started", label: "Setup your workspace", icon: "Sparkles" },
   { href: "/admin", label: "Dashboard", icon: "LayoutDashboard" },
   { href: "/admin/fees", label: "Fees", icon: "CreditCard" },
+  { href: "/admin/financing", label: "Tuition Financing", icon: "Building2" },
   { href: "/admin/id-cards", label: "ID Cards", icon: "WalletCards" },
   { href: "/admin/students", label: "Students", icon: "Users" },
   { href: "/admin/academics", label: "Academics", icon: "BookOpen" },
@@ -41,7 +42,14 @@ const baseNav = [
   { href: "/admin/support", label: "Support", icon: "HelpCircle" },
   { href: "/admin/website", label: "Announcements", icon: "Globe" },
   { href: "/admin/subscription", label: "Subscription", icon: "CreditCard" },
-  { href: "/admin/settings", label: "Settings", icon: "Settings" },
+  {
+    href: "/admin/settings",
+    label: "Settings",
+    icon: "Settings",
+    children: [
+      { href: "/admin/settings/whatsapp", label: "WhatsApp settings", icon: "WhatsApp" },
+    ],
+  },
 ];
 
 export default function AdminLayout({

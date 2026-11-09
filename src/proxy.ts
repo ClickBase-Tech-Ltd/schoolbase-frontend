@@ -15,6 +15,7 @@ const ROLE_PROTECTED_PREFIXES = [
   "/employee",
   "/parent",
   "/api/admin",
+  "/api/ai",
   "/api/bursar",
   "/api/teacher",
   "/api/staff",

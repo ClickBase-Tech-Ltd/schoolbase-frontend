@@ -13,6 +13,7 @@ const nav = [
   { href: "/parent/timetable", label: "Timetable", icon: "CalendarDays" },
   { href: "/parent/results", label: "Results", icon: "BarChart3" },
   { href: "/parent/invoices", label: "Invoices", icon: "FileText" },
+  { href: "/parent/financing", label: "Tuition Financing", icon: "WalletCards" },
   { href: "/parent/payments", label: "Payments", icon: "CreditCard" },
   { href: "/parent/publications", label: "Publications", icon: "BookOpen" },
   {

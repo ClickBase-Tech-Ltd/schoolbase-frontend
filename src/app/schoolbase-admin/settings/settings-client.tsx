@@ -122,6 +122,7 @@ interface PlatformSettingsState {
   signupNotificationRecipients: string[];
   supportNotificationRecipients: string[];
   competitionFeatures: Record<CompetitionFeatureKey, boolean>;
+  tuitionFinancingEnabled: boolean;
   billingMarketPricing: BillingMarketCatalog | null;
 }
 
@@ -134,6 +135,7 @@ const defaultSettings: PlatformSettingsState = {
   signupNotificationRecipients: [],
   supportNotificationRecipients: [],
   competitionFeatures: Object.fromEntries(competitionFeatureOptions.map(({ key }) => [key, false])) as Record<CompetitionFeatureKey, boolean>,
+  tuitionFinancingEnabled: false,
   billingMarketPricing: null,
 };
 
@@ -221,6 +223,7 @@ export default function SettingsClient() {
           signupNotificationRecipients: Array.isArray(settingsData?.settings?.signupNotificationRecipients) ? settingsData.settings.signupNotificationRecipients : defaultSettings.signupNotificationRecipients,
           supportNotificationRecipients: Array.isArray(settingsData?.settings?.supportNotificationRecipients) ? settingsData.settings.supportNotificationRecipients : defaultSettings.supportNotificationRecipients,
           competitionFeatures: Object.fromEntries(competitionFeatureOptions.map(({ key }) => [key, loadedCompetitionFeatures[key] === true])) as Record<CompetitionFeatureKey, boolean>,
+          tuitionFinancingEnabled: settingsData?.settings?.tuitionFinancingEnabled === true,
           billingMarketPricing: settingsData?.settings?.billingMarketPricing ?? null,
         };
         setSettings(nextSettings);
@@ -631,6 +634,29 @@ export default function SettingsClient() {
                 </label>
               </div>
               </div>}
+            </div>
+
+            <div className="border-t border-border pt-5">
+              <h3 className="text-sm font-semibold text-foreground">Tuition financing</h3>
+              <p className="mt-1 text-xs text-muted">
+                Platform-wide master switch. Keep this off until a bank partnership, approved workflow, and security/compliance review are complete. Financing routes must enforce this setting server-side.
+              </p>
+              <div className="mt-3 flex items-center justify-between gap-4 border border-border bg-background px-3 py-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">Tuition financing module</p>
+                  <p className="text-xs text-muted">Turn off to block access to all financing workflows.</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={settings.tuitionFinancingEnabled}
+                  aria-label="Tuition financing module"
+                  onClick={() => handleSettingToggle("tuitionFinancingEnabled")}
+                  className={`shrink-0 border px-3 py-1 text-xs font-semibold transition ${settings.tuitionFinancingEnabled ? "border-brand bg-brand text-white" : "border-border bg-surface text-muted"}`}
+                >
+                  {settings.tuitionFinancingEnabled ? "On" : "Off"}
+                </button>
+              </div>
             </div>
 
             <div className="border-t border-border pt-5">

@@ -336,19 +336,19 @@ model PasswordReset {
 }
 
 model SupportRequest {
-  id        String                  @id @default(cuid())
-  schoolId  String
+  id                  String                  @id @default(cuid())
+  schoolId            String
   assignedCountryRepId String?
-  subject   String
-  message   String                  @db.LongText
-  status    SupportStatus           @default(OPEN)
-  priority  SupportPriority         @default(MEDIUM)
-  response  String?                 @db.LongText
-  createdAt DateTime                @default(now())
-  updatedAt DateTime                @updatedAt
-  school    School                  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  assignedCountryRep User?           @relation("CountrySupportRequestAssignee", fields: [assignedCountryRepId], references: [id], onDelete: SetNull)
-  messages  SupportRequestMessage[]
+  subject             String
+  message             String                  @db.LongText
+  status              SupportStatus           @default(OPEN)
+  priority            SupportPriority          @default(MEDIUM)
+  response            String?                  @db.LongText
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  school              School                   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  assignedCountryRep User?                    @relation("CountrySupportRequestAssignee", fields: [assignedCountryRepId], references: [id], onDelete: SetNull)
+  messages            SupportRequestMessage[]
 
   @@index([schoolId], map: "SupportRequest_schoolId_fkey")
   @@index([assignedCountryRepId, status])
