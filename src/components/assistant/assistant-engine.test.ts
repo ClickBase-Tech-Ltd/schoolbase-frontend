@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   getAdmissionsQuestion,
   getSchoolIntelligenceIntent,
+  isReadOnlyAiEngineQuery,
   isTimetablePlanningRequest,
   isUnsupportedSchoolDataQuestion,
   resolveAssistantRequest,
@@ -66,6 +67,17 @@ test("classifies outstanding summaries and student lists", () => {
 
 test("does not guess at unsupported requests", () => {
   assert.equal(getSchoolIntelligenceIntent("Tell me how the school is doing"), null);
+});
+
+test("routes supported SchoolBase record questions to the read-only query engine", () => {
+  assert.equal(isReadOnlyAiEngineQuery("Students do we have"), true);
+  assert.equal(isReadOnlyAiEngineQuery("What is the learner headcount?"), true);
+  assert.equal(isReadOnlyAiEngineQuery("Show our school details"), true);
+  assert.equal(isReadOnlyAiEngineQuery("Retrieve the current school year"), true);
+  assert.equal(isReadOnlyAiEngineQuery("Show the course catalogue"), true);
+  assert.equal(isReadOnlyAiEngineQuery("Give me the current teaching workforce"), true);
+  assert.equal(isReadOnlyAiEngineQuery("List academic staff"), true);
+  assert.equal(isReadOnlyAiEngineQuery("Explain the school dashboard"), false);
 });
 
 test("recognizes unsupported school-data requests so they do not fall through to navigation", () => {

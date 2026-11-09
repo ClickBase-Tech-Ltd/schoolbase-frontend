@@ -23,6 +23,13 @@ export function isTimetablePlanningRequest(input: string): boolean {
     || /\b(?:time\s*table|schedule)\b.{0,30}\b(?:create|make|build|generate|prepare|plan)\b/i.test(input);
 }
 
+export function isReadOnlyAiEngineQuery(input: string): boolean {
+  const asksStudentCount = /\b(?:students?|pupils?|learners?)\s+do we have\b/i.test(input);
+  const asksSupportedData = /\b(?:students?|pupils?|learners?|enrolments?|enrollments?|schoolchildren|staff|employees?|teachers?|educators?|workforce|personnel|classes?|classrooms?|arms?|sections?|subjects?|courses?|curriculum|academic years?|school years?|academic sessions?|school (?:settings?|details?|profile|configuration|information))\b/i.test(input);
+  const asksSupportedOperation = /\b(?:show|list|find|search|look up|retrieve|fetch|display|pull up|get(?: me)?|who|which|give me|provide|how many|head\s?count|count|number of|what is|what are|tell me)\b/i.test(input);
+  return asksStudentCount || (asksSupportedData && asksSupportedOperation);
+}
+
 export function getSchoolIntelligenceIntent(input: string): {
   intent: SchoolIntelligenceIntent;
   className: string | null;

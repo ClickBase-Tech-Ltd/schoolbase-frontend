@@ -9,6 +9,7 @@ import {
   getAssistantPortalRoot,
   getAdmissionsQuestion,
   getSchoolIntelligenceIntent,
+  isReadOnlyAiEngineQuery,
   isTimetablePlanningRequest,
   getStudentFieldLabel,
   isUnsupportedSchoolDataQuestion,
@@ -286,6 +287,7 @@ export default function SchoolBaseAssistant({
   const highlightedHrefRef = useRef<string | null>(null);
   const highlightedElementRef = useRef<HTMLElement | null>(null);
   const pendingStudentRegistrationRef = useRef(false);
+  const aiContextTokenRef = useRef<string | null>(null);
   const welcomeMessage = useMemo(() => buildWelcomeMessage(userName), [userName]);
   const welcomeKey = portalRoot && userId
     ? `schoolbase-assistant-welcome:${portalRoot}:${userId}`
@@ -331,6 +333,7 @@ export default function SchoolBaseAssistant({
     recognition.interimResults = false;
     recognition.continuous = true;
     recognition.onresult = (event) => {
+      if (isSpeakingRef.current) return;
       const transcript = Array.from(event.results)
         .slice(event.resultIndex)
         .filter((result) => result.isFinal)
@@ -383,6 +386,8 @@ export default function SchoolBaseAssistant({
       if (force) setStatusMessage("Spoken welcome isn’t supported by this browser. You can continue using the assistant.");
       return;
     }
+    isSpeakingRef.current = true;
+    setIsSpeaking(true);
     recognitionRef.current?.stop();
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
@@ -569,6 +574,109 @@ export default function SchoolBaseAssistant({
     }
   }, [addMessage, speak]);
 
+  const queryReadOnlyAiEngine = useCallback(async (question: string): Promise<void> => {
+    const isFollowup = /^(?:show|list|find|display)\s+(?:me\s+)?(?:them|those students|those pupils|those learners|the same students|the same pupils|those staff|those employees|those teachers|the same staff|the same employees|the same teachers)[?.!]*$/i.test(question);
+    if (!isFollowup) aiContextTokenRef.current = null;
+    setIsLookingUpFees(true);
+    try {
+      const response = await fetch('/api/ai/query/execute', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question,
+          ...(aiContextTokenRef.current ? { contextToken: aiContextTokenRef.current } : {}),
+        }),
+      });
+
+      const payload = await response.json() as {
+        ok?: boolean;
+        error?: string;
+        contextToken?: string;
+        result?: { model: string; action: 'count' | 'list'; matched: number; filters: Record<string, unknown>; data: { count?: number; items?: Array<Record<string, unknown>>; total?: number; limit?: number } };
+      };
+
+      if (response.status === 422) {
+        aiContextTokenRef.current = null;
+        const reply = "I can’t safely resolve that query with the currently enabled data capabilities, so I haven’t treated it as zero results. Please ask about student, staff, class, subject, or academic-year records using a direct count or list request.";
+        addMessage('assistant', reply);
+        speak(reply);
+        return;
+      }
+      if (!response.ok || !payload.ok || !payload.result || !payload.contextToken) {
+        aiContextTokenRef.current = null;
+        const reply = payload.error
+          || (response.status === 503
+            ? "Read-only data queries are not enabled for this environment yet. I haven’t queried or changed any records."
+            : "I couldn’t complete the read-only SchoolBase data query.");
+        addMessage('assistant', reply);
+        speak(reply);
+        return;
+      }
+
+      aiContextTokenRef.current = payload.contextToken;
+      const { result } = payload;
+      if (result.action === 'count') {
+        const count = result.data.count ?? result.matched;
+        const studentStatus = result.filters.isActive === false ? 'inactive' : 'active';
+        const label = result.model === 'pupil' ? `${studentStatus} student records`
+          : result.model === 'employeeProfile' ? 'matching linked employee profiles'
+          : result.model === 'class' ? 'classes'
+            : result.model === 'subject' ? 'subjects'
+              : result.model === 'academicYear' ? 'academic years'
+                : 'school profiles';
+        const reply = `SchoolBase found ${count.toLocaleString()} ${label} in your school.`;
+        addMessage('assistant', reply);
+        speak(reply);
+        return;
+      }
+
+      const items = result.data.items ?? [];
+      const labels = items.map((item) => {
+        if (result.model === 'pupil') {
+          return [item.firstName, item.lastName, item.admissionNo ? `(${item.admissionNo})` : null]
+            .filter((value) => typeof value === 'string' && value.length > 0)
+            .join(' ');
+        }
+        if (result.model === 'employeeProfile') {
+          const name = [item.firstName, item.lastName]
+            .filter((value) => typeof value === 'string' && value.length > 0)
+            .join(' ');
+          const details = [item.jobTitle, item.department, item.employmentStatus]
+            .filter((value) => typeof value === 'string' && value.length > 0)
+            .join(' · ');
+          return [name, details].filter(Boolean).join(' — ');
+        }
+        return [item.name, item.phase, item.arm, item.code, item.isCurrent === true ? '(current)' : null]
+          .filter((value) => typeof value === 'string' && value.length > 0)
+          .join(' · ');
+      }).filter(Boolean);
+      const total = result.data.total ?? result.matched;
+      const studentStatus = result.filters.isActive === false ? 'inactive' : 'active';
+      const label = result.model === 'pupil' ? `${studentStatus} students`
+        : result.model === 'employeeProfile' ? 'linked staff profiles'
+        : result.model === 'class' ? 'classes'
+          : result.model === 'subject' ? 'subjects'
+            : result.model === 'academicYear' ? 'academic years'
+              : 'school profiles';
+      const reply = total === 0
+        ? `There are no matching ${label} for that query.${result.model === 'employeeProfile' ? ' This directory does not include staff accounts without a linked employee profile.' : ''}`
+        : labels.length
+          ? `Showing ${labels.length} of ${total} matching ${label}: ${labels.join('; ')}${total > labels.length ? ` (limited to ${labels.length} records; further pages are not available yet).${result.model === 'employeeProfile' ? ' This directory does not include staff accounts without a linked employee profile.' : ''}` : result.model === 'employeeProfile' ? '. This directory does not include staff accounts without a linked employee profile.' : '.'}`
+          : `SchoolBase found ${total} matching ${label}, but no displayable names were returned.`;
+      addMessage('assistant', reply);
+      speak(reply);
+    } catch (error) {
+      aiContextTokenRef.current = null;
+      console.error('Assistant read-only AI query failed:', error);
+      const reply = 'I couldn’t reach the read-only data query service. No changes were made.';
+      addMessage('assistant', reply);
+      speak(reply);
+    } finally {
+      setIsLookingUpFees(false);
+    }
+  }, [addMessage, speak]);
+
   const queryAdmissionsSummary = useCallback(async (question: "pending" | "approved" | "total") => {
     setIsLookingUpFees(true);
     setFeeLookup(null);
@@ -668,6 +776,7 @@ export default function SchoolBaseAssistant({
     setInput("");
 
     if (studentFillMode) {
+      aiContextTokenRef.current = null;
       const extracted = parseStudentIntakeDetails(trimmed);
       if (Object.keys(extracted).length === 0) {
         const reply = "I couldn’t identify any supported field labels and values. Try “first name Ama, surname Mensah, guardian phone +233...” or say “cancel” to stop form assistance.";
@@ -687,6 +796,11 @@ export default function SchoolBaseAssistant({
       speak(reply);
       return;
     }
+
+    const isAiEngineQuery = portalRoot === "/admin" && isReadOnlyAiEngineQuery(trimmed);
+    const isAiEngineFollowup = portalRoot === "/admin"
+      && /^(?:show|list|find|display)\s+(?:me\s+)?(?:them|those students|those pupils|those learners|the same students|the same pupils|those staff|those employees|those teachers|the same staff|the same employees|the same teachers)[?.!]*$/i.test(trimmed);
+    if (!isAiEngineQuery && !isAiEngineFollowup) aiContextTokenRef.current = null;
 
     if (isStudentFormAssistanceRequest(trimmed) && portalRoot === "/admin") {
       const registrationPage = destinations.find((item) => item.href === "/admin/students");
@@ -766,8 +880,13 @@ export default function SchoolBaseAssistant({
       return;
     }
 
+    if (isAiEngineQuery || isAiEngineFollowup) {
+      void queryReadOnlyAiEngine(trimmed);
+      return;
+    }
+
     if (portalRoot === "/admin" && isUnsupportedSchoolDataQuestion(trimmed)) {
-      const reply = "I can currently count active students by class or school, report outstanding fee balances across all terms, and summarize collections for the current term. I don’t yet have a verified query for that status, date range, or data domain, so I won’t guess. You can ask me to count active students or summarize outstanding fees.";
+      const reply = "I don’t have a verified query for that information yet, so I won’t guess or present an unsupported query as zero results. Please ask about student counts, outstanding fees, or recorded collections using the supported questions.";
       addMessage("assistant", reply);
       speak(reply);
       return;
@@ -809,11 +928,15 @@ export default function SchoolBaseAssistant({
         router.push(result.destination.href);
       }
     }
-  }, [addMessage, destinations, lookupStudentFees, navItems, pathname, portalRoot, promptForStudentDetails, queryAdmissionsSummary, querySchoolIntelligence, router, schoolIntelligence, speak, stopSpeaking, studentFillMode]);
+  }, [addMessage, destinations, lookupStudentFees, navItems, pathname, portalRoot, promptForStudentDetails, queryAdmissionsSummary, queryReadOnlyAiEngine, querySchoolIntelligence, router, schoolIntelligence, speak, stopSpeaking, studentFillMode]);
 
   useEffect(() => {
     sendMessageRef.current = sendMessage;
   }, [sendMessage]);
+
+  useEffect(() => {
+    aiContextTokenRef.current = null;
+  }, [portalRoot, userId]);
 
   useEffect(() => {
     let frame = 0;
@@ -998,6 +1121,7 @@ export default function SchoolBaseAssistant({
   };
 
   const clearConversation = () => {
+    aiContextTokenRef.current = null;
     recognitionRef.current?.stop();
     setIsListening(false);
     stopSpeaking();
