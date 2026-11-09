@@ -2085,10 +2085,21 @@ export default function SchoolBaseAssistant({
           aria-label={assistantMode ? "Close SchoolBase AI" : isModeMenuOpen ? "Close assistant choices" : "Open SchoolBase AI choices"}
           aria-expanded={isModeMenuOpen || assistantMode !== null}
           aria-haspopup="true"
-          className="flex h-14 w-14 items-center justify-center rounded-full border border-white/30 bg-brand text-white shadow-lg shadow-brand/20 transition duration-200 hover:scale-105 hover:shadow-xl focus-visible:outline focus-visible:outline-4 focus-visible:outline-brand/30 active:scale-95"
+          className={`assistant-launcher-button relative flex h-14 w-14 items-center justify-center rounded-full border border-white/30 bg-brand text-white shadow-lg shadow-brand/20 transition duration-200 hover:scale-105 hover:shadow-xl focus-visible:outline focus-visible:outline-4 focus-visible:outline-brand/30 active:scale-95 ${!assistantMode && !isModeMenuOpen ? "assistant-launcher-button--attention" : ""}`}
           title="SchoolBase AI"
         >
-          {assistantMode ? <X className="h-6 w-6" aria-hidden="true" /> : <Mic className="h-6 w-6" aria-hidden="true" />}
+          {!assistantMode && !isModeMenuOpen ? (
+            <>
+              <span className="assistant-launcher-glow" aria-hidden="true" />
+              <span className="assistant-launcher-ring" aria-hidden="true" />
+              <span className="assistant-launcher-orbit" aria-hidden="true">
+                <span className="assistant-launcher-particle" />
+              </span>
+            </>
+          ) : null}
+          <span className="relative z-[1]">
+            {assistantMode ? <X className="h-6 w-6" aria-hidden="true" /> : <Mic className="h-6 w-6" aria-hidden="true" />}
+          </span>
         </button>
       </div>
     </>

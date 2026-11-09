@@ -62,6 +62,75 @@ body {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+@keyframes assistant-launcher-rotate {
+  to { transform: rotate(1turn); }
+}
+
+@keyframes assistant-launcher-orbit {
+  to { transform: rotate(1turn); }
+}
+
+@keyframes assistant-launcher-glow {
+  0%, 100% { opacity: .42; transform: scale(.96); }
+  50% { opacity: .72; transform: scale(1.04); }
+}
+
+.assistant-launcher-button--attention {
+  isolation: isolate;
+}
+
+.assistant-launcher-glow {
+  position: absolute;
+  z-index: -1;
+  inset: -10px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgb(10 102 194 / 42%) 0%, rgb(10 102 194 / 18%) 48%, transparent 74%);
+  opacity: .55;
+  animation: assistant-launcher-glow 3.6s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.assistant-launcher-ring {
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgb(10 102 194 / 20%) 95deg,
+    rgb(53 195 242 / 82%) 150deg,
+    rgb(10 102 194 / 28%) 205deg,
+    transparent 285deg,
+    transparent 360deg
+  );
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+  animation: assistant-launcher-rotate 12s linear infinite;
+  will-change: transform;
+  pointer-events: none;
+}
+
+.assistant-launcher-orbit {
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  animation: assistant-launcher-orbit 8s linear infinite;
+  will-change: transform;
+  pointer-events: none;
+}
+
+.assistant-launcher-particle {
+  position: absolute;
+  top: -1px;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: #b7f1ff;
+  box-shadow: 0 0 7px 2px rgb(53 195 242 / 72%);
+  transform: translateX(-50%);
+}
+
 .assistant-orb {
   position: relative;
   display: grid;
@@ -165,7 +234,10 @@ body {
   .assistant-orb__core,
   .assistant-orb__ring,
   .assistant-waveform span,
-  .assistant-mode-menu {
+  .assistant-mode-menu,
+  .assistant-launcher-glow,
+  .assistant-launcher-ring,
+  .assistant-launcher-orbit {
     animation: none !important;
   }
 }
