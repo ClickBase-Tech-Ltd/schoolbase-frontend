@@ -519,7 +519,7 @@ export default function SchoolBaseAssistant({
     }
 
     try {
-      const response = await fetch("/api/assistant/context", {
+      const response = await fetch("/assistant-api/context", {
         credentials: "include",
         cache: "no-store",
       });
@@ -548,7 +548,7 @@ export default function SchoolBaseAssistant({
     if (question.personal) params.set("personal", "true");
 
     try {
-      const response = await fetch(`/api/assistant/timetable?${params.toString()}`, {
+      const response = await fetch(`/assistant-api/timetable?${params.toString()}`, {
         credentials: "include",
         cache: "no-store",
       });
