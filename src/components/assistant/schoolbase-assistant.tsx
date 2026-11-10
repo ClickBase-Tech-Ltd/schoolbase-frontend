@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { AudioLines, Bot, Compass, Eraser, LoaderCircle, MessageSquareText, Mic, MicOff, Send, Volume2, VolumeX, X } from "lucide-react";
+import { AudioLines, BookOpen, Bot, ChevronLeft, ChevronRight, Compass, Eraser, LoaderCircle, MessageSquareText, Mic, MicOff, Send, Volume2, VolumeX, X } from "lucide-react";
 import { formatMoney } from "@/lib/format";
+import { getPageGuide } from "@/components/admin-route-help-guide";
+import { useActivePageHelpGuide } from "@/components/ui/user-guide";
 import {
   getAssistantConversationReply,
   getAssistantConversationRequest,
@@ -28,6 +30,7 @@ import {
   type StudentIntakeField,
 } from "./assistant-engine";
 import type { TimetableQuestion } from "./timetable-intelligence";
+import { getPageCoachCommand } from "./page-coach";
 import type { NavItem } from "@/components/shared-layout";
 
 type Message = {
@@ -249,6 +252,7 @@ export default function SchoolBaseAssistant({
   const router = useRouter();
   const pathname = usePathname();
   const portalRoot = getAssistantPortalRoot(logoHref);
+  const activePageGuide = useActivePageHelpGuide();
   const destinations = useMemo(
     () => (portalRoot ? getAssistantDestinations(navItems) : []),
     [navItems, portalRoot],
@@ -257,6 +261,8 @@ export default function SchoolBaseAssistant({
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [pageTourIndex, setPageTourIndex] = useState<number | null>(null);
+  const [pageCoachNudgeKey, setPageCoachNudgeKey] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -296,8 +302,19 @@ export default function SchoolBaseAssistant({
   const aiContextTokenRef = useRef<string | null>(null);
   const pendingGreetingRef = useRef<string | null>(null);
   const greetedSpeechReplyRef = useRef<{ original: string; decorated: string } | null>(null);
+  const seenPageCoachRoutesRef = useRef(new Set<string>());
+  const currentPageGuide = useMemo(
+    () => activePageGuide ?? getPageGuide(pathname),
+    [activePageGuide, pathname],
+  );
   const voicePreferenceKey = portalRoot && userId
     ? `schoolbase-assistant-voice:${portalRoot}:${userId}`
+    : null;
+  const pageCoachStorageKey = portalRoot && userId && pathname
+    ? `schoolbase-ai-page-coach:${portalRoot}:${userId}:${pathname}`
+    : null;
+  const pageCoachMemoryKey = portalRoot && pathname
+    ? pageCoachStorageKey ?? `${portalRoot}:${pathname}`
     : null;
 
   const addMessage = useCallback((role: Message["role"], text: string) => {
@@ -349,6 +366,7 @@ export default function SchoolBaseAssistant({
   }, [stopSpeaking]);
 
   const switchToText = useCallback(() => {
+    setPageCoachNudgeKey(null);
     if (shouldListenRef.current) {
       shouldListenRef.current = false;
       if (recognitionRestartTimerRef.current) clearTimeout(recognitionRestartTimerRef.current);
@@ -361,6 +379,7 @@ export default function SchoolBaseAssistant({
   }, [stopSpeaking]);
 
   const switchToVoice = useCallback(() => {
+    setPageCoachNudgeKey(null);
     if (shouldListenRef.current) {
       shouldListenRef.current = false;
       if (recognitionRestartTimerRef.current) clearTimeout(recognitionRestartTimerRef.current);
@@ -496,6 +515,55 @@ export default function SchoolBaseAssistant({
     };
     window.speechSynthesis.speak(utterance);
   }, [assistantMode, continuousMode, voiceEnabled]);
+
+  const startPageTour = useCallback(() => {
+    pendingGreetingRef.current = null;
+    setPageTourIndex(0);
+    setPageCoachNudgeKey(null);
+    setIsModeMenuOpen(false);
+    setAssistantMode((mode) => mode ?? "text");
+    const firstStep = currentPageGuide.steps?.[0];
+    const reply = `Let’s take a quick, step-by-step look at ${currentPageGuide.title}. You stay in control of every change. You can say or select Next, Back, Repeat, or Finish at any time.${firstStep ? ` Step 1 of ${currentPageGuide.steps?.length}: ${firstStep}` : ""}`;
+    addMessage("assistant", reply);
+    speak(reply);
+  }, [addMessage, currentPageGuide.steps, currentPageGuide.title, speak]);
+
+  const movePageTour = useCallback((command: "next" | "back" | "repeat" | "tasks" | "finish") => {
+    if (pageTourIndex === null) return;
+    const steps = currentPageGuide.steps ?? [];
+    if (command === "finish") {
+      setPageTourIndex(null);
+      const reply = "That’s the end of this walkthrough. You can ask me to teach you this page again whenever you need.";
+      addMessage("assistant", reply);
+      speak(reply);
+      return;
+    }
+
+    if (command === "tasks") {
+      const tasks = currentPageGuide.commonTasks ?? [];
+      const reply = tasks.length
+        ? `Common tasks on this page: ${tasks.map((task) => `${task.title}. ${task.description}`).join(" ")}`
+        : "This page guide does not list separate common tasks. Follow the walkthrough steps and the instructions shown on the page.";
+      addMessage("assistant", reply);
+      speak(reply);
+      return;
+    }
+
+    if (command === "repeat") {
+      const reply = `Step ${pageTourIndex + 1} of ${steps.length}: ${steps[pageTourIndex]}`;
+      addMessage("assistant", reply);
+      speak(reply);
+      return;
+    }
+
+    const nextIndex = command === "next"
+      ? Math.min(pageTourIndex + 1, steps.length - 1)
+      : Math.max(pageTourIndex - 1, 0);
+    setPageTourIndex(nextIndex);
+    const reply = `Step ${nextIndex + 1} of ${steps.length}: ${steps[nextIndex]}`;
+    addMessage("assistant", reply);
+    speak(reply);
+  }, [addMessage, currentPageGuide.commonTasks, currentPageGuide.steps, pageTourIndex, speak]);
 
   const answerConversationQuestion = useCallback(async (
     request: NonNullable<ReturnType<typeof getAssistantConversationRequest>>,
@@ -964,6 +1032,16 @@ export default function SchoolBaseAssistant({
     addMessage("user", trimmed);
     setInput("");
 
+    const pageCoachCommand = getPageCoachCommand(trimmed, pageTourIndex !== null);
+    if (pageCoachCommand === "start") {
+      startPageTour();
+      return;
+    }
+    if (pageCoachCommand) {
+      movePageTour(pageCoachCommand);
+      return;
+    }
+
     const conversationRequest = getAssistantConversationRequest(trimmed);
     if (conversationRequest) {
       aiContextTokenRef.current = null;
@@ -1134,7 +1212,7 @@ export default function SchoolBaseAssistant({
         router.push(result.destination.href);
       }
     }
-  }, [addMessage, answerConversationQuestion, destinations, lookupStudentFees, navItems, pathname, portalRoot, promptForStudentDetails, queryAdmissionsSummary, queryReadOnlyAiEngine, querySchoolIntelligence, queryTimetable, router, schoolIntelligence, speak, stopSpeaking, studentFillMode]);
+  }, [addMessage, answerConversationQuestion, destinations, lookupStudentFees, movePageTour, navItems, pageTourIndex, pathname, portalRoot, promptForStudentDetails, queryAdmissionsSummary, queryReadOnlyAiEngine, querySchoolIntelligence, queryTimetable, router, schoolIntelligence, speak, startPageTour, stopSpeaking, studentFillMode]);
 
   useEffect(() => {
     sendMessageRef.current = sendMessage;
@@ -1143,6 +1221,37 @@ export default function SchoolBaseAssistant({
   useEffect(() => {
     aiContextTokenRef.current = null;
   }, [portalRoot, userId]);
+
+  useEffect(() => {
+    const memoryKey = pageCoachMemoryKey;
+    let shouldShow = false;
+    if (memoryKey && !seenPageCoachRoutesRef.current.has(memoryKey)) {
+      let alreadySeen = false;
+      try {
+        alreadySeen = pageCoachStorageKey !== null
+          && window.localStorage.getItem(pageCoachStorageKey) === "seen";
+      } catch (error) {
+        console.warn("Could not read the page-coach preference:", error);
+      }
+
+      seenPageCoachRoutesRef.current.add(memoryKey);
+      shouldShow = !alreadySeen;
+      if (shouldShow) {
+        try {
+          if (pageCoachStorageKey) window.localStorage.setItem(pageCoachStorageKey, "seen");
+        } catch (error) {
+          console.warn("Could not save the page-coach preference:", error);
+        }
+      }
+    }
+    const frame = window.requestAnimationFrame(() => setPageCoachNudgeKey(shouldShow ? memoryKey : null));
+    return () => window.cancelAnimationFrame(frame);
+  }, [pageCoachMemoryKey, pageCoachStorageKey]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => setPageTourIndex(null));
+    return () => window.cancelAnimationFrame(frame);
+  }, [pathname]);
 
   useEffect(() => {
     let savedPreference: string | null = null;
@@ -1334,6 +1443,7 @@ export default function SchoolBaseAssistant({
     recognitionRef.current?.stop();
     setIsListening(false);
     stopSpeaking();
+    setPageTourIndex(null);
     setStudentFillMode(false);
     setStudentDraft(null);
     setFeeLookup(null);
@@ -1445,6 +1555,91 @@ export default function SchoolBaseAssistant({
           : voicePaused
             ? "Paused"
             : "Ready when you are");
+  const pageTourSteps = currentPageGuide.steps ?? [];
+  const pageTourPanel = pageTourIndex !== null && pageTourSteps.length > 0 ? (
+    <section className="rounded-xl border border-brand/30 bg-brand/5 p-3" aria-label="Page walkthrough">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">{currentPageGuide.title}</h3>
+              <p className="mt-1 text-[11px] font-medium text-brand">Step {pageTourIndex + 1} of {pageTourSteps.length}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => movePageTour("finish")}
+              className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-muted hover:bg-background hover:text-foreground"
+            >
+              Skip
+            </button>
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-muted">{currentPageGuide.overview}</p>
+          <p className="mt-3 text-sm leading-relaxed text-foreground" aria-live="polite">
+            {pageTourSteps[pageTourIndex]}
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => movePageTour("back")}
+              disabled={pageTourIndex === 0}
+              className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-2 text-xs font-medium text-foreground hover:border-brand disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={() => movePageTour("next")}
+              disabled={pageTourIndex === pageTourSteps.length - 1}
+              className="inline-flex items-center gap-1 rounded-lg bg-brand px-2.5 py-2 text-xs font-semibold text-white hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => movePageTour("finish")}
+              className="rounded-lg px-2.5 py-2 text-xs font-medium text-muted hover:bg-background hover:text-foreground"
+            >
+              Finish
+            </button>
+            {currentPageGuide.commonTasks?.length ? (
+              <button
+                type="button"
+                onClick={() => movePageTour("tasks")}
+                className="rounded-lg px-2.5 py-2 text-xs font-medium text-brand hover:bg-background"
+              >
+                Common tasks
+              </button>
+            ) : null}
+            {assistantMode === "voice" ? (
+              voiceEnabled ? (
+                <button
+                  type="button"
+                  onClick={() => speak(pageTourSteps[pageTourIndex])}
+                  className="rounded-lg px-2.5 py-2 text-xs font-medium text-brand hover:bg-background"
+                >
+                  Read aloud
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={toggleVoiceReplies}
+                  className="rounded-lg px-2.5 py-2 text-xs font-medium text-brand hover:bg-background"
+                >
+                  Turn on spoken replies
+                </button>
+              )
+            ) : (
+              <button
+                type="button"
+                onClick={switchToVoice}
+                className="rounded-lg px-2.5 py-2 text-xs font-medium text-brand hover:bg-background"
+              >
+                Switch to Voice
+              </button>
+            )}
+          </div>
+    </section>
+  ) : null;
 
   return (
     <>
@@ -1571,6 +1766,7 @@ export default function SchoolBaseAssistant({
                 </div>
               </section>
             ) : null}
+            {pageTourPanel}
             {isLookingUpFees ? (
               <p role="status" className="rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted">
                 Checking this school’s records…
@@ -1836,7 +2032,7 @@ export default function SchoolBaseAssistant({
               <div className="mt-1 flex flex-wrap gap-2">
                 {(pathname === "/admin/students/new"
                   ? ["Help me fill this form", "Explain this page"]
-                  : ["Explain this page", "Show me around", ...destinations.slice(0, 2).map((destination) => `Open ${destination.label}`)]
+                  : ["Explain this page", "Teach me this page", ...destinations.slice(0, 2).map((destination) => `Open ${destination.label}`)]
                 ).map((suggestion) => (
                   <button
                     key={suggestion}
@@ -2001,6 +2197,8 @@ export default function SchoolBaseAssistant({
             ) : null}
           </div>
 
+          {pageTourPanel}
+
           <div className="flex flex-wrap items-center justify-center gap-2 border-t border-border pt-3">
             <button
               ref={voiceStartButtonRef}
@@ -2069,6 +2267,35 @@ export default function SchoolBaseAssistant({
         ref={launcherRef}
         className="fixed bottom-[calc(12.5rem+env(safe-area-inset-bottom))] right-4 z-[91] flex flex-col items-end gap-2 print:hidden sm:right-6"
       >
+        {pageCoachNudgeKey === pageCoachMemoryKey && !assistantMode && !isModeMenuOpen ? (
+          <aside className="max-w-[min(290px,calc(100vw-2rem))] rounded-2xl border border-brand/20 bg-surface p-3 text-foreground shadow-xl" aria-label="Page walkthrough invitation">
+            <div className="flex items-start gap-2">
+              <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-brand" aria-hidden="true" />
+              <div>
+                <p className="text-sm font-semibold">Want a quick walkthrough?</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted">
+                  I can guide you through {currentPageGuide.title.replace(/ guide$/i, "").toLowerCase()} step by step.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPageCoachNudgeKey(null)}
+                className="rounded-lg px-2.5 py-2 text-xs font-medium text-muted hover:bg-background hover:text-foreground"
+              >
+                Not now
+              </button>
+              <button
+                type="button"
+                onClick={startPageTour}
+                className="rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:bg-brand/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+              >
+                Teach me
+              </button>
+            </div>
+          </aside>
+        ) : null}
         {isModeMenuOpen ? (
           <div className="assistant-mode-menu flex items-center gap-2" role="group" aria-label="Choose assistant mode">
             <button

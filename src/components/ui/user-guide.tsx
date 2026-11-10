@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertCircle, HelpCircle, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 type HelpLevel = "basic" | "detailed";
 
@@ -21,9 +21,50 @@ export interface PageHelpGuide {
   videoUrl?: string;
 }
 
+type RegisteredPageHelpGuide = {
+  id: number;
+  guide: PageHelpGuide;
+};
+
+const pageHelpGuideListeners = new Set<() => void>();
+let registeredPageHelpGuide: RegisteredPageHelpGuide | null = null;
+let nextPageHelpGuideId = 0;
+
+function subscribeToPageHelpGuide(onChange: () => void) {
+  pageHelpGuideListeners.add(onChange);
+  return () => {
+    pageHelpGuideListeners.delete(onChange);
+  };
+}
+
+function getRegisteredPageHelpGuide() {
+  return registeredPageHelpGuide?.guide ?? null;
+}
+
+function getServerPageHelpGuide() {
+  return null;
+}
+
+export function useActivePageHelpGuide() {
+  return useSyncExternalStore(subscribeToPageHelpGuide, getRegisteredPageHelpGuide, getServerPageHelpGuide);
+}
+
+function registerPageHelpGuide(guide: PageHelpGuide) {
+  const registration = { id: ++nextPageHelpGuideId, guide };
+  registeredPageHelpGuide = registration;
+  pageHelpGuideListeners.forEach((onChange) => onChange());
+  return () => {
+    if (registeredPageHelpGuide?.id !== registration.id) return;
+    registeredPageHelpGuide = null;
+    pageHelpGuideListeners.forEach((onChange) => onChange());
+  };
+}
+
 export function UserGuide({ guide }: { guide: PageHelpGuide }) {
   const [isOpen, setIsOpen] = useState(false);
   const [helpLevel, setHelpLevel] = useState<HelpLevel>("basic");
+
+  useEffect(() => registerPageHelpGuide(guide), [guide]);
 
   return (
     <>

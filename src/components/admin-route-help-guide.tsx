@@ -245,7 +245,7 @@ function getPageLabel(pathname: string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function getGuide(pathname: string): PageHelpGuide {
+export function getPageGuide(pathname: string): PageHelpGuide {
   const exactGuide = pageGuides[pathname];
   if (exactGuide) return exactGuide;
 
@@ -266,5 +266,5 @@ export default function AdminRouteHelpGuide() {
   const pathname = usePathname();
   if (!pathname.startsWith("/admin") || pagesWithExistingGuide.has(pathname)) return null;
 
-  return <UserGuide guide={getGuide(pathname)} />;
+  return <UserGuide guide={getPageGuide(pathname)} />;
 }
