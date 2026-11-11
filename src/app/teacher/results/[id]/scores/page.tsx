@@ -193,12 +193,29 @@ export default function TeacherScoreEntryPage({
 
       if (!res.ok) {
         const errorText = await res.text();
+        let errorMessage = errorText || "Failed to save scores";
+
         try {
-          const error = JSON.parse(errorText);
-          throw new Error(error.error || "Failed to save scores");
-        } catch {
-          throw new Error(errorText || "Failed to save scores");
+          const parsed: unknown = JSON.parse(errorText);
+          if (
+            parsed &&
+            typeof parsed === "object" &&
+            "error" in parsed &&
+            typeof parsed.error === "string"
+          ) {
+            errorMessage = parsed.error;
+          }
+        } catch (parseError) {
+          if (!(parseError instanceof SyntaxError)) throw parseError;
         }
+
+        if (res.status === 401) {
+          throw new Error("Your session could not be verified, possibly because it expired. Sign in again and retry; your entered scores are still on this page.");
+        }
+        if (res.status === 403 && errorMessage === "Unauthorized") {
+          throw new Error("You are not authorized to save scores for this assessment. Refresh the assessment and ask your school administrator to verify its class assignment if the problem persists.");
+        }
+        throw new Error(errorMessage);
       }
 
       setMessage({ type: "success", text: "Scores saved successfully" });

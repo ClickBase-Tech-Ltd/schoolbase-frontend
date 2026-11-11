@@ -14,6 +14,7 @@ import { applyTheme, detectSystemTheme, resolveStoredTheme, ThemeMode } from "@/
 import TeacherClassAlert from "@/components/teacher-class-alert";
 import BellScheduler from "@/components/bell-scheduler";
 import SupportChatWidget from "@/components/support-chat-widget";
+import SessionExpiryGuard from "@/components/session-expiry-guard";
 
 const SchoolBaseAssistant = dynamic(
   () => import("@/components/assistant/schoolbase-assistant"),
@@ -64,7 +65,7 @@ export default function SharedLayout({
   children: ReactNode;
   navItems: NavItem[];
   school?: { name?: string | null; city?: string | null; country?: string | null } | null;
-  session?: { id?: string; userId?: string; guardianId?: string; name?: string; role?: string } | null;
+  session?: { id?: string; userId?: string; guardianId?: string; name?: string; role?: string; exp?: number } | null;
   setupProgress?: number | null;
   logoHref?: string;
   logoutRedirectUrl?: string;
@@ -793,6 +794,9 @@ export default function SharedLayout({
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
+      {session ? (
+        <SessionExpiryGuard expiresAt={session.exp} loginPath={logoutRedirectUrl} />
+      ) : null}
       {logoHref === "/teacher" ? <TeacherClassAlert /> : null}
       {logoHref === "/admin" ? <BellScheduler /> : null}
       {/* Desktop Sidebar */}
