@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useEffect, useTransition, useRef, type FormEvent } from "react";
 import { createPortal } from "react-dom";
-import { useRouter } from "next/navigation";
 import { Download, FileText, Info, Mail, Plus, TrendingUp } from "lucide-react";
 import Image from "next/image";
 import { setSchoolPlanAction, approveSchoolSubscriptionAction, rejectSchoolSubscriptionAction } from "../actions";
@@ -44,7 +43,26 @@ function formatExpiryDate(school: School) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-interface SubscriptionPaymentRecord {
+function getSchoolSubscriptionStatus(school: School) {
+  const paidPlan = ["STARTER", "GROWTH", "ENTERPRISE"].includes(school.plan);
+  const expiresAt = school.subscriptionExpiresAt
+    ? new Date(school.subscriptionExpiresAt)
+    : null;
+  if (paidPlan && expiresAt && !Number.isNaN(expiresAt.getTime()) && expiresAt < new Date()) {
+    return "EXPIRED";
+  }
+  return school.status;
+}
+
+function getSchoolStatusBadgeVariant(school: School) {
+  const status = getSchoolSubscriptionStatus(school);
+  if (status === "ACTIVE") return "success";
+  if (status === "SUSPENDED") return "warning";
+  if (status === "CANCELLED") return "error";
+  return "default";
+}
+
+export interface SubscriptionPaymentRecord {
   id: string;
   amount: number;
   method: string;
@@ -63,7 +81,7 @@ interface SubscriptionPaymentRecord {
   billingIntent?: string | null;
 }
 
-interface SubscriptionSchoolRecord {
+export interface SubscriptionSchoolRecord {
   id: string;
   name: string;
   slug: string;
@@ -117,14 +135,15 @@ export default function SubscriptionsPageClient({
   payments: initialPayments,
   subscriptions: initialSubscriptions,
   loadError,
+  onDataRefresh,
 }: {
   schools: School[];
   payments: SubscriptionPaymentRecord[];
   subscriptions: SubscriptionSchoolRecord[];
   loadError?: string | null;
+  onDataRefresh: () => Promise<boolean>;
 }) {
-  const router = useRouter();
-  const [schools, setSchools] = useState<School[]>(initialSchools);
+  const schools = initialSchools;
   const [manuallyAddedPayments, setManuallyAddedPayments] = useState<SubscriptionPaymentRecord[]>([]);
   const payments = useMemo(() => {
     const persistedIds = new Set(initialPayments.map((payment) => payment.id));
@@ -190,22 +209,18 @@ export default function SubscriptionsPageClient({
       if (!response.ok) {
         throw new Error(data?.message || "Failed to save expiry date");
       }
-      setSchools((current) =>
-        current.map((school) =>
-          school.id === schoolId
-            ? {
-                ...school,
-                subscriptionExpiresAt: new Date(expiresAt),
-                status: school.status === "ACTIVE" ? school.status : "ACTIVE",
-              }
-            : school,
-        ),
-      );
-      setFeedback({
-        type: "success",
-        title: "Subscription expiry updated",
-        message: "The school subscription expiry date has been saved.",
-      });
+      const refreshed = await onDataRefresh();
+      setFeedback(refreshed
+        ? {
+            type: "success",
+            title: "Subscription expiry updated",
+            message: "The school subscription expiry date has been saved.",
+          }
+        : {
+            type: "error",
+            title: "Expiry saved, but data could not be refreshed",
+            message: "The expiry date was saved, but the latest school and subscription records could not be loaded. Refresh the page before making another change.",
+          });
       return true;
     } catch (error) {
       console.error("Failed to save expiry date:", error);
@@ -238,19 +253,19 @@ export default function SubscriptionsPageClient({
     setFeedback(null);
     startTransition(async () => {
       try {
-        const result = await setSchoolPlanAction(formData);
-        if (result?.school) {
-          setSchools((current) =>
-            current.map((school) =>
-              school.id === result.school.id ? { ...school, ...result.school } : school,
-            ),
-          );
-        }
-        setFeedback({
-          type: "success",
-          title: "Subscription plan updated",
-          message: "The school’s subscription plan has been updated.",
-        });
+        await setSchoolPlanAction(formData);
+        const refreshed = await onDataRefresh();
+        setFeedback(refreshed
+          ? {
+              type: "success",
+              title: "Subscription plan updated",
+              message: "The school’s subscription plan has been updated.",
+            }
+          : {
+              type: "error",
+              title: "Plan saved, but data could not be refreshed",
+              message: "The plan change was saved, but the latest school and subscription records could not be loaded. Refresh the page before making another change.",
+            });
       } catch (error) {
         console.error("Failed to set plan:", error);
         setFeedback({
@@ -268,21 +283,23 @@ export default function SubscriptionsPageClient({
       try {
         const result = await approveSchoolSubscriptionAction(formData);
         if (result?.school) {
-          setSchools((current) =>
-            current.map((school) =>
-              school.id === result.school.id ? { ...school, ...result.school } : school,
-            ),
-          );
           setSelectedPlans((current) => ({
             ...current,
             [result.school.id]: result.school.plan || current[result.school.id] || "STARTER",
           }));
         }
-        setFeedback({
-          type: "success",
-          title: "Subscription approved",
-          message: "The school subscription has been approved.",
-        });
+        const refreshed = await onDataRefresh();
+        setFeedback(refreshed
+          ? {
+              type: "success",
+              title: "Subscription approved",
+              message: "The school subscription has been approved.",
+            }
+          : {
+              type: "error",
+              title: "Approval saved, but data could not be refreshed",
+              message: "The subscription was approved, but the latest school and subscription records could not be loaded. Refresh the page before making another change.",
+            });
       } catch (error) {
         console.error("Failed to approve subscription:", error);
         setFeedback({
@@ -298,25 +315,55 @@ export default function SubscriptionsPageClient({
     setFeedback(null);
     startTransition(async () => {
       try {
-        const result = await rejectSchoolSubscriptionAction(formData);
-        if (result?.school) {
-          setSchools((current) =>
-            current.map((school) =>
-              school.id === result.school.id ? { ...school, ...result.school } : school,
-            ),
-          );
-        }
-        setFeedback({
-          type: "success",
-          title: "Subscription request rejected",
-          message: "The school subscription request has been rejected.",
-        });
+        await rejectSchoolSubscriptionAction(formData);
+        const refreshed = await onDataRefresh();
+        setFeedback(refreshed
+          ? {
+              type: "success",
+              title: "Subscription request rejected",
+              message: "The school subscription request has been rejected.",
+            }
+          : {
+              type: "error",
+              title: "Request rejected, but data could not be refreshed",
+              message: "The request was rejected, but the latest school and subscription records could not be loaded. Refresh the page before making another change.",
+            });
       } catch (error) {
         console.error("Failed to reject subscription:", error);
         setFeedback({
           type: "error",
           title: "Could not reject subscription",
           message: error instanceof Error ? error.message : "Failed to reject subscription.",
+        });
+      }
+    });
+  };
+
+  const handleCancelSubscription = (schoolId: string) => {
+    setFeedback(null);
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        formData.set("schoolId", schoolId);
+        await rejectSchoolSubscriptionAction(formData);
+        const refreshed = await onDataRefresh();
+        setFeedback(refreshed
+          ? {
+              type: "success",
+              title: "Subscription cancelled",
+              message: "The school subscription has been cancelled.",
+            }
+          : {
+              type: "error",
+              title: "Cancellation saved, but data could not be refreshed",
+              message: "The subscription was cancelled, but the latest school and subscription records could not be loaded. Refresh the page before making another change.",
+            });
+      } catch (error) {
+        console.error("Failed to cancel subscription:", error);
+        setFeedback({
+          type: "error",
+          title: "Could not cancel subscription",
+          message: error instanceof Error ? error.message : "Failed to cancel subscription.",
         });
       }
     });
@@ -338,7 +385,7 @@ export default function SubscriptionsPageClient({
 
     // Filter by status
     if (statusFilter !== "ALL") {
-      filtered = filtered.filter((s) => s.status === statusFilter);
+      filtered = filtered.filter((s) => getSchoolSubscriptionStatus(s) === statusFilter);
     }
 
 
@@ -486,16 +533,23 @@ export default function SubscriptionsPageClient({
 
       setManuallyAddedPayments((current) => [payment, ...current]);
       setPaymentPage(1);
-      setFeedback({
-        type: "success",
-        title: data.subscriptionApplied ? "Payment recorded and subscription applied" : "Payment recorded",
-        message: data.subscriptionApplied
-          ? data.receiptEmailStatus === "SENT"
-            ? "The confirmed payment has been recorded, the school subscription updated, and the official PDF receipt emailed."
-            : `The confirmed payment and subscription update were saved, but receipt email delivery failed${data.receiptEmailMessage ? `: ${data.receiptEmailMessage}` : ". Use Email receipt in the payment history to retry."}`
-          : "The confirmed payment has been added to the revenue report without changing school access. Historical record-only payments are not emailed automatically.",
-      });
-      if (data.subscriptionApplied) router.refresh();
+      const refreshed = await onDataRefresh();
+      const successMessage = data.subscriptionApplied
+        ? data.receiptEmailStatus === "SENT"
+          ? "The confirmed payment has been recorded, the school subscription updated, and the official PDF receipt emailed."
+          : `The confirmed payment and subscription update were saved, but receipt email delivery failed${data.receiptEmailMessage ? `: ${data.receiptEmailMessage}` : ". Use Email receipt in the payment history to retry."}`
+        : "The confirmed payment has been added to the revenue report without changing school access. Historical record-only payments are not emailed automatically.";
+      setFeedback(refreshed
+        ? {
+            type: "success",
+            title: data.subscriptionApplied ? "Payment recorded and subscription applied" : "Payment recorded",
+            message: successMessage,
+          }
+        : {
+            type: "error",
+            title: "Payment saved, but subscription data could not be refreshed",
+            message: `${successMessage} The latest school records could not be loaded; refresh the page before making another change.`,
+          });
       form.reset();
       setCustomSchoolId("");
       setCustomSchoolName("");
@@ -539,6 +593,23 @@ export default function SubscriptionsPageClient({
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
     setCurrentPage(1);
+  };
+
+  const showSchoolInOverview = (schoolId: string) => {
+    const school = schools.find((item) => item.id === schoolId);
+    if (!school) return;
+    setActiveTab("overview");
+    setSearchQuery(school.slug || school.name);
+    setPlanFilter("ALL");
+    setStatusFilter("ALL");
+    setCurrentPage(1);
+  };
+
+  const showPaymentSchoolInOverview = (payment: SubscriptionPaymentRecord) => {
+    const school = schools.find((item) =>
+      item.id === payment.schoolId || (payment.schoolSlug && item.slug === payment.schoolSlug),
+    );
+    if (school) showSchoolInOverview(school.id);
   };
 
   function ActionDropdown({ onCancel }: { onCancel: () => void }) {
@@ -832,7 +903,13 @@ export default function SubscriptionsPageClient({
                     {visibleSubscriptions.map((subscription) => (
                       <tr key={subscription.id} className="border-t border-border">
                         <td className="px-4 py-3">
-                          <p className="font-semibold text-foreground">{subscription.name}</p>
+                          <button
+                            type="button"
+                            onClick={() => showSchoolInOverview(subscription.id)}
+                            className="text-left font-semibold text-brand hover:underline"
+                          >
+                            {subscription.name}
+                          </button>
                           <p className="mt-0.5 text-xs text-muted">{subscription.slug}{subscription.email ? ` · ${subscription.email}` : ""}</p>
                         </td>
                         <td className="px-4 py-3"><Badge variant="default">{subscription.plan}</Badge></td>
@@ -1139,7 +1216,19 @@ export default function SubscriptionsPageClient({
                   {paginatedPayments.map((payment) => (
                     <tr key={payment.id} className="border-t border-border hover:bg-background/50 transition-colors">
                       <td className="px-3 py-2">
-                        <div className="font-medium text-foreground">{payment.schoolName}</div>
+                        {schools.some((school) =>
+                          school.id === payment.schoolId || (payment.schoolSlug && school.slug === payment.schoolSlug),
+                        ) ? (
+                          <button
+                            type="button"
+                            onClick={() => showPaymentSchoolInOverview(payment)}
+                            className="text-left font-medium text-brand hover:underline"
+                          >
+                            {payment.schoolName}
+                          </button>
+                        ) : (
+                          <div className="font-medium text-foreground">{payment.schoolName}</div>
+                        )}
                         {payment.schoolSlug ? <div className="text-xs text-muted">{payment.schoolSlug}</div> : null}
                       </td>
                       <td className="px-3 py-2 text-xs text-muted">{payment.schoolEmail || "—"}</td>
@@ -1354,17 +1443,9 @@ export default function SubscriptionsPageClient({
                     </td>
                     <td className="px-4 py-3">
                       <Badge
-                        variant={
-                          school.status === "ACTIVE"
-                            ? "success"
-                            : school.status === "SUSPENDED"
-                              ? "warning"
-                              : school.status === "CANCELLED"
-                                ? "error"
-                                : "default"
-                        }
+                        variant={getSchoolStatusBadgeVariant(school)}
                       >
-                        {school.status}
+                        {getSchoolSubscriptionStatus(school)}
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-sm text-muted">
@@ -1407,33 +1488,7 @@ export default function SubscriptionsPageClient({
                           Set
                         </button>
                         <ActionDropdown
-                          onCancel={() =>
-                            startTransition(async () => {
-                              setFeedback(null);
-                              try {
-                                const formData = new FormData();
-                                formData.set("schoolId", school.id);
-                                const result = await rejectSchoolSubscriptionAction(formData);
-                                if (result?.school) {
-                                  setSchools((current) =>
-                                    current.map((s) => (s.id === result.school.id ? { ...s, ...result.school } : s)),
-                                  );
-                                }
-                                setFeedback({
-                                  type: "success",
-                                  title: "Subscription cancelled",
-                                  message: "The school subscription has been cancelled.",
-                                });
-                              } catch (error) {
-                                console.error("Failed to cancel subscription:", error);
-                                setFeedback({
-                                  type: "error",
-                                  title: "Could not cancel subscription",
-                                  message: error instanceof Error ? error.message : "Failed to cancel subscription.",
-                                });
-                              }
-                            })
-                          }
+                          onCancel={() => handleCancelSubscription(school.id)}
                         />
                       </form>
                     </td>
@@ -1477,7 +1532,7 @@ export default function SubscriptionsPageClient({
                 <div className="flex items-center gap-2 text-xs text-muted mb-3">
                   <span>{school.country}</span>
                   <span>•</span>
-                  <span>{school.status}</span>
+                  <span>{getSchoolSubscriptionStatus(school)}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted mb-3">
                   <span>Expires: {formatExpiryDate(school)}</span>
@@ -1509,22 +1564,7 @@ export default function SubscriptionsPageClient({
                     Set
                   </button>
                   <ActionDropdown
-                    onCancel={() =>
-                      startTransition(async () => {
-                        try {
-                          const formData = new FormData();
-                          formData.set("schoolId", school.id);
-                          const result = await rejectSchoolSubscriptionAction(formData);
-                          if (result?.school) {
-                            setSchools((current) =>
-                              current.map((s) => (s.id === result.school.id ? { ...s, ...result.school } : s)),
-                            );
-                          }
-                        } catch (error) {
-                          console.error("Failed to cancel subscription:", error);
-                        }
-                      })
-                    }
+                    onCancel={() => handleCancelSubscription(school.id)}
                   />
                 </form>
               </div>

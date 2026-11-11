@@ -1,49 +1,89 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { LifeBuoy, School2 } from "lucide-react";
 import AdminSkeleton from "@/components/ui/skeleton";
-import SubscriptionsClient from "./subscriptions-client";
+import SubscriptionsClient, {
+  type SubscriptionPaymentRecord,
+  type SubscriptionSchoolRecord,
+} from "./subscriptions-client";
+import type { School } from "@prisma/client";
 
 export default function SubscriptionsPage() {
-  const [schools, setSchools] = useState([]);
-  const [payments, setPayments] = useState([]);
-  const [subscriptions, setSubscriptions] = useState([]);
+  const [schools, setSchools] = useState<School[]>([]);
+  const [payments, setPayments] = useState<SubscriptionPaymentRecord[]>([]);
+  const [subscriptions, setSubscriptions] = useState<SubscriptionSchoolRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const loadRequestId = useRef(0);
 
   const loadData = useCallback(async () => {
+    const requestId = ++loadRequestId.current;
     try {
       setLoadError(null);
       const [schoolsRes, paymentsRes] = await Promise.all([
-        fetch(`/schoolbase-admin/api/schools?limit=500`, {
+        fetch(`/schoolbase-admin/api/schools?page=1&limit=500`, {
           credentials: "include",
+          cache: "no-store",
         }),
         fetch(`/schoolbase-admin/api/subscription-payments?limit=100`, {
           credentials: "include",
+          cache: "no-store",
         }),
       ]);
 
-      const paymentsData = await paymentsRes.json();
+      const [schoolsData, paymentsData] = await Promise.all([
+        schoolsRes.json(),
+        paymentsRes.json(),
+      ]);
+      if (!schoolsRes.ok) {
+        throw new Error(schoolsData?.error || schoolsData?.message || "School records could not be loaded.");
+      }
       if (!paymentsRes.ok) {
         throw new Error(paymentsData?.error || paymentsData?.message || "Subscription payment records could not be loaded.");
       }
 
-      if (schoolsRes.ok) {
-        const schoolsData = await schoolsRes.json();
-        setSchools(schoolsData.schools || []);
-      } else {
-        console.error("School overview data could not be loaded:", await schoolsRes.text());
-        setSchools([]);
+      const reportedSchoolPages = Number(schoolsData?.pagination?.pages);
+      if (!Number.isInteger(reportedSchoolPages) || reportedSchoolPages < 0) {
+        throw new Error("School pagination details were missing or invalid.");
       }
-      setPayments(paymentsData.payments || []);
-      setSubscriptions(paymentsData.subscriptions || []);
+      const schoolPages = Math.max(1, reportedSchoolPages);
+      const remainingSchoolPages = await Promise.all(
+        Array.from({ length: schoolPages - 1 }, (_, index) =>
+          fetch(`/schoolbase-admin/api/schools?page=${index + 2}&limit=500`, {
+            credentials: "include",
+            cache: "no-store",
+          }).then(async (response) => {
+            const data = await response.json();
+            if (!response.ok) {
+              throw new Error(data?.error || data?.message || `School records page ${index + 2} could not be loaded.`);
+            }
+            return data;
+          }),
+        ),
+      );
+
+      if (requestId !== loadRequestId.current) return false;
+      const allSchoolPages = [schoolsData, ...remainingSchoolPages];
+      if (allSchoolPages.some((page) => !Array.isArray(page?.schools))) {
+        throw new Error("School records were returned in an unexpected format.");
+      }
+      if (!Array.isArray(paymentsData?.payments) || !Array.isArray(paymentsData?.subscriptions)) {
+        throw new Error("Subscription payment data was returned in an unexpected format.");
+      }
+      setSchools(allSchoolPages.flatMap((page) => page.schools));
+      setPayments(paymentsData.payments);
+      setSubscriptions(paymentsData.subscriptions);
+      return true;
     } catch (err) {
-      console.error("Error loading subscriptions data:", err);
-      setLoadError(err instanceof Error ? err.message : "Unable to load subscription data.");
+      if (requestId === loadRequestId.current) {
+        console.error("Error loading subscriptions data:", err);
+        setLoadError(err instanceof Error ? err.message : "Unable to load subscription data.");
+      }
+      return false;
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestId.current) setLoading(false);
     }
   }, []);
 
@@ -79,7 +119,13 @@ export default function SubscriptionsPage() {
 
   return (
     <SubscriptionPageFrame>
-      <SubscriptionsClient schools={schools} payments={payments} subscriptions={subscriptions} loadError={loadError} />
+      <SubscriptionsClient
+        schools={schools}
+        payments={payments}
+        subscriptions={subscriptions}
+        loadError={loadError}
+        onDataRefresh={loadData}
+      />
     </SubscriptionPageFrame>
   );
 }
