@@ -47,6 +47,7 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [jobTitle, setJobTitle] = useState('');
   const [department, setDepartment] = useState('');
@@ -95,6 +96,7 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
         setFirstName(profile.firstName);
         setMiddleName(profile.middleName || '');
         setLastName(profile.lastName);
+        setEmail(profile.user.email);
         setPhone(profile.phone || '');
         setJobTitle(profile.jobTitle);
         setDepartment(profile.department || '');
@@ -140,6 +142,7 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
       return;
     }
     const roleChanged = employee?.user.role !== accountRole;
+    const emailChanged = employee?.user.email !== email.trim().toLowerCase();
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -149,7 +152,7 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
         credentials: 'include',
         body: (() => {
           const formData = new FormData();
-          const values: Record<string, string> = { firstName, middleName, lastName, phone, jobTitle, department, classification, employmentType, startDate, emergencyContactName, emergencyContactPhone, reason };
+          const values: Record<string, string> = { firstName, middleName, lastName, email, phone, jobTitle, department, classification, employmentType, startDate, emergencyContactName, emergencyContactPhone, reason };
           if (employee && ['STAFF', 'TEACHER', 'BURSAR'].includes(employee.user.role)) values.role = accountRole;
           if (newPassword) values.password = newPassword;
           if (accountRole === 'TEACHER') {
@@ -164,9 +167,12 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.error || 'Unable to update staff profile.');
       setEmployee((current) => current ? { ...current, ...data.employee } : current);
+      setEmail(data.employee.user.email);
       setNotice(roleChanged
         ? 'Profile updated. The staff member must sign in again for their new account access to take effect.'
-        : 'Profile updated and history recorded.');
+        : emailChanged
+          ? 'Login email updated and recorded in staff history. The staff member must use the new email for their next sign-in.'
+          : 'Profile updated and history recorded.');
       setReason('');
       setPhotoFile(null);
       setNewPassword('');
@@ -247,6 +253,7 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
                 <p className="mt-1 text-xs text-muted">Choose the staff member’s school account role. Role changes require the staff member to sign in again.</p>
               </div>
               <div className="grid gap-4 sm:grid-cols-3">
+                <label className={labelClass}>Login email<input required type="email" maxLength={254} autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} className={fieldClass} /><span className="mt-1 block text-xs font-normal text-muted">This becomes the email used at the next sign-in. Confirm the new address with the staff member.</span></label>
                 <label className={labelClass}>Account role<select value={accountRole} onChange={(event) => { const nextRole = event.target.value; setAccountRole(nextRole); setAssignmentOptionsLoaded(false); setClassification(nextRole === 'TEACHER' ? 'ACADEMIC' : 'NON_ACADEMIC'); if (nextRole !== 'TEACHER') { setClassIds([]); setSubjectIds([]); } }} className={fieldClass}><option value="STAFF">Staff</option><option value="TEACHER">Teacher</option><option value="BURSAR">Bursar</option></select></label>
                 {accountRole === 'TEACHER' || accountRole === 'BURSAR' ? <>
                   <label className={labelClass}>New temporary password<input type="password" autoComplete="new-password" minLength={8} maxLength={128} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className={fieldClass} placeholder="At least 8 characters" /></label>
@@ -266,7 +273,7 @@ export default function StaffProfileClient({ employeeId }: { employeeId: string 
               <label className={labelClass}>Employment type<select value={employmentType} onChange={(event) => setEmploymentType(event.target.value as typeof employmentType)} className={fieldClass}><option value="FULL_TIME">Full-time</option><option value="PART_TIME">Part-time</option><option value="CONTRACT">Contract</option><option value="TEMPORARY">Temporary</option></select></label>
               <label className={labelClass}>Start date<input required type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className={fieldClass} /></label>
             </div>
-            <label className={labelClass}>Reason for update<textarea required minLength={8} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} className="mt-1.5 min-h-24 w-full border border-border bg-background p-3 text-sm outline-none focus:border-brand" placeholder="Record why these employment details are changing." /></label>
+            <label className={labelClass}>Reason for update<textarea required minLength={8} maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} className="mt-1.5 min-h-24 w-full border border-border bg-background p-3 text-sm outline-none focus:border-brand" placeholder="Record why these employment details or account details are changing." /></label>
           </section>
 
           <div className="flex justify-end"><Button type="submit" disabled={saving} className="h-11 min-w-40 gap-2">{saving ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</> : 'Save changes'}</Button></div>
